@@ -3,12 +3,42 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with
 code in this repository.
 
-## Project Status
+## Project Overview
 
-This is a **base template repository** in initial state. The design
-documentation system (`.claude/` skills and agents) is included but no design
-docs exist yet. To begin planning and documenting architecture decisions, run
-`/design-init` to create your first design document.
+`@spencerbeggs/workspaces-effect` — an Effect-TS library for monorepo workspace
+tooling, inspired by Microsoft's
+[workspace-tools](https://github.com/microsoft/workspace-tools). Key traits:
+
+- First-class Effect library: services, layers, typed errors, observability
+- Supports npm, pnpm, yarn Berry, and Bun workspaces only
+- Scope is being iteratively defined through design doc sessions
+
+### Design Status
+
+Active design phase. Key documents:
+
+- **Architecture**: `.claude/design/architecture.md` -- service groups,
+  error hierarchy, schemas, layer composition, platform abstraction
+- **Research Notes**: `.claude/design/research-notes.md` -- patterns from
+  sibling repos (runtime-resolver, semver-effect, type-registry-effect,
+  github-action-effects, pnpm-config-dependency-action, claude-tools)
+- **Roadmap**: `.claude/plans/000-roadmap.md` -- phased development plan
+- **Phase 1 Plan**: `.claude/plans/001-phase1-discovery-services.md`
+
+### Service Groups (Planned)
+
+1. **Discovery**: WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery
+2. **Package Analysis**: PackageJsonReader, DependencyGraph, TopologicalSorter
+3. **Resolution**: GlobResolver, PackageResolver, ChangeDetector
+4. **Configuration**: WorkspaceConfigReader, LockfileReader
+
+### Key Design Decisions
+
+- Use `Context.GenericTag` (not class Tag) for api-extractor DTS compat
+- Platform-independent via `@effect/platform` (FileSystem, Path, Command)
+- `Data.TaggedError` with exported Base constants for all errors
+- Paired Live + Test layers for every service
+- No dependency on workspace-tools; build on Effect platform directly
 
 ## Commands
 
@@ -34,11 +64,11 @@ pnpm run build:prod        # Build production/npm output only
 ### Running a Single Test
 
 ```bash
-# Run tests for a specific package
-pnpm run test -- --filter=@spencerbeggs/ecma-module
+# Run tests for a specific package (replace with actual package name)
+pnpm run test -- --filter=@spencerbeggs/<package-name>
 
 # Run a specific test file
-pnpm vitest run pkgs/ecma-module/src/index.test.ts
+pnpm vitest run pkgs/<package-name>/src/index.test.ts
 ```
 
 ## Architecture
@@ -52,7 +82,7 @@ pnpm vitest run pkgs/ecma-module/src/index.test.ts
 
 ### Package Build Pipeline
 
-Each package uses Rslib with dual output:
+Packages use Rslib with dual output:
 
 1. `dist/dev/` - Development build with source maps
 2. `dist/npm/` - Production build for npm publishing
