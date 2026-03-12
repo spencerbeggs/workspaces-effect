@@ -3,7 +3,7 @@ title: "Research Notes: Sibling Repos & Effect Patterns"
 module: core
 category: reference
 status: draft
-completeness: 55
+completeness: 60
 created: 2026-03-12
 updated: 2026-03-12
 last-synced: 2026-03-12
@@ -28,6 +28,7 @@ tags:
 - [Sibling Repo Analysis](#sibling-repo-analysis)
 - [Effect Documentation Insights](#effect-documentation-insights)
 - [Workspace Detection Patterns](#workspace-detection-patterns)
+- [Service Patterns Across Sibling Repos](#service-patterns-across-sibling-repos)
 - [Rationale](#rationale)
 
 <!-- /TOC -->
@@ -423,6 +424,152 @@ Walk up from cwd looking for:
 3. `package.json` without workspaces (single-package root)
 
 The root is the highest ancestor directory containing a workspace marker.
+
+## Service Patterns Across Sibling Repos
+
+Research from runtime-resolver, semver-effect, type-registry-effect, and
+github-action-effects.
+
+### Key Finding: GenericTag Still Used Everywhere
+
+All four sibling repos use `Context.GenericTag` for service definitions:
+
+```typescript
+export interface NodeResolver {
+  readonly resolve: (options?: NodeResolverOptions) => Effect.Effect<...>;
+}
+export const NodeResolver = Context.GenericTag<NodeResolver>("NodeResolver");
+```
+
+workspaces-effect already uses the newer class-based `Context.Tag` pattern.
+The sibling repos haven't migrated yet. Neither repo uses `Effect.Service`.
+
+### Layer Construction Consistency
+
+All repos follow the same `Layer.effect` + `Effect.gen` pattern:
+
+```typescript
+export const ServiceLive = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    const dep = yield* Dependency;
+    return { method: (arg) => /* ... */ };
+  }),
+);
+```
+
+### Layer Composition
+
+- `Layer.merge()` for parallel/independent dependencies
+- `Layer.provide()` for sequential dependency chains
+- Pipe chaining for readability
+- Composition logic lives in `index.ts`
+
+### publishConfig Pattern (Consistent Across All Repos)
+
+All repos use identical dual-registry publishing:
+
+```json
+{
+  "publishConfig": {
+    "access": "public",
+    "directory": "dist/dev",
+    "linkDirectory": true,
+    "targets": [
+      {
+        "protocol": "npm",
+        "registry": "https://npm.pkg.github.com/",
+        "directory": "dist/github",
+        "provenance": true
+      },
+      {
+        "protocol": "npm",
+        "registry": "https://registry.npmjs.org/",
+        "directory": "dist/npm",
+        "provenance": true
+      }
+    ]
+  }
+}
+```
+
+Source `package.json` has `"private": true` -- build system transforms for
+publishing.
+
+### File Organization (Consistent)
+
+```text
+src/
+├── services/    # Interfaces + Context.GenericTag
+├── layers/      # Live implementations
+├── errors/      # Typed errors
+├── schemas/     # Schema definitions
+└── index.ts     # Layer composition + exports
+```
+
+### Implications for workspaces-effect
+
+1. Our class-based `Context.Tag` pattern is already more modern
+2. `Effect.Service` adoption should be evaluated but isn't proven in our
+   ecosystem yet
+3. The `Layer.effect` + `Effect.gen` pattern is well-established and should
+   continue
+4. publishConfig with dual-registry targets is the standard -- our
+   PublishabilityDetector should understand this structure
+5. File organization matches our existing structure
+
+## Silk Deployment Publishability Pattern
+
+Research from `workflow-release-action` (2026-03-12). This pattern informs
+the design of a composable `PublishabilityDetector` layer for workspaces-effect.
+
+### Core Decision Logic
+
+A package is publishable if and only if:
+
+1. It has `publishConfig.access` set to `"public"` or `"restricted"`
+2. It is NOT `private: true` (unless `publishConfig.access` overrides)
+
+Key principle: absence of `publishConfig.access` makes a package NOT
+publishable regardless of `private` field.
+
+### Fields Examined
+
+| Field | Role |
+| ----- | ---- |
+| `publishConfig.access` | Primary publishability signal ("public" or "restricted") |
+| `private` | Secondary -- blocks if true AND no publishConfig |
+| `publishConfig.directory` | Alternate publish directory (e.g., `dist/npm`) |
+| `publishConfig.registry` | Legacy single-registry URL |
+| `publishConfig.targets` | Modern multi-registry array (preferred) |
+
+### Multi-Registry Target System
+
+`publishConfig.targets` supports:
+
+- Shorthand strings: `"npm"`, `"github"`, `"jsr"`, `"https://custom.registry"`
+- Full objects with: protocol, registry, directory, access, provenance, tag, tokenEnv
+
+### Priority Resolution
+
+1. No publishConfig -- if `private: true`, empty targets; else default to npm
+2. publishConfig without targets -- use `publishConfig.registry` or npm default
+3. publishConfig with targets -- resolve each target independently
+
+### Implications for workspaces-effect
+
+- Default `PublishabilityDetector`: check `publishConfig.access` + `private` field
+- Must be composable -- users like Silk override with multi-target strategies
+- Service interface should return both: publishability boolean AND target metadata
+- Consider `PublishTarget` schema for target resolution results
+- The action uses Microsoft's `workspace-tools` for workspace detection -- our
+  module could replace this dependency
+
+### Source Files
+
+- `workflow-release-action/src/utils/detect-publishable-changes.ts`
+- `workflow-release-action/src/utils/resolve-targets.ts`
+- `workflow-release-action/src/types/publish-config.ts`
 
 ## Rationale
 
