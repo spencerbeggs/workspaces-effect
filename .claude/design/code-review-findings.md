@@ -128,18 +128,19 @@ non-workspace repos. No guard that the path is actually a workspace root.
 
 ## Prioritization for Future Iterations
 
-**Must fix before Phase 3 implementation**:
+**Fixed (iteration 5)**:
 
-- Issue 1 (process.cwd) — ChangeDetector needs configurable cwd
-- Issue 2 (swallowed errors) — affects error reporting quality
-- Issue 5 (JSON.parse) — can cause untyped defects
+- Issue 1 (process.cwd) — FIXED: Root resolved eagerly at layer construction
+- Issue 2 (swallowed errors) — FIXED: WorkspaceDiscoveryError propagates from getPackage
+- Issue 4 (CRLF) — FIXED: parsePnpmWorkspacePatterns now normalizes CRLF
+- Issue 5 (JSON.parse) — FIXED: Wrapped in Effect.try with typed error
+- Issue 6 (double WorkspaceRootLive) — FIXED: Integration test uses mock root
 
 **Should fix soon**:
 
 - Issue 3 (`/**` glob) — affects Yarn Berry users
-- Issue 4 (CRLF) — affects Windows users
 - Issue 7 (peerDependencies) — Phase 2 graph completeness
 
 **Nice to have**:
 
-- Issues 6, 8, 9, 10 — structural improvements
+- Issues 8, 9, 10 — structural improvements

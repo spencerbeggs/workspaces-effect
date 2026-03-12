@@ -90,13 +90,11 @@ const detectCycle = (graph: GraphState): boolean => {
 };
 
 /** Live layer for DependencyGraph. Depends on WorkspaceDiscovery. */
-export const DependencyGraphLive: Layer.Layer<DependencyGraph, never, WorkspaceDiscovery> = Layer.effect(
+export const DependencyGraphLive = Layer.effect(
 	DependencyGraph,
 	Effect.gen(function* () {
 		const discovery = yield* WorkspaceDiscovery;
-		const packages = yield* discovery
-			.listPackages()
-			.pipe(Effect.catchTag("WorkspaceDiscoveryError", () => Effect.succeed([] as ReadonlyArray<WorkspacePackage>)));
+		const packages = yield* discovery.listPackages();
 		const graph = buildGraph(packages);
 
 		return {

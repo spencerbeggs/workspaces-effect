@@ -8,6 +8,7 @@
 
 import type { FileSystem, Path } from "@effect/platform";
 import { Layer } from "effect";
+import type { WorkspaceDiscoveryError } from "../errors/index.js";
 import type { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import type { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import type { WorkspaceRoot } from "../services/WorkspaceRoot.js";
@@ -39,7 +40,7 @@ import { WorkspaceRootLive } from "./WorkspaceRootLive.js";
  */
 export const DiscoveryLive: Layer.Layer<
 	WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery,
-	never,
+	WorkspaceDiscoveryError,
 	FileSystem.FileSystem | Path.Path
 > = Layer.mergeAll(
 	WorkspaceRootLive,

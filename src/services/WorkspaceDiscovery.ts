@@ -20,6 +20,8 @@ export class WorkspaceDiscovery extends Context.Tag("@spencerbeggs/workspaces-ef
 		readonly listPackages: () => Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError>;
 
 		/** Get a specific workspace package by name. */
-		readonly getPackage: (name: string) => Effect.Effect<WorkspacePackage, PackageNotFoundError>;
+		readonly getPackage: (
+			name: string,
+		) => Effect.Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>;
 	}
 >() {}

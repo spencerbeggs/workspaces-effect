@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
-import { DiscoveryLive } from "./DiscoveryLive.js";
 import { PackageManagerDetectorLive } from "./PackageManagerDetectorLive.js";
 import { WorkspaceDiscoveryLive } from "./WorkspaceDiscoveryLive.js";
 import { WorkspaceRootLive } from "./WorkspaceRootLive.js";
@@ -185,7 +184,17 @@ describe("DiscoveryLive composite layer", () => {
 			}),
 		};
 
-		const layer = DiscoveryLive.pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)));
+		// Use a mock WorkspaceRoot since DiscoveryLive now eagerly resolves
+		// the workspace root at layer construction time via process.cwd().
+		const mockRoot = Layer.succeed(WorkspaceRoot, {
+			find: () => Effect.succeed("/projects/monorepo"),
+		});
+
+		const layer = Layer.mergeAll(
+			mockRoot,
+			PackageManagerDetectorLive,
+			WorkspaceDiscoveryLive.pipe(Layer.provide(mockRoot)),
+		).pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)));
 
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {

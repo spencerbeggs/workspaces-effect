@@ -16,8 +16,8 @@ tooling, inspired by Microsoft's
 ### Implementation Status
 
 Phases 1 (Discovery) and 2 (Package Analysis) are complete. Phase 3 (Change
-Detection) design is complete with service interfaces defined. 76 tests
-passing, all typechecking.
+Detection) implementation is mostly complete — PackageResolverLive and
+ChangeDetectorLive are implemented. 92 tests passing, all typechecking.
 
 **Implemented services and layers** (`src/`):
 
@@ -35,6 +35,10 @@ passing, all typechecking.
   WorkspaceDiscovery output; inter-workspace edges only, excludes self-deps
 - `layers/TopologicalSorterLive.ts` -- Kahn's algorithm for deterministic
   ordering with parallel level detection
+- `layers/PackageResolverLive.ts` -- prefix matching on sorted package paths
+  for file-to-package resolution
+- `layers/ChangeDetectorLive.ts` -- git-based change detection using
+  CommandExecutor resolved at construction time
 
 **Design documents** (`.claude/design/`):
 
@@ -44,14 +48,14 @@ passing, all typechecking.
 - `bun-lockfile.md` -- bun.lock JSONC format reference
 - `phase2-dependency-graph.md` -- dependency graph design decisions
 - `phase3-change-detection.md` -- change detection design and Command patterns
-- `code-review-findings.md` -- Phase 1/2 audit (10 issues, 3 critical)
+- `code-review-findings.md` -- Phase 1/2 audit (10 issues, 5 fixed)
 
 **Plans** (`.claude/plans/`, gitignored):
 
-- `000-roadmap.md` -- phased development plan (progress: 60%)
+- `000-roadmap.md` -- phased development plan (progress: 80%)
 - `001-phase1-discovery-services.md` -- Phase 1 (complete)
 - `002-phase2-package-analysis.md` -- Phase 2 (complete)
-- `003-phase3-change-detection.md` -- Phase 3 (design complete, impl next)
+- `003-phase3-change-detection.md` -- Phase 3 (80%, Live layers done)
 
 ### Service Groups
 
@@ -59,7 +63,7 @@ passing, all typechecking.
    WorkspaceDiscovery
 2. **Package Analysis** (implemented): DependencyGraph, TopologicalSorter
    (PackageJsonReader merged into WorkspaceDiscovery)
-3. **Resolution** (design complete): PackageResolver, ChangeDetector
+3. **Resolution** (implemented): PackageResolver, ChangeDetector
    (GlobResolver deferred — current WorkspaceDiscoveryLive sufficient)
 4. **Configuration** (planned): WorkspaceConfigReader, LockfileReader
 

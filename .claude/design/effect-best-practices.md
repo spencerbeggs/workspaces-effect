@@ -501,12 +501,33 @@ const runGit = (cwd: string, ...args: string[]) =>
   )
 ```
 
-### CommandExecutor as platform dependency
+### CommandExecutor resolved at construction for R=never methods
 
-`Command.string` and `Command.lines` require `CommandExecutor` in the R
-channel. This is provided by `NodeContext.layer` or `BunContext.layer`.
-Layers that use Command should NOT resolve CommandExecutor themselves —
-pass it through as a requirement for the consumer to provide.
+`Command.string` and `Command.lines` put `CommandExecutor` in the R
+channel. If your service interface requires `R = never` on methods,
+you must yield `CommandExecutor` at layer construction time and call
+`executor.string(command)` directly:
+
+```typescript
+export const MyServiceLive = Layer.effect(
+  MyService,
+  Effect.gen(function* () {
+    const executor = yield* CommandExecutor.CommandExecutor;
+    return {
+      myMethod: () =>
+        Effect.scoped(
+          executor.string(
+            Command.make("git", "status").pipe(Command.workingDirectory(cwd))
+          ),
+        ),
+    };
+  }),
+);
+```
+
+The layer's R channel includes CommandExecutor (provided by
+`NodeContext.layer` or `BunContext.layer`) but service methods have
+`R = never`.
 
 ### Testing Command-dependent code
 
