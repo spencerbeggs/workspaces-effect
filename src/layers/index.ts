@@ -3,4 +3,5 @@
  */
 
 export { PackageManagerDetectorLive } from "./PackageManagerDetectorLive.js";
+export { WorkspaceDiscoveryLive } from "./WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./WorkspaceRootLive.js";

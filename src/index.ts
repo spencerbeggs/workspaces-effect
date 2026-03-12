@@ -16,6 +16,7 @@ export {
 } from "./errors/index.js";
 // ── Layers ──────────────────────────────────────────────────────────
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
+export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 export type {
 	PackageJsonType,
