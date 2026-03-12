@@ -64,9 +64,10 @@ export const MyService = Context.GenericTag<MyService>("MyService")
 class-based `Context.Tag` patterns through DTS bundling. `GenericTag` produces
 resolvable type signatures in `.d.ts` rollup output.
 
-**Decision for workspaces-effect**: Use `GenericTag` pattern until we verify
-class `Context.Tag` works with our Rslib build. All sibling repos have
-converged on `GenericTag`.
+**Decision for workspaces-effect (resolved 2026-03-12)**: `GenericTag` is
+deprecated. Use class-based `Context.Tag` pattern. Verified it works with
+Rslib + api-extractor DTS bundling. The `_base` symbols are correctly
+inlined in bundled `.d.ts`. Sibling repos should migrate to class Tag.
 
 ### P2: Data.TaggedError with Base Export
 

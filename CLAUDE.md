@@ -34,7 +34,7 @@ Active design phase. Key documents:
 
 ### Key Design Decisions
 
-- Use `Context.GenericTag` (not class Tag) for api-extractor DTS compat
+- Use class-based `Context.Tag` (GenericTag is deprecated, verified with Rslib)
 - Platform-independent via `@effect/platform` (FileSystem, Path, Command)
 - `Data.TaggedError` with exported Base constants for all errors
 - Paired Live + Test layers for every service

@@ -1,0 +1,82 @@
+{
+	"$schema": "../../.claude/skills/design-config/json-schemas/current.json",
+	"version": "1.0.0",
+	"project": {
+		"name": "spencerbeggs/workspaces-effect",
+		"type": "monorepo",
+		"repository": "https://github.com/spencerbeggs/workspaces-effect",
+		"maintainer": "C. Spencer Beggs"
+	},
+	"paths": {
+		"designDocs": ".claude/design",
+		"plans": ".claude/plans",
+		"skills": ".claude/skills",
+		"context": "CLAUDE.md",
+		"localContext": "CLAUDE.local.md"
+	},
+	"modules": {},
+	"skills": {
+		"baseNamespace": "/",
+		"enabled": [
+			"design-init",
+			"design-validate",
+			"design-update",
+			"design-sync",
+			"design-prune",
+			"design-review",
+			"design-audit",
+			"design-search",
+			"design-index",
+			"design-export",
+			"design-compare",
+			"design-link",
+			"design-report",
+			"design-archive",
+			"design-config",
+			"plan-validate",
+			"plan-create",
+			"plan-list"
+		]
+	},
+	"quality": {
+		"designDocs": {
+			"maxLineLength": 120,
+			"requireFrontmatter": true,
+			"requireTOC": true,
+			"minSections": ["Overview", "Current State", "Rationale"]
+		},
+		"context": {
+			"rootMaxLines": 500,
+			"childMaxLines": 300,
+			"requireDesignDocPointers": true
+		},
+		"plans": {
+			"maxLineLength": 120,
+			"requireFrontmatter": true,
+			"requiredFields": ["name", "title", "created", "status", "progress"],
+			"validStatuses": ["ready", "in-progress", "blocked", "completed", "abandoned"],
+			"progressRange": [0, 100],
+			"stalenessThresholdDays": 30,
+			"archiveAfterDays": 30
+		}
+	},
+	"integration": {
+		"ci": {
+			"enabled": false,
+			"validateOnPR": false,
+			"syncOnMerge": false
+		},
+		"git": {
+			"trackDesignDocs": true,
+			"requireReviewForChanges": false
+		},
+		"plans": {
+			"enabled": true,
+			"bidirectionalLinking": true,
+			"autoSyncProgress": false,
+			"validateOnCommit": true,
+			"cacheMetadata": true,
+			"cacheTTL": 300
+		}
+	}
+}

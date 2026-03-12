@@ -124,10 +124,12 @@ class WorkspaceDiscovery extends Context.Tag("WorkspaceDiscovery")<
 >() {}
 ```
 
-**Note on Tag pattern**: The sibling repos use `Context.GenericTag` for
-api-extractor/DTS bundling compatibility. We should evaluate whether
-`Context.Tag` class pattern or `GenericTag` works better with our Rslib
-build pipeline. See [Open Questions](#open-questions).
+**Tag pattern decision (resolved 2026-03-12)**: `Context.GenericTag` is
+deprecated. The class-based `Context.Tag` pattern works correctly with
+our Rslib + api-extractor DTS bundling pipeline. The `_base` constants
+are inlined as `declare const` in the bundled `.d.ts` (not exported),
+which is the expected behavior. "Forgotten exports" warnings from
+api-extractor are cosmetic and do not affect the output.
 
 ## Error Hierarchy
 
@@ -455,10 +457,10 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
 
 ## Open Questions
 
-1. **Context.Tag vs Context.GenericTag**: The sibling repos use `GenericTag`
-   for api-extractor compatibility. We need to verify which pattern works with
-   our Rslib build pipeline. Test both patterns with `api-extractor` and DTS
-   rollup.
+1. **Context.Tag vs Context.GenericTag**: RESOLVED. `GenericTag` is deprecated.
+   Class-based `Context.Tag` works with Rslib DTS bundling. The `_base`
+   symbols appear as "forgotten exports" warnings but are correctly inlined
+   in the bundled `.d.ts`. Verified on 2026-03-12.
 
 2. **Glob implementation**: Should we use `@effect/platform`'s glob support
    (if available) or implement our own glob resolver using FileSystem?

@@ -1,0 +1,78 @@
+/**
+ * Typed error definitions for workspace operations.
+ *
+ * All errors use `Data.TaggedError` with exported Base constants
+ * for api-extractor DTS bundling compatibility.
+ */
+
+import { Data } from "effect";
+
+// ── Discovery Errors ─────────────────────────────────────────────────
+
+/** @internal */
+export const WorkspaceRootNotFoundErrorBase = Data.TaggedError("WorkspaceRootNotFoundError");
+
+/** Emitted when no workspace root can be found from the search path. */
+export class WorkspaceRootNotFoundError extends WorkspaceRootNotFoundErrorBase<{
+	readonly searchPath: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Workspace root not found from "${this.searchPath}": ${this.reason}`;
+	}
+}
+
+/** @internal */
+export const PackageManagerDetectionErrorBase = Data.TaggedError("PackageManagerDetectionError");
+
+/** Emitted when the package manager type cannot be determined. */
+export class PackageManagerDetectionError extends PackageManagerDetectionErrorBase<{
+	readonly searchPath: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Cannot detect package manager at "${this.searchPath}": ${this.reason}`;
+	}
+}
+
+/** @internal */
+export const WorkspaceDiscoveryErrorBase = Data.TaggedError("WorkspaceDiscoveryError");
+
+/** Emitted when workspace package discovery fails. */
+export class WorkspaceDiscoveryError extends WorkspaceDiscoveryErrorBase<{
+	readonly root: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Workspace discovery failed at "${this.root}": ${this.reason}`;
+	}
+}
+
+// ── Package Errors ───────────────────────────────────────────────────
+
+/** @internal */
+export const PackageJsonParseErrorBase = Data.TaggedError("PackageJsonParseError");
+
+/** Emitted when a package.json file cannot be parsed or validated. */
+export class PackageJsonParseError extends PackageJsonParseErrorBase<{
+	readonly filePath: string;
+	readonly cause: unknown;
+}> {
+	get message(): string {
+		return `Failed to parse package.json at "${this.filePath}": ${String(this.cause)}`;
+	}
+}
+
+/** @internal */
+export const PackageNotFoundErrorBase = Data.TaggedError("PackageNotFoundError");
+
+/** Emitted when a named package is not found in the workspace. */
+export class PackageNotFoundError extends PackageNotFoundErrorBase<{
+	readonly name: string;
+	readonly available: ReadonlyArray<string>;
+}> {
+	get message(): string {
+		const count = this.available.length;
+		return `Package "${this.name}" not found (${count} package${count === 1 ? "" : "s"} available)`;
+	}
+}

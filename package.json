@@ -1,12 +1,15 @@
 {
-	"name": "@spencerbeggs/pnpm-module-template",
+	"name": "workspaces-effect",
 	"version": "0.0.0",
 	"private": true,
 	"description": "A template repository for developing and deploying Node.js modules from a pnpm monorepo structure.",
-	"homepage": "https://github.com/spencerbeggs/pnpm-module-template#readme",
+	"homepage": "https://github.com/spencerbeggs/workspaces-effect#readme",
+	"bugs": {
+		"url": "https://github.com/spencerbeggs/workspaces-effect/issues"
+	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/spencerbeggs/pnpm-module-template.git"
+		"url": "https://github.com/spencerbeggs/workspaces-effect.git"
 	},
 	"license": "MIT",
 	"author": {
@@ -39,6 +42,11 @@
 		"test:watch": "vitest --watch",
 		"typecheck": "turbo run types:check --log-prefix=none --log-order=grouped",
 		"types:check": "tsgo --noEmit"
+	},
+	"dependencies": {
+		"@effect/platform": "^0.94.5",
+		"@effect/platform-node": "^0.104.1",
+		"effect": "^3.19.19"
 	},
 	"devDependencies": {
 		"@savvy-web/changesets": "^0.4.2",

@@ -1,18 +1,36 @@
 /**
- * \@savvy-web/example-module
- *
- * Version-aware type definition registry for TypeScript documentation with Twoslash.
- * Built with Effect for robust error handling and composable async operations.
+ * Effect-TS library for monorepo workspace tooling.
+ * Provides composable services for workspace discovery, dependency graph
+ * analysis, and change detection across npm, pnpm, yarn Berry, and Bun.
  *
  * @packageDocumentation
  */
 
-export interface Foo {
-	baz: number;
-}
+// ── Errors ───────────────────────────────────────────────────────────
+export {
+	PackageJsonParseError,
+	PackageManagerDetectionError,
+	PackageNotFoundError,
+	WorkspaceDiscoveryError,
+	WorkspaceRootNotFoundError,
+} from "./errors/index.js";
 
-export class Bar {
-	qux(): Foo {
-		return { baz: 42 };
-	}
-}
+export type {
+	PackageJsonType,
+	PackageManagerType,
+	PackageNameType,
+	WorkspacePathType,
+} from "./schemas/core.js";
+// ── Schemas ──────────────────────────────────────────────────────────
+export {
+	PackageJsonSchema,
+	PackageManager,
+	PackageName,
+	WorkspaceInfo,
+	WorkspacePackage,
+	WorkspacePath,
+} from "./schemas/core.js";
+export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
+export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
+// ── Services ─────────────────────────────────────────────────────────
+export { WorkspaceRoot } from "./services/WorkspaceRoot.js";
