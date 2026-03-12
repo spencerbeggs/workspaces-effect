@@ -456,6 +456,60 @@ sub-adjacency map containing only those nodes, and finally run Kahn's
 algorithm on the subset. This avoids sorting the entire graph when only
 a portion is needed.
 
+## Command Execution Patterns
+
+### Command.make + Command.string for shell commands
+
+```typescript
+import { Command, CommandExecutor } from "@effect/platform"
+
+// Run command, capture stdout as string
+const output = yield* Command.make("git", "rev-parse", "--git-dir").pipe(
+  Command.workingDirectory(cwd),
+  Command.string,
+)
+// R = CommandExecutor.CommandExecutor, E = PlatformError
+
+// Run command, capture stdout as line array
+const lines = yield* Command.make("git", "diff", "--name-only").pipe(
+  Command.workingDirectory(cwd),
+  Command.lines,
+)
+// R = CommandExecutor.CommandExecutor, E = PlatformError
+```
+
+### Converting PlatformError to typed errors for commands
+
+Same pattern as filesystem operations — wrap with `Effect.mapError`:
+
+```typescript
+const runGit = (cwd: string, ...args: string[]) =>
+  Command.make("git", ...args).pipe(
+    Command.workingDirectory(cwd),
+    Command.string,
+    Effect.map((s) => s.trim()),
+    Effect.mapError((e) =>
+      new ChangeDetectionError({
+        operation: `git ${args.join(" ")}`,
+        reason: String(e),
+      })
+    ),
+  )
+```
+
+### CommandExecutor as platform dependency
+
+`Command.string` and `Command.lines` require `CommandExecutor` in the R
+channel. This is provided by `NodeContext.layer` or `BunContext.layer`.
+Layers that use Command should NOT resolve CommandExecutor themselves —
+pass it through as a requirement for the consumer to provide.
+
+### Testing Command-dependent code
+
+From sibling repos: create a test service that mocks at the service level
+(not CommandExecutor level). Use recorded response maps keyed by
+`"command args..."` strings.
+
 ## Gotchas & Pitfalls
 
 ### GenericTag is deprecated

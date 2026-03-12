@@ -15,16 +15,17 @@ tooling, inspired by Microsoft's
 
 ### Implementation Status
 
-Phases 1 (Discovery) and 2 (Package Analysis) are complete. 76 tests passing,
-all typechecking.
+Phases 1 (Discovery) and 2 (Package Analysis) are complete. Phase 3 (Change
+Detection) design is complete with service interfaces defined. 76 tests
+passing, all typechecking.
 
 **Implemented services and layers** (`src/`):
 
 - `schemas/core.ts` -- PackageManager, PackageName, WorkspacePath,
   PackageJsonSchema, WorkspacePackage, WorkspaceInfo
-- `errors/index.ts` -- 7 typed errors with Data.TaggedError + Base exports
+- `errors/index.ts` -- 9 typed errors with Data.TaggedError + Base exports
 - `services/` -- WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery,
-  DependencyGraph, TopologicalSorter
+  DependencyGraph, TopologicalSorter, PackageResolver, ChangeDetector
 - `layers/WorkspaceRootLive.ts` -- walks up from cwd for workspace markers
 - `layers/PackageManagerDetectorLive.ts` -- pnpm > bun > yarn > npm priority
 - `layers/WorkspaceDiscoveryLive.ts` -- reads patterns, resolves globs, reads
@@ -42,13 +43,14 @@ all typechecking.
 - `effect-best-practices.md` -- living doc of Effect patterns and gotchas
 - `bun-lockfile.md` -- bun.lock JSONC format reference
 - `phase2-dependency-graph.md` -- dependency graph design decisions
+- `phase3-change-detection.md` -- change detection design and Command patterns
 
 **Plans** (`.claude/plans/`, gitignored):
 
-- `000-roadmap.md` -- phased development plan
+- `000-roadmap.md` -- phased development plan (progress: 60%)
 - `001-phase1-discovery-services.md` -- Phase 1 (complete)
 - `002-phase2-package-analysis.md` -- Phase 2 (complete)
-- `003-phase3-change-detection.md` -- Phase 3 (next)
+- `003-phase3-change-detection.md` -- Phase 3 (design complete, impl next)
 
 ### Service Groups
 
@@ -56,7 +58,8 @@ all typechecking.
    WorkspaceDiscovery
 2. **Package Analysis** (implemented): DependencyGraph, TopologicalSorter
    (PackageJsonReader merged into WorkspaceDiscovery)
-3. **Resolution** (planned): GlobResolver, PackageResolver, ChangeDetector
+3. **Resolution** (design complete): PackageResolver, ChangeDetector
+   (GlobResolver deferred — current WorkspaceDiscoveryLive sufficient)
 4. **Configuration** (planned): WorkspaceConfigReader, LockfileReader
 
 ### Key Design Decisions

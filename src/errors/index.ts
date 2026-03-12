@@ -104,3 +104,30 @@ export class DependencyResolutionError extends DependencyResolutionErrorBase<{
 		return `Cannot resolve "${this.dependency}" from "${this.packageName}": ${this.reason}`;
 	}
 }
+
+// ── Change Detection Errors ─────────────────────────────────────────
+
+/** @internal */
+export const GitNotAvailableErrorBase = Data.TaggedError("GitNotAvailableError");
+
+/** Emitted when git is not installed or the directory is not a git repository. */
+export class GitNotAvailableError extends GitNotAvailableErrorBase<{
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Git is not available: ${this.reason}`;
+	}
+}
+
+/** @internal */
+export const ChangeDetectionErrorBase = Data.TaggedError("ChangeDetectionError");
+
+/** Emitted when a git operation fails during change detection. */
+export class ChangeDetectionError extends ChangeDetectionErrorBase<{
+	readonly operation: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Change detection failed during "${this.operation}": ${this.reason}`;
+	}
+}

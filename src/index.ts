@@ -8,8 +8,10 @@
 
 // ── Errors ───────────────────────────────────────────────────────────
 export {
+	ChangeDetectionError,
 	CyclicDependencyError,
 	DependencyResolutionError,
+	GitNotAvailableError,
 	PackageJsonParseError,
 	PackageManagerDetectionError,
 	PackageNotFoundError,
@@ -38,9 +40,11 @@ export {
 	WorkspacePackage,
 	WorkspacePath,
 } from "./schemas/core.js";
+export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
 export { DependencyGraph } from "./services/DependencyGraph.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
+export { PackageResolver } from "./services/PackageResolver.js";
 export { TopologicalSorter } from "./services/TopologicalSorter.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
 // ── Services ─────────────────────────────────────────────────────────

@@ -1,11 +1,16 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
+	ChangeDetectionError,
+	ChangeDetectionOptions,
+	ChangeDetector,
+	GitNotAvailableError,
 	PackageJsonParseError,
 	PackageJsonSchema,
 	PackageManager,
 	PackageManagerDetector,
 	PackageNotFoundError,
+	PackageResolver,
 	WorkspaceDiscovery,
 	WorkspaceInfo,
 	WorkspacePackage,
@@ -142,6 +147,93 @@ describe("PackageJsonParseError", () => {
 		});
 		expect(err._tag).toBe("PackageJsonParseError");
 		expect(err.message).toContain("/root/packages/bad/package.json");
+	});
+});
+
+describe("GitNotAvailableError", () => {
+	it("has correct _tag and message", () => {
+		const err = new GitNotAvailableError({
+			reason: "not a git repository",
+		});
+		expect(err._tag).toBe("GitNotAvailableError");
+		expect(err.message).toContain("not a git repository");
+	});
+});
+
+describe("ChangeDetectionError", () => {
+	it("has correct _tag and message", () => {
+		const err = new ChangeDetectionError({
+			operation: "git diff",
+			reason: "invalid ref",
+		});
+		expect(err._tag).toBe("ChangeDetectionError");
+		expect(err.message).toContain("git diff");
+		expect(err.message).toContain("invalid ref");
+	});
+});
+
+describe("ChangeDetectionOptions", () => {
+	it("provides sensible defaults", () => {
+		const opts = new ChangeDetectionOptions({});
+		expect(opts.base).toBe("HEAD~1");
+		expect(opts.head).toBe("HEAD");
+		expect(opts.includeUncommitted).toBe(false);
+	});
+
+	it("accepts custom values", () => {
+		const opts = new ChangeDetectionOptions({
+			base: "main",
+			head: "feature",
+			includeUncommitted: true,
+		});
+		expect(opts.base).toBe("main");
+		expect(opts.head).toBe("feature");
+		expect(opts.includeUncommitted).toBe(true);
+	});
+});
+
+// ── Phase 3 Service Tag Tests ───────────────────────────────────────
+
+describe("PackageResolver tag", () => {
+	it("is accessible in Effect.gen", () => {
+		const program = Effect.gen(function* () {
+			const resolver = yield* PackageResolver;
+			return yield* resolver.resolveFile("/some/file.ts");
+		});
+		type _R = Effect.Effect.Context<typeof program>;
+		const _check: _R extends PackageResolver ? true : never = true;
+		expect(_check).toBe(true);
+	});
+
+	it("composes with Layer.succeed mock", async () => {
+		const { Layer } = await import("effect");
+
+		const testResolver = Layer.succeed(PackageResolver, {
+			resolveFile: () => Effect.succeed(Option.none()),
+			resolveFiles: () => Effect.succeed(new Map()),
+			packagePaths: () => Effect.succeed([]),
+		});
+
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const resolver = yield* PackageResolver;
+				return yield* resolver.resolveFile("/test/file.ts");
+			}).pipe(Effect.provide(testResolver)),
+		);
+
+		expect(Option.isNone(result)).toBe(true);
+	});
+});
+
+describe("ChangeDetector tag", () => {
+	it("is accessible in Effect.gen", () => {
+		const program = Effect.gen(function* () {
+			const detector = yield* ChangeDetector;
+			return yield* detector.changedFiles(new ChangeDetectionOptions({}));
+		});
+		type _R = Effect.Effect.Context<typeof program>;
+		const _check: _R extends ChangeDetector ? true : never = true;
+		expect(_check).toBe(true);
 	});
 });
 
