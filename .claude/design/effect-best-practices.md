@@ -506,9 +506,19 @@ pass it through as a requirement for the consumer to provide.
 
 ### Testing Command-dependent code
 
-From sibling repos: create a test service that mocks at the service level
-(not CommandExecutor level). Use recorded response maps keyed by
-`"command args..."` strings.
+Two approaches for testing code that uses `Command`:
+
+**Approach 1: Mock at service level** (recommended for most tests).
+Mock the service that wraps Command (e.g., ChangeDetector) using
+`Layer.succeed`. This tests consumers without touching Command at all.
+
+**Approach 2: Mock CommandExecutor** (for Live layer tests).
+`CommandExecutor.makeExecutor(start)` derives `string`/`lines` from
+a mock `start` function that returns a mock `Process`. The Process
+needs `stdout`/`stderr` streams and an `exitCode` effect.
+
+From sibling repos: recorded response maps keyed by `"command args..."`
+strings provide deterministic git output for testing.
 
 ## Gotchas & Pitfalls
 

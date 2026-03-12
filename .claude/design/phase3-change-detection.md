@@ -439,10 +439,17 @@ by mocking at the ChangeDetector service level for consumers.
 
 ## Open Questions
 
-1. **CommandExecutor mocking**: Need to research how to provide a mock
-   `CommandExecutor` layer from `@effect/platform` for testing. The
-   sibling repo pattern (recorded response map) is ideal but needs
-   adaptation for the platform Command API. **Status: needs-research**
+1. **CommandExecutor mocking**: RESEARCHED. `CommandExecutor` has a
+   `makeExecutor(start)` constructor that derives `string`/`lines`
+   from a `start` function. For testing, two options:
+   (a) Use `makeExecutor` with a mock `start` that returns a mock
+   `Process` — complex but complete
+   (b) Use `Layer.succeed(CommandExecutor, ...)` with a mock object
+   that has `TypeId` symbol + direct mock of `string`/`lines` methods
+   — simpler but needs TypeId
+   (c) Test at ChangeDetector service level (mock ChangeDetector
+   directly) — simplest, but doesn't test the Live layer
+   **Decision needed**: which approach for which test level
 
 2. **Working tree changes**: Should `includeUncommitted` also include
    untracked files (`git ls-files --others --exclude-standard`)?

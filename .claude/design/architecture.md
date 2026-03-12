@@ -99,13 +99,16 @@ The library is organized into four service groups:
 **Note**: `PackageJsonReader` was merged into `WorkspaceDiscovery` (already
 reads package.json). `DependencyGraph` consumes discovery output directly.
 
-### Group 3: Resolution
+### Group 3: Resolution (design complete)
 
 | Service | Purpose | Dependencies |
 | ------- | ------- | ------------ |
-| `GlobResolver` | Resolve workspace glob patterns to paths | FileSystem, Path |
-| `PackageResolver` | Resolve package name to workspace path | WorkspaceDiscovery |
-| `ChangeDetector` | Detect changed packages (git-based) | WorkspaceDiscovery, Command |
+| `PackageResolver` | Map file paths to owning workspace packages | WorkspaceDiscovery |
+| `ChangeDetector` | Git-based change detection + affected computation | PackageResolver, DependencyGraph, CommandExecutor |
+
+**Note**: `GlobResolver` was deferred — the glob resolution logic in
+`WorkspaceDiscoveryLive` is sufficient for current needs. Can be
+extracted if future phases need general-purpose glob matching.
 
 ### Group 4: Configuration
 
@@ -484,18 +487,19 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    symbols appear as "forgotten exports" warnings but are correctly inlined
    in the bundled `.d.ts`. Verified on 2026-03-12.
 
-2. **Glob implementation**: Should we use `@effect/platform`'s glob support
-   (if available) or implement our own glob resolver using FileSystem?
-   Research the latest `@effect/platform` FileSystem API for glob support.
+2. **Glob implementation**: RESOLVED. No `@effect/platform` glob support.
+   Using `readDirectory` + manual pattern matching in WorkspaceDiscoveryLive.
+   GlobResolver deferred as separate service (current approach sufficient).
 
 3. **Lockfile parsing depth**: How deep should lockfile reading go? Options:
    a. Metadata only (exists, PM version, integrity)
    b. Dependency resolution tree
    c. Full parse with integrity hashes
 
-4. **Change detection scope**: Should `ChangeDetector` only detect changed
-   files, or should it also determine "affected" packages (packages that
-   depend on changed packages)?
+4. **Change detection scope**: RESOLVED. ChangeDetector provides three
+   progressive methods: `changedFiles` (raw git diff), `changedPackages`
+   (files mapped to packages), `affectedPackages` (changed + transitive
+   dependents via DependencyGraph).
 
 5. **Dual API priority**: Should the Promise wrapper API be in the main
    package or a separate `/node` entry point (following type-registry-effect
