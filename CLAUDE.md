@@ -15,19 +15,25 @@ tooling, inspired by Microsoft's
 
 ### Implementation Status
 
-Phase 1 (Discovery Services) is complete. 54 tests passing, all typechecking.
+Phases 1 (Discovery) and 2 (Package Analysis) are complete. 76 tests passing,
+all typechecking.
 
 **Implemented services and layers** (`src/`):
 
 - `schemas/core.ts` -- PackageManager, PackageName, WorkspacePath,
   PackageJsonSchema, WorkspacePackage, WorkspaceInfo
-- `errors/index.ts` -- 5 typed errors with Data.TaggedError + Base exports
-- `services/` -- WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery
+- `errors/index.ts` -- 7 typed errors with Data.TaggedError + Base exports
+- `services/` -- WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery,
+  DependencyGraph, TopologicalSorter
 - `layers/WorkspaceRootLive.ts` -- walks up from cwd for workspace markers
 - `layers/PackageManagerDetectorLive.ts` -- pnpm > bun > yarn > npm priority
 - `layers/WorkspaceDiscoveryLive.ts` -- reads patterns, resolves globs, reads
   package.json for each workspace package
 - `layers/DiscoveryLive.ts` -- composite layer for all discovery services
+- `layers/DependencyGraphLive.ts` -- builds directed graph from
+  WorkspaceDiscovery output; inter-workspace edges only, excludes self-deps
+- `layers/TopologicalSorterLive.ts` -- Kahn's algorithm for deterministic
+  ordering with parallel level detection
 
 **Design documents** (`.claude/design/`):
 
@@ -35,20 +41,21 @@ Phase 1 (Discovery Services) is complete. 54 tests passing, all typechecking.
 - `research-notes.md` -- patterns from sibling repos
 - `effect-best-practices.md` -- living doc of Effect patterns and gotchas
 - `bun-lockfile.md` -- bun.lock JSONC format reference
+- `phase2-dependency-graph.md` -- dependency graph design decisions
 
 **Plans** (`.claude/plans/`, gitignored):
 
 - `000-roadmap.md` -- phased development plan
 - `001-phase1-discovery-services.md` -- Phase 1 (complete)
-- `002-phase2-package-analysis.md` -- Phase 2 (next)
-- `003-phase3-change-detection.md` -- Phase 3
+- `002-phase2-package-analysis.md` -- Phase 2 (complete)
+- `003-phase3-change-detection.md` -- Phase 3 (next)
 
 ### Service Groups
 
 1. **Discovery** (implemented): WorkspaceRoot, PackageManagerDetector,
    WorkspaceDiscovery
-2. **Package Analysis** (planned): PackageJsonReader, DependencyGraph,
-   TopologicalSorter
+2. **Package Analysis** (implemented): DependencyGraph, TopologicalSorter
+   (PackageJsonReader merged into WorkspaceDiscovery)
 3. **Resolution** (planned): GlobResolver, PackageResolver, ChangeDetector
 4. **Configuration** (planned): WorkspaceConfigReader, LockfileReader
 

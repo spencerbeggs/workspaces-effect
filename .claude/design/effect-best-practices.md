@@ -27,6 +27,7 @@ tags:
 - [Layer Composition](#layer-composition)
 - [Testing](#testing)
 - [Platform Abstraction](#platform-abstraction)
+- [Graph Construction Patterns](#graph-construction-patterns)
 - [Gotchas & Pitfalls](#gotchas--pitfalls)
 - [Powerful Abstractions](#powerful-abstractions)
 - [Rationale](#rationale)
@@ -44,7 +45,9 @@ and sibling repos. Updated continuously as we learn.
 Initial patterns catalogued from research phase (2026-03-12). Updated with
 platform error handling and filesystem testing patterns discovered during
 Iteration 3 (WorkspaceRootLive and PackageManagerDetectorLive implementation).
-Will continue to grow as implementation progresses.
+Updated with graph construction and eager layer patterns from Phase 2
+(DependencyGraph, TopologicalSorter). Will continue to grow as implementation
+progresses.
 
 ## Service Definition
 
@@ -403,6 +406,55 @@ program.pipe(Effect.provide(NodeContext.layer));
 import { BunContext } from "@effect/platform-bun";
 program.pipe(Effect.provide(BunContext.layer));
 ```
+
+## Graph Construction Patterns
+
+### Eager graph building in Layer.effect
+
+When a service needs a precomputed data structure (like a dependency graph),
+build it eagerly inside `Layer.effect`. The graph is constructed once when
+the layer is created and shared by all service method calls:
+
+```typescript
+const DependencyGraphLive = Layer.effect(
+  DependencyGraph,
+  Effect.gen(function* () {
+    const discovery = yield* WorkspaceDiscovery;
+    const packages = yield* discovery.listPackages();
+    const graph = buildGraph(packages); // Built once, used by all methods
+
+    return {
+      dependenciesOf: (name) => /* lookup in graph.edges */,
+      dependentsOf: (name) => /* lookup in graph.reverseEdges */,
+      packages: () => Effect.succeed(Array.from(graph.nodes)),
+      hasCycle: () => Effect.succeed(detectCycle(graph)),
+      adjacencyMap: () => Effect.succeed(graph.edges),
+    };
+  }),
+);
+```
+
+This is appropriate when:
+
+- The underlying data is fixed for a given run (e.g., workspace list)
+- Construction cost is low relative to query frequency
+- All queries benefit from the precomputed structure
+
+### Native Map/Set vs Effect HashMap
+
+Use native `Map<string, Set<string>>` for internal graph structures when
+keys are primitive strings. Effect's `HashMap` and `HashSet` provide
+structural equality which is valuable for complex keys but adds overhead
+for simple string lookups. The graph is an implementation detail hidden
+behind the service interface.
+
+### sortSubset via BFS + sub-graph
+
+To topologically sort a subset of packages, first collect all transitive
+dependencies via BFS from the requested packages, then build a
+sub-adjacency map containing only those nodes, and finally run Kahn's
+algorithm on the subset. This avoids sorting the entire graph when only
+a portion is needed.
 
 ## Gotchas & Pitfalls
 

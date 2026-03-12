@@ -1,7 +1,7 @@
 ---
 title: "Phase 2: Dependency Graph Design"
 module: core
-status: draft
+status: current
 created: 2026-03-12
 updated: 2026-03-12
 authors:
@@ -351,22 +351,29 @@ const testDiscovery = (packages: WorkspacePackage[]) =>
   });
 ```
 
+## Resolved Questions
+
+1. **Eager vs lazy graph construction**: Resolved as eager. Graph is built
+   at layer construction time. Appropriate for CLI tools where workspace
+   list is fixed per run and all queries benefit from precomputed
+   forward + reverse edges.
+
+2. **peerDependencies**: Excluded by default. Only `dependencies` and
+   `devDependencies` contribute edges. Can be revisited if needed.
+
+3. **Optional dependencies**: Excluded from graph. Optional by definition
+   means they should not affect build ordering.
+
+4. **Reverse dependency lookup**: `dependentsOf` works as designed for
+   Phase 3 change detection ("what packages are affected by a change
+   in X?").
+
 ## Open Questions
 
-1. **Should DependencyGraph be lazy or eager?** Currently designed as
-   eager (built at layer construction). Lazy would defer graph building
-   to first query. Eager is simpler and appropriate for CLI tools that
-   always need the full graph.
+1. **peerDependencies configurability**: Should there be a
+   `DependencyGraphOptions` config to optionally include peerDeps?
+   Deferred until a concrete use case arises.
 
-2. **Should peerDependencies be included by default?** Currently excluded
-   by default. Some build systems need them, others don't. Could make
-   this configurable via a DependencyGraphOptions config.
-
-3. **What about optional dependencies?** `optionalDependencies` in
-   package.json. Probably exclude from build ordering since they're
-   optional by definition.
-
-4. **Reverse dependency lookup use cases**: The `dependentsOf` method
-   enables "what packages are affected by a change in X?" which is
-   critical for Phase 3 change detection. Validate this interface
-   meets Phase 3 needs.
+2. **Graph caching across runs**: For watch-mode or daemon scenarios,
+   should the graph be incrementally updated rather than rebuilt?
+   Not needed for CLI usage; revisit if daemon mode is added.

@@ -45,18 +45,21 @@ abstractions. Users compose only the services they need and provide platform lay
 
 ## Current State
 
-The project is in Phase 1 (Discovery Services) implementation. The monorepo
-scaffold exists with build tooling (Rslib, Turbo, Vitest, Biome) configured.
-Core schemas, error types, and two of three discovery service layers are
-implemented:
+Phases 1 (Discovery Services) and 2 (Package Analysis) are complete. 76 tests
+passing, all typechecking.
 
 - **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
   WorkspacePackage, WorkspaceInfo, DetectedPackageManager
 - **Errors**: WorkspaceRootNotFoundError, PackageManagerDetectionError,
-  WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError
-- **Layers**: WorkspaceRootLive, PackageManagerDetectorLive
-- **Tests**: 36 tests passing (17 schema/error + 19 layer tests)
-- **Remaining**: WorkspaceDiscovery service, integration layer, Promise API
+  WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError,
+  CyclicDependencyError, DependencyResolutionError
+- **Discovery Layers** (Phase 1): WorkspaceRootLive, PackageManagerDetectorLive,
+  WorkspaceDiscoveryLive, DiscoveryLive (composite)
+- **Package Analysis Layers** (Phase 2): DependencyGraphLive,
+  TopologicalSorterLive
+- **Tests**: 76 tests passing (17 schema/error + 19 discovery layer +
+  18 WorkspaceDiscovery + 12 DependencyGraph + 10 TopologicalSorter)
+- **Next**: Phase 3 (Change Detection)
 
 ## Design Goals
 
@@ -86,13 +89,15 @@ The library is organized into four service groups:
 | `PackageManagerDetector` | Detect PM type and version | FileSystem, Path |
 | `WorkspaceDiscovery` | List workspace packages | FileSystem, Path, WorkspaceRoot |
 
-### Group 2: Package Analysis
+### Group 2: Package Analysis (implemented)
 
 | Service | Purpose | Dependencies |
 | ------- | ------- | ------------ |
-| `PackageJsonReader` | Parse and validate package.json | FileSystem, Path |
-| `DependencyGraph` | Build directed graph of inter-package deps | WorkspaceDiscovery, PackageJsonReader |
+| `DependencyGraph` | Build directed graph of inter-package deps | WorkspaceDiscovery |
 | `TopologicalSorter` | Topological sort for build ordering | DependencyGraph |
+
+**Note**: `PackageJsonReader` was merged into `WorkspaceDiscovery` (already
+reads package.json). `DependencyGraph` consumes discovery output directly.
 
 ### Group 3: Resolution
 
