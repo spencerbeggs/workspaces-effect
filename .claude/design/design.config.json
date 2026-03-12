@@ -14,7 +14,14 @@
 		"context": "CLAUDE.md",
 		"localContext": "CLAUDE.local.md"
 	},
-	"modules": {},
+	"modules": {
+		"core": {
+			"path": ".",
+			"designDocsPath": ".claude/design",
+			"categories": ["architecture", "patterns", "reference", "review"],
+			"maintainer": "C. Spencer Beggs"
+		}
+	},
 	"skills": {
 		"baseNamespace": "/",
 		"enabled": [

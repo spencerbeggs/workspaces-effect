@@ -1,6 +1,7 @@
 ---
 title: "Bun Lockfile Format Reference"
 module: core
+category: reference
 status: draft
 created: 2026-03-12
 updated: 2026-03-12

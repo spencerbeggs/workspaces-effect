@@ -1,7 +1,8 @@
 ---
 title: "Code Review Findings — Phase 1/2 Audit"
 module: core
-status: actionable
+category: review
+status: current
 created: 2026-03-12
 updated: 2026-03-12
 authors:

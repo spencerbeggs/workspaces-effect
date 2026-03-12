@@ -1,7 +1,8 @@
 ---
 title: "Effect Best Practices & Patterns"
 module: core
-status: living
+category: patterns
+status: current
 created: 2026-03-12
 updated: 2026-03-12
 authors:
@@ -531,16 +532,46 @@ The layer's R channel includes CommandExecutor (provided by
 
 ### Testing Command-dependent code
 
-Two approaches for testing code that uses `Command`:
+Three approaches for testing code that uses `Command`:
 
 **Approach 1: Mock at service level** (recommended for most tests).
 Mock the service that wraps Command (e.g., ChangeDetector) using
 `Layer.succeed`. This tests consumers without touching Command at all.
 
-**Approach 2: Mock CommandExecutor** (for Live layer tests).
+**Approach 2: Mock CommandExecutor via makeExecutor** (for Live layer tests).
 `CommandExecutor.makeExecutor(start)` derives `string`/`lines` from
-a mock `start` function that returns a mock `Process`. The Process
-needs `stdout`/`stderr` streams and an `exitCode` effect.
+a mock `start` function. Build a response map keyed by command string:
+
+```typescript
+import { CommandExecutor, Command } from "@effect/platform"
+import { Effect, Stream, Chunk, Sink } from "effect"
+
+const makeTestExecutor = (
+  responses: Map<string, { stdout: string; stderr?: string; exitCode?: number }>
+) => CommandExecutor.makeExecutor((command) => {
+  // Extract command args for lookup
+  const args = [...Command.flatten(command)].map(c => c.args).flat()
+  const key = args.join(" ")
+  const response = responses.get(key) ?? { stdout: "", exitCode: 0 }
+  const encoder = new TextEncoder()
+
+  return Effect.succeed({
+    [CommandExecutor.ProcessTypeId]: CommandExecutor.ProcessTypeId,
+    pid: CommandExecutor.ProcessId(1),
+    exitCode: Effect.succeed(CommandExecutor.ExitCode(response.exitCode ?? 0)),
+    isRunning: Effect.succeed(false),
+    kill: () => Effect.void,
+    stderr: Stream.fromChunk(Chunk.of(encoder.encode(response.stderr ?? ""))),
+    stdin: Sink.drain,
+    stdout: Stream.fromChunk(Chunk.of(encoder.encode(response.stdout))),
+  })
+})
+```
+
+**Approach 3: Yield executor at construction** (current pattern).
+When service methods need `R = never` but use Command internally,
+yield `CommandExecutor` at layer construction and call
+`executor.string(command)` directly. See ChangeDetectorLive for example.
 
 From sibling repos: recorded response maps keyed by `"command args..."`
 strings provide deterministic git output for testing.

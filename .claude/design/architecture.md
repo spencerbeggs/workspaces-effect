@@ -1,6 +1,7 @@
 ---
 title: "Module Architecture Design"
 module: core
+category: architecture
 status: draft
 created: 2026-03-12
 updated: 2026-03-12
@@ -8,6 +9,9 @@ related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
   - effect-best-practices.md
+  - code-review-findings.md
+  - research-notes.md
+  - bun-lockfile.md
 authors:
   - C. Spencer Beggs
 tags:

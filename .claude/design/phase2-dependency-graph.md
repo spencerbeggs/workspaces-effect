@@ -1,6 +1,7 @@
 ---
 title: "Phase 2: Dependency Graph Design"
 module: core
+category: architecture
 status: current
 created: 2026-03-12
 updated: 2026-03-12
