@@ -76,3 +76,31 @@ export class PackageNotFoundError extends PackageNotFoundErrorBase<{
 		return `Package "${this.name}" not found (${count} package${count === 1 ? "" : "s"} available)`;
 	}
 }
+
+// ── Graph Errors ────────────────────────────────────────────────────
+
+/** @internal */
+export const CyclicDependencyErrorBase = Data.TaggedError("CyclicDependencyError");
+
+/** Emitted when a cycle is detected in the dependency graph. */
+export class CyclicDependencyError extends CyclicDependencyErrorBase<{
+	readonly cycle: ReadonlyArray<string>;
+}> {
+	get message(): string {
+		return `Cyclic dependency detected: ${this.cycle.join(" -> ")}`;
+	}
+}
+
+/** @internal */
+export const DependencyResolutionErrorBase = Data.TaggedError("DependencyResolutionError");
+
+/** Emitted when a dependency cannot be resolved within the workspace. */
+export class DependencyResolutionError extends DependencyResolutionErrorBase<{
+	readonly packageName: string;
+	readonly dependency: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Cannot resolve "${this.dependency}" from "${this.packageName}": ${this.reason}`;
+	}
+}
