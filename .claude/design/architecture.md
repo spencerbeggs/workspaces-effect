@@ -124,12 +124,16 @@ reads package.json). `DependencyGraph` consumes discovery output directly.
 `WorkspaceDiscoveryLive` is sufficient for current needs. Can be
 extracted if future phases need general-purpose glob matching.
 
-### Group 4: Configuration
+### Group 4: Configuration (design in progress)
 
 | Service | Purpose | Dependencies |
 | ------- | ------- | ------------ |
-| `WorkspaceConfigReader` | Read PM-specific workspace config | FileSystem, Path |
-| `LockfileReader` | Parse lockfile metadata | FileSystem, Path |
+| `LockfileReader` | Parse lockfile metadata + PM-specific config | FileSystem, Path, WorkspaceRoot, PackageManagerDetector |
+
+**Note**: `WorkspaceConfigReader` was merged into `LockfileReader`. Rationale:
+WorkspaceDiscoveryLive already handles workspace config reading; PM-specific
+config (catalogs, overrides) is lockfile-adjacent. PM-specific data accessible
+via optional `pmSpecific` extension field on `LockfileData`.
 
 ### Service Interface Pattern
 
@@ -463,6 +467,11 @@ platform FileSystem. The glob logic is currently embedded in
 implementation in WorkspaceDiscoveryLive is sufficient. See
 `phase3-change-detection.md` for the deferral decision.
 
+**Future consideration**: Node 24 and Bun both have native glob support
+(`fs.glob`, `Bun.Glob`). If a GlobResolver is extracted in the future,
+it could leverage these platform-native APIs via `@effect/platform`
+rather than reimplementing glob matching manually.
+
 ## Rationale
 
 ### Why Effect-TS?
@@ -510,10 +519,9 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    Using `readDirectory` + manual pattern matching in WorkspaceDiscoveryLive.
    GlobResolver deferred as separate service (current approach sufficient).
 
-3. **Lockfile parsing depth**: How deep should lockfile reading go? Options:
-   a. Metadata only (exists, PM version, integrity)
-   b. Dependency resolution tree
-   c. Full parse with integrity hashes
+3. **Lockfile parsing depth**: RESOLVED. Full parse (importers + packages),
+   with packages section optional in schema. Eager parsing at layer
+   construction. See `phase4-configuration-lockfiles.md` for details.
 
 4. **Change detection scope**: RESOLVED. ChangeDetector provides three
    progressive methods: `changedFiles` (raw git diff), `changedPackages`
@@ -525,19 +533,18 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    package or a separate `/node` entry point (following type-registry-effect
    pattern)?
 
-6. **pnpm catalogs**: Should we support reading pnpm catalog definitions
-   from `pnpm-workspace.yaml`? This would add value for pnpm-heavy monorepos.
+6. **pnpm catalogs**: RESOLVED. Yes, parse catalogs from lockfile.
+   Available via `PnpmExtension.catalogs` on `LockfileData.pmSpecific`.
 
 7. **Bun workspace quirks**: Bun's workspace implementation has some
    differences from npm/yarn. Research and document edge cases.
 
-8. **Bun lockfile parsing**: RESEARCHED. `bun.lock` is JSONC format since
+8. **Bun lockfile parsing**: RESOLVED. `bun.lock` is JSONC format since
    Bun v1.2. Schema documented in `.claude/design/bun-lockfile.md`.
    Decision: support only text `bun.lock` (not binary `bun.lockb`).
-   The `workspaces` map provides workspace discovery; the `packages` map
-   (variable-length tuples) is needed for full dependency resolution.
+   Parser: `jsonc-parser` package.
 
-9. **Lockfile abstraction**: Should we provide a unified `LockfileReader`
-   interface that abstracts over all PM lockfile formats? Or PM-specific
-   readers? A unified interface enables PM-agnostic analysis but may lose
-   PM-specific details (e.g., pnpm catalogs, Bun catalogs).
+9. **Lockfile abstraction**: RESOLVED. Unified `LockfileReader` interface
+   with PM-agnostic `LockfileData` base model. PM-specific data (catalogs,
+   overrides) preserved via discriminated `pmSpecific` extension field.
+   See `phase4-configuration-lockfiles.md`.
