@@ -15,9 +15,8 @@ tooling, inspired by Microsoft's
 
 ### Implementation Status
 
-Phases 1 (Discovery) and 2 (Package Analysis) are complete. Phase 3 (Change
-Detection) implementation is mostly complete — PackageResolverLive and
-ChangeDetectorLive are implemented. 92 tests passing, all typechecking.
+Phases 1 (Discovery), 2 (Package Analysis), and 3 (Change Detection) are
+complete. 104 tests passing, all typechecking.
 
 **Implemented services and layers** (`src/`):
 
@@ -39,6 +38,8 @@ ChangeDetectorLive are implemented. 92 tests passing, all typechecking.
   for file-to-package resolution
 - `layers/ChangeDetectorLive.ts` -- git-based change detection using
   CommandExecutor resolved at construction time
+- `layers/ChangeDetectionLive.ts` -- composite layer for PackageResolver +
+  ChangeDetector
 
 **Design documents** (`.claude/design/`):
 
@@ -52,10 +53,10 @@ ChangeDetectorLive are implemented. 92 tests passing, all typechecking.
 
 **Plans** (`.claude/plans/`, gitignored):
 
-- `000-roadmap.md` -- phased development plan (progress: 80%)
+- `000-roadmap.md` -- phased development plan (progress: 85%)
 - `001-phase1-discovery-services.md` -- Phase 1 (complete)
 - `002-phase2-package-analysis.md` -- Phase 2 (complete)
-- `003-phase3-change-detection.md` -- Phase 3 (80%, Live layers done)
+- `003-phase3-change-detection.md` -- Phase 3 (complete)
 
 ### Service Groups
 
