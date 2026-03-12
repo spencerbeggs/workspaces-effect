@@ -14,7 +14,9 @@ export {
 	WorkspaceDiscoveryError,
 	WorkspaceRootNotFoundError,
 } from "./errors/index.js";
-
+// ── Layers ──────────────────────────────────────────────────────────
+export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
+export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 export type {
 	PackageJsonType,
 	PackageManagerType,
@@ -30,6 +32,7 @@ export {
 	WorkspacePackage,
 	WorkspacePath,
 } from "./schemas/core.js";
+export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
 // ── Services ─────────────────────────────────────────────────────────
