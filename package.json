@@ -41,7 +41,7 @@
 		"types:check": "tsgo --noEmit"
 	},
 	"devDependencies": {
-		"@savvy-web/changesets": "^0.4.2",
+		"@savvy-web/changesets": "^0.5.0",
 		"@savvy-web/commitlint": "^0.4.0",
 		"@savvy-web/lint-staged": "^0.5.1",
 		"@savvy-web/rslib-builder": "^0.17.0",
