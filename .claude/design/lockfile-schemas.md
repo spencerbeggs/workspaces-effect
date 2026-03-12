@@ -432,31 +432,37 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"react@npm:^19.0.0":
-  version: 19.0.0
-  resolution: "react@npm:19.0.0"
-  checksum: 10c0/abc123def456...
-  dependencies:
-    loose-envify: "npm:^1.1.0"
+"lodash@npm:^4.17.0, lodash@npm:^4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: d8e86a09ab0ae4406a3a1ae905a65d43d1ce1deca40d12512fbb2ec5b4fa170e17c5bf96a0b462a60be00e85de40ebc6f1b13398e25ca2f8c0da3551c1807cb5a
+  bin:
+    lodash: bin/lodash.js
   languageName: node
   linkType: hard
 
 "@repo/ui@workspace:packages/ui":
-  version: 0.0.0
+  version: 0.0.0-use.local
   resolution: "@repo/ui@workspace:packages/ui"
   dependencies:
     react: "npm:^19.0.0"
+  peerDependencies:
+    react-dom: "*"
+  peerDependenciesMeta:
+    react-dom:
+      optional: true
   languageName: unknown
   linkType: soft
 
 "root-workspace@workspace:.":
-  version: 0.0.0
+  version: 0.0.0-use.local
   resolution: "root-workspace@workspace:."
   dependencies:
     "@repo/ui": "workspace:*"
     react: "npm:^19.0.0"
-  devDependencies:
-    typescript: "npm:^5.5.0"
+  dependenciesMeta:
+    fsevents:
+      optional: true
   languageName: unknown
   linkType: soft
 ```
@@ -468,12 +474,17 @@ import { Schema } from "effect"
 
 /**
  * Metadata block at the top of yarn.lock Berry format.
- * `version` is the lockfile schema version (e.g., 8).
- * `cacheKey` is used for cache invalidation.
+ *
+ * The `__metadata` key is always the first entry in the lockfile.
+ * - `version` is the lockfile schema version (integer; currently 8 for Yarn 4).
+ * - `cacheKey` is an integer used for cache invalidation (currently 10).
+ *
+ * The presence of `__metadata` distinguishes Yarn Berry lockfiles from
+ * Yarn Classic, which uses a non-standard format without this header.
  */
 const YarnBerryMetadata = Schema.Struct({
  version: Schema.Number,
- cacheKey: Schema.optional(Schema.String),
+ cacheKey: Schema.optional(Schema.Number),
 })
 type YarnBerryMetadata = Schema.Schema.Type<typeof YarnBerryMetadata>
 
@@ -481,34 +492,69 @@ type YarnBerryMetadata = Schema.Schema.Type<typeof YarnBerryMetadata>
  * A package entry in yarn.lock Berry format.
  *
  * Keys in the lockfile are package descriptors like:
- * - `"react@npm:^19.0.0"` — npm registry package
- * - `"@repo/ui@workspace:packages/ui"` — workspace package
- * - `"root-workspace@workspace:."` — root workspace
+ * - `"lodash@npm:^4.17.21"` -- npm registry package
+ * - `"@repo/ui@workspace:packages/ui"` -- workspace package
+ * - `"root-workspace@workspace:."` -- root workspace
  *
- * Multiple descriptors can map to the same resolution when different
- * version ranges resolve to the same version. In that case, the key
- * is a comma-separated list of descriptors.
+ * Multiple descriptors resolving to the same package share a single YAML
+ * key joined with `, ` (comma-space). Standard YAML parsers read this as
+ * a single string key; the consumer must split on `, ` to recover each
+ * individual descriptor.
+ *
+ * Field names and semantics are derived from Yarn's `Project.ts`
+ * `generateLockfile()` method.
+ *
+ * Workspace entries are identified by:
+ * - `linkType: "soft"`
+ * - `languageName: "unknown"`
+ * - `version: "0.0.0-use.local"`
+ * - `resolution` containing the `workspace:` protocol
  */
 const YarnBerryPackageEntry = Schema.Struct({
- /** Resolved version string. */
+ /**
+  * Resolved version string.
+  * For npm packages: the concrete version (e.g., "4.17.21").
+  * For workspace packages: always "0.0.0-use.local".
+  */
  version: Schema.String,
- /** Full resolution descriptor (e.g., "react@npm:19.0.0"). */
+ /**
+  * Locator string in the format `name@protocol:reference`.
+  * Examples:
+  * - `"lodash@npm:4.17.21"` (npm package)
+  * - `"@repo/ui@workspace:packages/ui"` (workspace package)
+  *
+  * Unlike Yarn Classic, Berry has no separate `resolved` or `integrity`
+  * fields. The `resolution` field serves as the canonical locator.
+  */
  resolution: Schema.String,
- /** Cache checksum for offline mirror. */
- checksum: Schema.optional(Schema.String),
- /** Production dependencies (name -> descriptor). */
+ /**
+  * Production dependencies as a map of package name to version range.
+  * In Yarn 4, ranges include the `npm:` prefix (e.g., `"npm:^5.1.6"`).
+  * Yarn 3 does not include the `npm:` prefix.
+  */
  dependencies: Schema.optional(
   Schema.Record({ key: Schema.String, value: Schema.String }),
  ),
- /** Development dependencies. */
- devDependencies: Schema.optional(
-  Schema.Record({ key: Schema.String, value: Schema.String }),
- ),
- /** Peer dependencies. */
+ /** Peer dependencies as a map of package name to version range. */
  peerDependencies: Schema.optional(
   Schema.Record({ key: Schema.String, value: Schema.String }),
  ),
- /** Peer dependency optional flags. */
+ /**
+  * Metadata about dependencies (e.g., marking a dependency as optional).
+  * Structure: `{ [depName]: { optional?: boolean } }`.
+  */
+ dependenciesMeta: Schema.optional(
+  Schema.Record({
+   key: Schema.String,
+   value: Schema.Struct({
+    optional: Schema.optional(Schema.Boolean),
+   }),
+  }),
+ ),
+ /**
+  * Metadata about peer dependencies (e.g., marking a peer as optional).
+  * Structure: `{ [peerName]: { optional?: boolean } }`.
+  */
  peerDependenciesMeta: Schema.optional(
   Schema.Record({
    key: Schema.String,
@@ -517,27 +563,34 @@ const YarnBerryPackageEntry = Schema.Struct({
    }),
   }),
  ),
- /** Optional dependencies. */
- optionalDependencies: Schema.optional(
+ /**
+  * Map of binary names to file paths (e.g., `{ lodash: "bin/lodash.js" }`).
+  */
+ bin: Schema.optional(
   Schema.Record({ key: Schema.String, value: Schema.String }),
  ),
- /** Executable binaries. */
- bin: Schema.optional(
-  Schema.Union(
-   Schema.String,
-   Schema.Record({ key: Schema.String, value: Schema.String }),
-  ),
- ),
  /**
-  * Language name. "node" for npm packages, "unknown" for workspaces.
+  * Language name. Required for all entries.
+  * - `"node"` for packages fetched from the npm registry
+  * - `"unknown"` for workspace packages
   */
- languageName: Schema.optional(Schema.String),
+ languageName: Schema.String,
  /**
-  * Link type. "hard" for npm packages (copied/cached),
-  * "soft" for workspace packages (symlinked).
+  * Link type. Required for all entries.
+  * - `"hard"` for fetched packages (copied into cache)
+  * - `"soft"` for workspace packages (symlinked)
   */
- linkType: Schema.optional(Schema.Literal("hard", "soft")),
- /** Dependency conditions (platform constraints). */
+ linkType: Schema.Literal("hard", "soft"),
+ /**
+  * Hex hash checksum for integrity verification.
+  * This is a plain hex string (NOT SRI format like `sha512-...`).
+  * Absent for workspace packages (which are local, not fetched).
+  */
+ checksum: Schema.optional(Schema.String),
+ /**
+  * Environment constraints for conditional dependencies.
+  * Uses Yarn's constraint syntax (e.g., `"os=linux & cpu=x64"`).
+  */
  conditions: Schema.optional(Schema.String),
 })
 type YarnBerryPackageEntry = Schema.Schema.Type<typeof YarnBerryPackageEntry>
@@ -545,7 +598,7 @@ type YarnBerryPackageEntry = Schema.Schema.Type<typeof YarnBerryPackageEntry>
 /**
  * Top-level yarn.lock Berry schema.
  *
- * The lockfile is a YAML document where:
+ * The lockfile is valid YAML where:
  * - `__metadata` is a reserved key for lockfile metadata
  * - All other keys are package descriptors mapping to resolution entries
  *
@@ -569,19 +622,34 @@ type YarnBerryLockfileRaw = Schema.Schema.Type<typeof YarnBerryLockfileRaw>
 
 ### Key parsing notes
 
-- Yarn Berry's lockfile is valid YAML but uses a flat structure where every
+- Yarn Berry's lockfile is valid YAML with a flat structure where every
   top-level key (except `__metadata`) is a package descriptor.
-- Workspace packages have `@workspace:` in their resolution string and
-  `linkType: "soft"`.
-- npm packages have `@npm:` in their resolution string and
+- **Detecting Berry vs. Classic**: The presence of `__metadata` at the top
+  level indicates a Berry lockfile. Yarn Classic uses a non-standard format
+  that is not valid YAML and has no `__metadata` header.
+- **Comma-separated key splitting**: Multiple descriptors resolving to the
+  same package are joined into a single YAML key with comma-space as the
+  separator (e.g., `"lodash@npm:^4.17.0, lodash@npm:^4.17.21"`). Standard
+  YAML parsers return this as one string key. The parser must split on the
+  comma-space sequence to recover individual descriptors for dependency
+  resolution.
+- **`npm:` prefix in Yarn 4 dependency ranges**: Yarn 4 adds an `npm:`
+  protocol prefix to dependency version ranges (e.g.,
+  `typescript: "npm:^5.1.6"`). Yarn 3 lockfiles omit this prefix. The
+  parser should handle both forms by stripping the `npm:` prefix when
+  normalizing ranges.
+- Workspace packages have `workspace:` protocol in their `resolution` string,
+  `linkType: "soft"`, `languageName: "unknown"`, and
+  `version: "0.0.0-use.local"`.
+- npm packages have `npm:` protocol in their `resolution` string and
   `linkType: "hard"`.
 - Inter-workspace dependencies use the `workspace:` protocol in dependency
   values (e.g., `"@repo/ui": "workspace:*"`).
-- Dependency values include the protocol prefix (e.g., `"npm:^19.0.0"`),
-  which differs from other lockfile formats.
-- Multiple version ranges can resolve to the same entry. The key format
-  is `"name@npm:^1.0.0, name@npm:^1.2.0"` with comma separation.
+- Unlike Yarn Classic, Berry has no `integrity` or `resolved` fields. The
+  `resolution` field is the canonical locator, and `checksum` is a hex hash
+  (not SRI format) used for integrity verification.
 - The `__metadata` key must be filtered out before iterating package entries.
+- Both `languageName` and `linkType` are required on every package entry.
 
 ### Two-phase parsing strategy
 
@@ -597,14 +665,18 @@ const parseYarnBerryLockfile = (raw: Record<string, unknown>) =>
    metadataRaw,
   )
 
-  // Phase 2: Validate each package entry
+  // Phase 2: Validate each package entry, splitting comma-separated keys
   const packageEntries: Record<string, YarnBerryPackageEntry> = {}
   for (const [key, value] of Object.entries(raw)) {
    if (key === "__metadata") continue
    const entry = yield* Schema.decodeUnknown(YarnBerryPackageEntry)(
     value,
    )
-   packageEntries[key] = entry
+   // Split comma-separated descriptors into individual entries
+   const descriptors = key.split(", ")
+   for (const descriptor of descriptors) {
+    packageEntries[descriptor] = entry
+   }
   }
 
   return { metadata, packages: packageEntries }
