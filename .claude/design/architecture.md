@@ -2,12 +2,15 @@
 title: "Module Architecture Design"
 module: core
 category: architecture
-status: draft
+status: current
+completeness: 85
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
+  - phase4-configuration-lockfiles.md
   - effect-best-practices.md
   - code-review-findings.md
   - research-notes.md
@@ -53,9 +56,8 @@ abstractions. Users compose only the services they need and provide platform lay
 
 ## Current State
 
-Phases 1 (Discovery Services) and 2 (Package Analysis) are complete. Phase 3
-(Change Detection) design is complete with service interfaces defined and
-initial tests written. 83 tests passing, all typechecking.
+Phases 1 (Discovery Services), 2 (Package Analysis), and 3 (Change Detection)
+are complete. 104 tests passing, all typechecking.
 
 - **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
   WorkspacePackage, WorkspaceInfo, DetectedPackageManager,
@@ -68,11 +70,10 @@ initial tests written. 83 tests passing, all typechecking.
   WorkspaceDiscoveryLive, DiscoveryLive (composite)
 - **Package Analysis Layers** (Phase 2): DependencyGraphLive,
   TopologicalSorterLive
-- **Service Interfaces** (Phase 3): PackageResolver, ChangeDetector
-- **Tests**: 83 tests passing (24 schema/error/service-tag + 19 discovery layer +
-  18 WorkspaceDiscovery + 12 DependencyGraph + 10 TopologicalSorter)
-- **Next**: Phase 3 Live layer implementations (PackageResolverLive,
-  ChangeDetectorLive)
+- **Change Detection Layers** (Phase 3): PackageResolverLive,
+  ChangeDetectorLive, ChangeDetectionLive (composite)
+- **Tests**: 104 tests passing across 9 test files
+- **Next**: Phase 4 design (Configuration & Lockfiles)
 
 ## Design Goals
 
@@ -112,7 +113,7 @@ The library is organized into four service groups:
 **Note**: `PackageJsonReader` was merged into `WorkspaceDiscovery` (already
 reads package.json). `DependencyGraph` consumes discovery output directly.
 
-### Group 3: Resolution (design complete)
+### Group 3: Resolution (implemented)
 
 | Service | Purpose | Dependencies |
 | ------- | ------- | ------------ |

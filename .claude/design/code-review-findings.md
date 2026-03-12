@@ -3,8 +3,12 @@ title: "Code Review Findings — Phase 1/2 Audit"
 module: core
 category: review
 status: current
+completeness: 80
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
+related:
+  - architecture.md
 authors:
   - C. Spencer Beggs
 tags:

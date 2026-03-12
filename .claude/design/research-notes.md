@@ -3,8 +3,13 @@ title: "Research Notes: Sibling Repos & Effect Patterns"
 module: core
 category: reference
 status: draft
+completeness: 55
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
+related:
+  - architecture.md
+  - effect-best-practices.md
 authors:
   - C. Spencer Beggs
 tags:

@@ -1,80 +1,32 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
-
-## Project Overview
+# workspaces-effect
 
 `@spencerbeggs/workspaces-effect` — an Effect-TS library for monorepo workspace
-tooling, inspired by Microsoft's
-[workspace-tools](https://github.com/microsoft/workspace-tools). Key traits:
+tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
-- First-class Effect library: services, layers, typed errors, observability
-- Supports npm, pnpm, yarn Berry, and Bun workspaces only
-- Scope is being iteratively defined through design doc sessions
+## Status
 
-### Implementation Status
+Phases 1-3 complete. 104 tests passing. Phase 4 (Configuration & Lockfiles)
+in design. Development plans in `.claude/plans/` (gitignored).
 
-Phases 1 (Discovery), 2 (Package Analysis), and 3 (Change Detection) are
-complete. 104 tests passing, all typechecking.
+## Design Documents
 
-**Implemented services and layers** (`src/`):
+Load these when working on the corresponding area:
 
-- `schemas/core.ts` -- PackageManager, PackageName, WorkspacePath,
-  PackageJsonSchema, WorkspacePackage, WorkspaceInfo
-- `errors/index.ts` -- 9 typed errors with Data.TaggedError + Base exports
-- `services/` -- WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery,
-  DependencyGraph, TopologicalSorter, PackageResolver, ChangeDetector
-- `layers/WorkspaceRootLive.ts` -- walks up from cwd for workspace markers
-- `layers/PackageManagerDetectorLive.ts` -- pnpm > bun > yarn > npm priority
-- `layers/WorkspaceDiscoveryLive.ts` -- reads patterns, resolves globs, reads
-  package.json for each workspace package
-- `layers/DiscoveryLive.ts` -- composite layer for all discovery services
-- `layers/DependencyGraphLive.ts` -- builds directed graph from
-  WorkspaceDiscovery output; inter-workspace edges only, excludes self-deps
-- `layers/TopologicalSorterLive.ts` -- Kahn's algorithm for deterministic
-  ordering with parallel level detection
-- `layers/PackageResolverLive.ts` -- prefix matching on sorted package paths
-  for file-to-package resolution
-- `layers/ChangeDetectorLive.ts` -- git-based change detection using
-  CommandExecutor resolved at construction time
-- `layers/ChangeDetectionLive.ts` -- composite layer for PackageResolver +
-  ChangeDetector
+- `.claude/design/architecture.md` — service groups, layers, schemas, errors
+- `.claude/design/effect-best-practices.md` — Effect patterns and conventions
+- `.claude/design/phase3-change-detection.md` — git change detection design
+- `.claude/design/phase4-configuration-lockfiles.md` — lockfile parsing design
+- `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference
+- `.claude/design/code-review-findings.md` — known issues (5/10 fixed)
+- `.claude/design/research-notes.md` — patterns from sibling repos
 
-**Design documents** (`.claude/design/`):
+## Key Conventions
 
-- `architecture.md` -- service groups, error hierarchy, schemas, layers
-- `research-notes.md` -- patterns from sibling repos
-- `effect-best-practices.md` -- living doc of Effect patterns and gotchas
-- `bun-lockfile.md` -- bun.lock JSONC format reference
-- `phase2-dependency-graph.md` -- dependency graph design decisions
-- `phase3-change-detection.md` -- change detection design and Command patterns
-- `code-review-findings.md` -- Phase 1/2 audit (10 issues, 5 fixed)
-
-**Plans** (`.claude/plans/`, gitignored):
-
-- `000-roadmap.md` -- phased development plan (progress: 85%)
-- `001-phase1-discovery-services.md` -- Phase 1 (complete)
-- `002-phase2-package-analysis.md` -- Phase 2 (complete)
-- `003-phase3-change-detection.md` -- Phase 3 (complete)
-
-### Service Groups
-
-1. **Discovery** (implemented): WorkspaceRoot, PackageManagerDetector,
-   WorkspaceDiscovery
-2. **Package Analysis** (implemented): DependencyGraph, TopologicalSorter
-   (PackageJsonReader merged into WorkspaceDiscovery)
-3. **Resolution** (implemented): PackageResolver, ChangeDetector
-   (GlobResolver deferred — current WorkspaceDiscoveryLive sufficient)
-4. **Configuration** (planned): WorkspaceConfigReader, LockfileReader
-
-### Key Design Decisions
-
-- Use class-based `Context.Tag` (GenericTag is deprecated, verified with Rslib)
-- Platform-independent via `@effect/platform` (FileSystem, Path, Command)
-- `Data.TaggedError` with exported Base constants for all errors
-- Paired Live + Test layers for every service
-- No dependency on workspace-tools; build on Effect platform directly
+- Class-based `Context.Tag` (GenericTag deprecated)
+- `@effect/platform` for FileSystem, Path, Command (no `node:` imports)
+- `Data.TaggedError` with exported Base constants
+- CommandExecutor resolved at layer construction for R=never methods
+- Eager data construction in `Layer.effect`
 
 ## Commands
 

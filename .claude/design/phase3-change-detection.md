@@ -2,9 +2,11 @@
 title: "Phase 3: Change Detection Design"
 module: core
 category: architecture
-status: draft
+status: current
+completeness: 95
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
 authors:
   - C. Spencer Beggs
 tags:
@@ -32,7 +34,7 @@ related:
 - [Layer Composition](#layer-composition)
 - [Testing Strategy](#testing-strategy)
 - [Decisions](#decisions)
-- [Open Questions](#open-questions)
+- [Open Questions (all resolved)](#open-questions-all-resolved)
 
 <!-- /TOC -->
 
@@ -442,31 +444,25 @@ by mocking at the ChangeDetector service level for consumers.
 | Three-method ChangeDetector | Progressive disclosure: files → packages → affected |
 | ChangeDetectionOptions as Schema.Class | Runtime validation, sensible defaults |
 
-## Open Questions
+## Open Questions (all resolved)
 
-1. **CommandExecutor mocking**: RESEARCHED. `CommandExecutor` has a
-   `makeExecutor(start)` constructor that derives `string`/`lines`
-   from a `start` function. For testing, two options:
-   (a) Use `makeExecutor` with a mock `start` that returns a mock
-   `Process` — complex but complete
-   (b) Use `Layer.succeed(CommandExecutor, ...)` with a mock object
-   that has `TypeId` symbol + direct mock of `string`/`lines` methods
-   — simpler but needs TypeId
-   (c) Test at ChangeDetector service level (mock ChangeDetector
-   directly) — simplest, but doesn't test the Live layer
-   **Decision needed**: which approach for which test level
+1. **CommandExecutor mocking**: RESOLVED. Used `CommandExecutor.makeExecutor(start)`
+   with a mock `start` returning `Effect.succeed(mockProcess)`. The mock Process
+   needs `toJSON` and cast through `unknown`. Command args extracted via
+   `Command.flatten(command)[0].args`. 12 tests validate the approach.
 
-2. **Working tree changes**: Should `includeUncommitted` also include
-   untracked files (`git ls-files --others --exclude-standard`)?
-   Leaning yes for completeness. **Status: needs-decision**
+2. **Working tree changes**: RESOLVED. `includeUncommitted: true` includes
+   untracked files via `git ls-files --others --exclude-standard`. Implemented
+   and tested.
 
-3. **Merge base**: For branch comparison, should we auto-compute merge
-   base via `git merge-base`? Or let users provide exact refs? Leaning
-   toward auto merge-base with option to bypass. **Status: needs-decision**
+3. **Merge base**: DEFERRED. Current implementation uses user-provided refs
+   directly (`base...head`). Auto merge-base computation can be added later
+   if needed.
 
-4. **Command dependency type**: The `@effect/platform` Command module
-   exports `CommandExecutor` as the service type. Need to verify the
-   exact R requirement for `Command.string`. **Status: needs-research**
+4. **Command dependency type**: RESOLVED. `Command.string` puts
+   `CommandExecutor.CommandExecutor` in R. Solved by yielding executor at
+   layer construction and calling `executor.string(command)` with
+   `Effect.scoped()` wrapper.
 
 5. **Resolved**: No caching for ChangeDetector — git state changes
    between calls, unlike static workspace structure.

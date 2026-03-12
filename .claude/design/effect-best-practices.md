@@ -3,8 +3,10 @@ title: "Effect Best Practices & Patterns"
 module: core
 category: patterns
 status: current
+completeness: 80
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
 authors:
   - C. Spencer Beggs
 tags:
@@ -16,6 +18,7 @@ tags:
 related:
   - architecture.md
   - phase3-change-detection.md
+  - research-notes.md
 ---
 
 ## Effect Best Practices & Patterns

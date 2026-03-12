@@ -3,8 +3,12 @@ title: "Bun Lockfile Format Reference"
 module: core
 category: reference
 status: draft
+completeness: 60
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
+related:
+  - architecture.md
 authors:
   - C. Spencer Beggs
 tags:
