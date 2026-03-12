@@ -574,3 +574,18 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
     graph traversal. This pattern could optimize scenarios where many
     packages need resolution simultaneously (e.g., full lockfile parsing,
     cross-workspace dependency analysis).
+
+12. **Effect-native parser modules**: Consider extracting `jsonc-effect` and
+    `yaml-effect` as standalone packages wrapping `jsonc-parser` and `yaml`
+    into Effect-native APIs. Both source libraries are battle-tested; the
+    lift to Effect idioms (Schema integration, typed errors, composable
+    pipelines) should be manageable. Having Effect-native parsers makes the
+    entire parsing pipeline more composable. Could live as sibling packages
+    in the monorepo (like `semver-effect`).
+
+13. **Publishable package detection**: Add a composable
+    `PublishabilityDetector` layer. Default strategy: check `"private"`
+    field and `publishConfig` in `package.json`. Design should allow users
+    to compose their own service to override the detection strategy (e.g.,
+    Silk Deployment uses a custom approach in `workflow-release-action`).
+    This keeps the module spec-compliant by default but extensible.
