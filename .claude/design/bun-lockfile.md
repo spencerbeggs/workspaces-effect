@@ -9,6 +9,8 @@ updated: 2026-03-12
 last-synced: 2026-03-12
 related:
   - architecture.md
+  - phase4-configuration-lockfiles.md
+  - lockfile-schemas.md
 authors:
   - C. Spencer Beggs
 tags:

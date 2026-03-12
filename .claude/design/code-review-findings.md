@@ -9,6 +9,8 @@ updated: 2026-03-12
 last-synced: 2026-03-12
 related:
   - architecture.md
+  - phase2-dependency-graph.md
+  - phase3-change-detection.md
 authors:
   - C. Spencer Beggs
 tags:
@@ -18,6 +20,14 @@ tags:
 ---
 
 ## Code Review Findings — Phase 1/2 Audit
+
+<!-- TOC -->
+
+- [Critical Issues](#critical-issues)
+- [Important Issues](#important-issues)
+- [Prioritization for Future Iterations](#prioritization-for-future-iterations)
+
+<!-- /TOC -->
 
 Automated code review of Phase 1 and Phase 2 implementation. Issues
 ranked by confidence and severity.

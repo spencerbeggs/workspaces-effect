@@ -18,6 +18,8 @@ tags:
 related:
   - architecture.md
   - phase3-change-detection.md
+  - phase4-configuration-lockfiles.md
+  - lockfile-schemas.md
   - research-notes.md
 ---
 

@@ -3,8 +3,10 @@ title: "Phase 4: Configuration & Lockfiles Design"
 module: core
 category: architecture
 status: draft
+completeness: 65
 created: 2026-03-12
 updated: 2026-03-12
+last-synced: 2026-03-12
 authors:
   - C. Spencer Beggs
 tags:
@@ -14,6 +16,7 @@ tags:
 related:
   - architecture.md
   - bun-lockfile.md
+  - lockfile-schemas.md
   - effect-best-practices.md
   - research-notes.md
 ---
