@@ -485,13 +485,13 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
 7. **Bun workspace quirks**: Bun's workspace implementation has some
    differences from npm/yarn. Research and document edge cases.
 
-8. **Bun lockfile parsing**: `bun.lock` is JSONC format since Bun v1.2
-   (binary `bun.lockb` prior). Need to research the schema, understand
-   how workspace inter-dependencies are encoded, and decide whether to
-   support both formats or only the newer JSONC format. This is a key
-   requirement for full Bun workspace support.
+8. **Bun lockfile parsing**: RESEARCHED. `bun.lock` is JSONC format since
+   Bun v1.2. Schema documented in `.claude/design/bun-lockfile.md`.
+   Decision: support only text `bun.lock` (not binary `bun.lockb`).
+   The `workspaces` map provides workspace discovery; the `packages` map
+   (variable-length tuples) is needed for full dependency resolution.
 
 9. **Lockfile abstraction**: Should we provide a unified `LockfileReader`
    interface that abstracts over all PM lockfile formats? Or PM-specific
    readers? A unified interface enables PM-agnostic analysis but may lose
-   PM-specific details (e.g., pnpm catalogs, Bun binary lockfile).
+   PM-specific details (e.g., pnpm catalogs, Bun catalogs).
