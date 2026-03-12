@@ -13,24 +13,44 @@ tooling, inspired by Microsoft's
 - Supports npm, pnpm, yarn Berry, and Bun workspaces only
 - Scope is being iteratively defined through design doc sessions
 
-### Design Status
+### Implementation Status
 
-Active design phase. Key documents:
+Phase 1 (Discovery Services) is complete. 54 tests passing, all typechecking.
 
-- **Architecture**: `.claude/design/architecture.md` -- service groups,
-  error hierarchy, schemas, layer composition, platform abstraction
-- **Research Notes**: `.claude/design/research-notes.md` -- patterns from
-  sibling repos (runtime-resolver, semver-effect, type-registry-effect,
-  github-action-effects, pnpm-config-dependency-action, claude-tools)
-- **Roadmap**: `.claude/plans/000-roadmap.md` -- phased development plan
-- **Phase 1 Plan**: `.claude/plans/001-phase1-discovery-services.md`
+**Implemented services and layers** (`src/`):
 
-### Service Groups (Planned)
+- `schemas/core.ts` -- PackageManager, PackageName, WorkspacePath,
+  PackageJsonSchema, WorkspacePackage, WorkspaceInfo
+- `errors/index.ts` -- 5 typed errors with Data.TaggedError + Base exports
+- `services/` -- WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery
+- `layers/WorkspaceRootLive.ts` -- walks up from cwd for workspace markers
+- `layers/PackageManagerDetectorLive.ts` -- pnpm > bun > yarn > npm priority
+- `layers/WorkspaceDiscoveryLive.ts` -- reads patterns, resolves globs, reads
+  package.json for each workspace package
+- `layers/DiscoveryLive.ts` -- composite layer for all discovery services
 
-1. **Discovery**: WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery
-2. **Package Analysis**: PackageJsonReader, DependencyGraph, TopologicalSorter
-3. **Resolution**: GlobResolver, PackageResolver, ChangeDetector
-4. **Configuration**: WorkspaceConfigReader, LockfileReader
+**Design documents** (`.claude/design/`):
+
+- `architecture.md` -- service groups, error hierarchy, schemas, layers
+- `research-notes.md` -- patterns from sibling repos
+- `effect-best-practices.md` -- living doc of Effect patterns and gotchas
+- `bun-lockfile.md` -- bun.lock JSONC format reference
+
+**Plans** (`.claude/plans/`, gitignored):
+
+- `000-roadmap.md` -- phased development plan
+- `001-phase1-discovery-services.md` -- Phase 1 (complete)
+- `002-phase2-package-analysis.md` -- Phase 2 (next)
+- `003-phase3-change-detection.md` -- Phase 3
+
+### Service Groups
+
+1. **Discovery** (implemented): WorkspaceRoot, PackageManagerDetector,
+   WorkspaceDiscovery
+2. **Package Analysis** (planned): PackageJsonReader, DependencyGraph,
+   TopologicalSorter
+3. **Resolution** (planned): GlobResolver, PackageResolver, ChangeDetector
+4. **Configuration** (planned): WorkspaceConfigReader, LockfileReader
 
 ### Key Design Decisions
 
