@@ -15,6 +15,7 @@ export {
 	WorkspaceRootNotFoundError,
 } from "./errors/index.js";
 // ── Layers ──────────────────────────────────────────────────────────
+export { DiscoveryLive } from "./layers/DiscoveryLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
