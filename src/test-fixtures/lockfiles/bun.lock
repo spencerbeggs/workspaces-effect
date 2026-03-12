@@ -1,0 +1,36 @@
+{
+  "lockfileVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "my-monorepo",
+      "devDependencies": {
+        "typescript": "^5.3.0",
+      },
+    },
+    "packages/api": {
+      "name": "@my-monorepo/api",
+      "version": "1.0.0",
+      "dependencies": {
+        "@my-monorepo/common": "packages/common",
+        "hono": "^4.0.0",
+      },
+    },
+    "packages/common": {
+      "name": "@my-monorepo/common",
+      "version": "1.0.0",
+      "dependencies": {
+        "zod": "^3.22.0",
+      },
+    },
+  },
+  "packages": {
+    "@my-monorepo/api": ["@my-monorepo/api@workspace:packages/api", { "dependencies": { "@my-monorepo/common": "packages/common", "hono": "^4.0.0" } }],
+    "@my-monorepo/common": ["@my-monorepo/common@workspace:packages/common", { "dependencies": { "zod": "^3.22.0" } }],
+    "hono": ["hono@4.6.14", "", { "bin": { "hono": "bin/hono.js" } }, "sha512-d9jhNf4bVCzDFz+VFXuWjaD9JKRl4EUlzCEMnWbg2p0qGv2ebHKZvJFGIL3bVR2kaaJAWHQFpAiMbGmJFoVDQ=="],
+    "zod": ["zod@3.23.8", "", {}, "sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g=="],
+    "typescript": ["typescript@5.3.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-pXWcraxM0uj4oVsJJggdo6irEJd9Q2Bm5K3eFdYofQPnXLmhFzCm2fQ4zpHvJOhviLZGGXdsrhlOPRfQHpcng=="],
+  },
+  "overrides": {
+    "lodash": "^4.17.23",
+  },
+}
