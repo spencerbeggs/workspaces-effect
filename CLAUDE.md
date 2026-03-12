@@ -44,6 +44,7 @@ passing, all typechecking.
 - `bun-lockfile.md` -- bun.lock JSONC format reference
 - `phase2-dependency-graph.md` -- dependency graph design decisions
 - `phase3-change-detection.md` -- change detection design and Command patterns
+- `code-review-findings.md` -- Phase 1/2 audit (10 issues, 3 critical)
 
 **Plans** (`.claude/plans/`, gitignored):
 

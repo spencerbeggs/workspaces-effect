@@ -10,6 +10,9 @@ tags:
   - dependency-graph
   - topological-sort
   - phase-2
+related:
+  - architecture.md
+  - phase3-change-detection.md
 ---
 
 ## Phase 2: Dependency Graph Design

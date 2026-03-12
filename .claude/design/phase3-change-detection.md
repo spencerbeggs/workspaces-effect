@@ -11,6 +11,10 @@ tags:
   - git
   - command
   - phase3
+related:
+  - architecture.md
+  - phase2-dependency-graph.md
+  - effect-best-practices.md
 ---
 
 ## Phase 3: Change Detection Design
@@ -147,8 +151,8 @@ class ChangeDetectionOptions extends Schema.Class<ChangeDetectionOptions>(
   /** Base ref to compare against (commit SHA, branch, tag). Default: "HEAD~1". */
   base: Schema.optionalWith(Schema.String, { default: () => "HEAD~1" }),
 
-  /** Head ref to compare to. Default: "HEAD" (working tree if undefined). */
-  head: Schema.optional(Schema.String),
+  /** Head ref to compare to. Default: "HEAD". */
+  head: Schema.optionalWith(Schema.String, { default: () => "HEAD" }),
 
   /** If true, include uncommitted working tree changes. */
   includeUncommitted: Schema.optionalWith(Schema.Boolean, {

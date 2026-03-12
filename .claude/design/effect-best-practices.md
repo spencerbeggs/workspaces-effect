@@ -12,6 +12,9 @@ tags:
   - best-practices
   - platform-error
   - testing
+related:
+  - architecture.md
+  - phase3-change-detection.md
 ---
 
 ## Effect Best Practices & Patterns
@@ -28,6 +31,7 @@ tags:
 - [Testing](#testing)
 - [Platform Abstraction](#platform-abstraction)
 - [Graph Construction Patterns](#graph-construction-patterns)
+- [Command Execution Patterns](#command-execution-patterns)
 - [Gotchas & Pitfalls](#gotchas--pitfalls)
 - [Powerful Abstractions](#powerful-abstractions)
 - [Rationale](#rationale)

@@ -4,6 +4,10 @@ module: core
 status: draft
 created: 2026-03-12
 updated: 2026-03-12
+related:
+  - phase2-dependency-graph.md
+  - phase3-change-detection.md
+  - effect-best-practices.md
 authors:
   - C. Spencer Beggs
 tags:
@@ -45,21 +49,26 @@ abstractions. Users compose only the services they need and provide platform lay
 
 ## Current State
 
-Phases 1 (Discovery Services) and 2 (Package Analysis) are complete. 76 tests
-passing, all typechecking.
+Phases 1 (Discovery Services) and 2 (Package Analysis) are complete. Phase 3
+(Change Detection) design is complete with service interfaces defined and
+initial tests written. 83 tests passing, all typechecking.
 
 - **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
-  WorkspacePackage, WorkspaceInfo, DetectedPackageManager
-- **Errors**: WorkspaceRootNotFoundError, PackageManagerDetectionError,
+  WorkspacePackage, WorkspaceInfo, DetectedPackageManager,
+  ChangeDetectionOptions
+- **Errors** (9 total): WorkspaceRootNotFoundError, PackageManagerDetectionError,
   WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError,
-  CyclicDependencyError, DependencyResolutionError
+  CyclicDependencyError, DependencyResolutionError, GitNotAvailableError,
+  ChangeDetectionError
 - **Discovery Layers** (Phase 1): WorkspaceRootLive, PackageManagerDetectorLive,
   WorkspaceDiscoveryLive, DiscoveryLive (composite)
 - **Package Analysis Layers** (Phase 2): DependencyGraphLive,
   TopologicalSorterLive
-- **Tests**: 76 tests passing (17 schema/error + 19 discovery layer +
+- **Service Interfaces** (Phase 3): PackageResolver, ChangeDetector
+- **Tests**: 83 tests passing (24 schema/error/service-tag + 19 discovery layer +
   18 WorkspaceDiscovery + 12 DependencyGraph + 10 TopologicalSorter)
-- **Next**: Phase 3 (Change Detection)
+- **Next**: Phase 3 Live layer implementations (PackageResolverLive,
+  ChangeDetectorLive)
 
 ## Design Goals
 
@@ -344,13 +353,13 @@ const DiscoveryLive: Layer.Layer<
   FileSystem | Path
 >
 
-// Full library layer
+// Full library layer (future — when all phases are implemented)
 const WorkspacesLive: Layer.Layer<
   WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery |
-  PackageJsonReader | DependencyGraph | TopologicalSorter |
-  GlobResolver | PackageResolver | ChangeDetector,
+  DependencyGraph | TopologicalSorter |
+  PackageResolver | ChangeDetector,
   never,
-  FileSystem | Path | Command
+  FileSystem | Path | CommandExecutor
 >
 ```
 
@@ -437,12 +446,17 @@ Detection order (first match wins):
 ### Glob Resolution
 
 Workspace patterns like `packages/*` are resolved to actual directories using
-platform FileSystem. The `GlobResolver` service handles:
+platform FileSystem. The glob logic is currently embedded in
+`WorkspaceDiscoveryLive` (not a separate service). It handles:
 
 - Simple wildcards: `packages/*`
 - Nested wildcards: `packages/**`
 - Negation: `!packages/internal-*`
 - Multiple patterns with merge/exclude
+
+**Note**: A separate `GlobResolver` service was deferred. The current
+implementation in WorkspaceDiscoveryLive is sufficient. See
+`phase3-change-detection.md` for the deferral decision.
 
 ## Rationale
 
@@ -498,8 +512,9 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
 
 4. **Change detection scope**: RESOLVED. ChangeDetector provides three
    progressive methods: `changedFiles` (raw git diff), `changedPackages`
-   (files mapped to packages), `affectedPackages` (changed + transitive
-   dependents via DependencyGraph).
+   (files mapped to packages via PackageResolver), `affectedPackages`
+   (changed + transitive dependents via DependencyGraph). See
+   `phase3-change-detection.md` for full design.
 
 5. **Dual API priority**: Should the Promise wrapper API be in the main
    package or a separate `/node` entry point (following type-registry-effect
