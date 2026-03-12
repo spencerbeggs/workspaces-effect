@@ -56,6 +56,20 @@ state of a monorepo without running `install`, which is valuable for:
 4. **Parse YAML/JSON/JSONC** using Effect Schema for validation
 5. **Keep it lightweight** — parse only what consumers need
 
+## Use Cases
+
+1. **Dependency audit** — "What exact versions are installed across the
+   monorepo?" Enables security scanning and license compliance.
+2. **Version consistency** — "Are all workspace packages using the same
+   version of react?" Catches version skew.
+3. **Change impact analysis** — "Which packages are affected by this
+   lockfile change?" Complements Phase 3 ChangeDetector.
+4. **Integrity checking** — "Is the lockfile in sync with package.json?"
+   Detects stale lockfiles.
+5. **Workspace dependency resolution** — "What resolved version does
+   package A see for its dependency on package B?" Useful for build
+   ordering and compatibility analysis.
+
 ## Service Decomposition
 
 The original architecture proposed two services:
@@ -152,11 +166,24 @@ Similar to ChangeDetector, the service provides progressive levels:
 
 ### yarn.lock
 
-- **Format**: Custom YAML-like (yarn classic) or YAML (yarn berry)
-- **Key fields**: Package entries with resolution, dependencies, checksum
-- **Workspace encoding**: `resolution: "workspace:*"`
-- **Inter-workspace deps**: `workspace:` protocol
-- **Parser needed**: Custom parser or YAML parser (yarn berry)
+**Yarn Classic (v1)** — Custom format, NOT valid YAML:
+
+- Entries keyed by `"name@version-range":`
+- Fields: `version`, `resolved`, `integrity`, `dependencies`
+- No workspace-specific encoding
+- Would need custom parser
+
+**Yarn Berry (v2+)** — YAML format:
+
+- Entries keyed by `"name@npm:version-range"` or `"name@workspace:*"`
+- Fields: `version`, `resolution`, `dependencies`, `checksum`
+- Workspace encoding: `resolution: "workspace:*"`
+- Inter-workspace deps: `workspace:` protocol
+- Can use YAML parser
+
+**Decision**: Support Yarn Berry only (project states "yarn Berry"). Yarn
+Classic workspaces have a very different format. If Classic support is
+needed, add it as a separate parser later.
 
 ### bun.lock
 
@@ -304,8 +331,12 @@ Options:
 2. **jsonc-parser** — VS Code's JSONC parser, handles comments too
 3. **Custom Effect.try wrapper** — strip commas in preprocessing
 
-**Recommendation**: Simple comma stripping + `JSON.parse`. The bun.lock
-format is regular enough that a regex replacement handles it.
+**Decision**: Use `jsonc-parser` package. Rationale:
+
+- Robust handling of trailing commas AND comments
+- Battle-tested (used by VS Code internally)
+- Small footprint, no dependencies
+- Handles edge cases that regex stripping misses
 
 ### Parsing pipeline pattern
 
@@ -406,13 +437,27 @@ const testLayer = LockfileReaderLive.pipe(
 )
 ```
 
+### Test fixtures strategy
+
+Generate realistic lockfile fixtures for each PM format. For PMs we
+don't have real monorepos for (yarn Berry, bun), create minimal fixture
+files that exercise the parsing logic:
+
+- **pnpm**: Extract from our own `pnpm-lock.yaml` (real data)
+- **npm**: Create a minimal `package-lock.json` v3 with workspace entries
+- **yarn Berry**: Generate a minimal `yarn.lock` with `workspace:*` entries
+- **bun**: Generate a minimal `bun.lock` JSONC with workspace tuples
+
+Fixtures should be inline strings in test files (like existing tests),
+not separate files, to keep tests self-contained.
+
 ### Test matrix
 
 | PM | Lockfile | Tests needed |
 | -- | -------- | ------------ |
-| pnpm | pnpm-lock.yaml | parse, workspace deps, resolved versions |
+| pnpm | pnpm-lock.yaml | parse, workspace deps, resolved versions, catalogs |
 | npm | package-lock.json | parse, workspace deps, resolved versions |
-| yarn | yarn.lock | parse, workspace deps, resolved versions |
+| yarn | yarn.lock (Berry) | parse, workspace deps, resolved versions |
 | bun | bun.lock | parse (JSONC), workspace deps, tuple parsing |
 | all | missing lockfile | LockfileReadError |
 | all | malformed lockfile | LockfileParseError |
