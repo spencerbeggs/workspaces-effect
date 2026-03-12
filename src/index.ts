@@ -19,6 +19,7 @@ export {
 	WorkspaceRootNotFoundError,
 } from "./errors/index.js";
 // ── Layers ──────────────────────────────────────────────────────────
+export { ChangeDetectionLive } from "./layers/ChangeDetectionLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export { DiscoveryLive } from "./layers/DiscoveryLive.js";

@@ -2,6 +2,7 @@
  * Live layer implementations for workspace services.
  */
 
+export { ChangeDetectionLive } from "./ChangeDetectionLive.js";
 export { ChangeDetectorLive } from "./ChangeDetectorLive.js";
 export { DependencyGraphLive } from "./DependencyGraphLive.js";
 export { DiscoveryLive } from "./DiscoveryLive.js";
