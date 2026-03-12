@@ -135,6 +135,17 @@ WorkspaceDiscoveryLive already handles workspace config reading; PM-specific
 config (catalogs, overrides) is lockfile-adjacent. PM-specific data accessible
 via optional `pmSpecific` extension field on `LockfileData`.
 
+**Architectural notes for LockfileReader layer construction:**
+
+- `Layer.unwrapEffect` can be used to dynamically construct the LockfileReader
+  layer based on which lockfile format is detected at runtime (e.g., read the
+  detected PM, then return the appropriate PM-specific parser layer).
+- `Layer.orElse` provides a fallback chain for PM detection -- try pnpm
+  lockfile parsing first, fall back to npm, then yarn, then bun.
+- Consider using `Request`/`RequestResolver` for batch package resolution
+  across workspaces in future phases. This would enable efficient batched
+  lookups when resolving many packages from lockfile data simultaneously.
+
 ### Service Interface Pattern
 
 Following the `Context.Tag` class pattern (consistent with Effect docs):
@@ -165,6 +176,10 @@ our Rslib + api-extractor DTS bundling pipeline. The `_base` constants
 are inlined as `declare const` in the bundled `.d.ts` (not exported),
 which is the expected behavior. "Forgotten exports" warnings from
 api-extractor are cosmetic and do not affect the output.
+
+**Note:** Effect now provides `Effect.Service` which combines Context.Tag and
+Layer.effect into a single declaration. New services may use this pattern.
+See effect-best-practices.md for details.
 
 ## Error Hierarchy
 
@@ -548,3 +563,14 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    with PM-agnostic `LockfileData` base model. PM-specific data (catalogs,
    overrides) preserved via discriminated `pmSpecific` extension field.
    See `phase4-configuration-lockfiles.md`.
+
+10. **Effect.Service migration**: Consider `Effect.Service` migration for new
+    services (simpler API, auto-generates Default layer). Existing services
+    using `Context.Tag` + `Layer.effect` work fine; migration is optional
+    and only recommended for new service definitions.
+
+11. **Request/RequestResolver for batch lookups**: Evaluate
+    `Request`/`RequestResolver` for batch dependency lookups in workspace
+    graph traversal. This pattern could optimize scenarios where many
+    packages need resolution simultaneously (e.g., full lockfile parsing,
+    cross-workspace dependency analysis).

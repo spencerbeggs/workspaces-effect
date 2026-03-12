@@ -3,7 +3,7 @@ title: "Effect Best Practices & Patterns"
 module: core
 category: patterns
 status: current
-completeness: 80
+completeness: 90
 created: 2026-03-12
 updated: 2026-03-12
 last-synced: 2026-03-12
@@ -34,6 +34,8 @@ related:
 - [Platform Error Handling](#platform-error-handling)
 - [Schema Patterns](#schema-patterns)
 - [Layer Composition](#layer-composition)
+- [Effect.Service Pattern](#effectservice-pattern)
+- [Dynamic Layer Patterns](#dynamic-layer-patterns)
 - [Testing](#testing)
 - [Platform Abstraction](#platform-abstraction)
 - [Graph Construction Patterns](#graph-construction-patterns)
@@ -311,6 +313,97 @@ const DiscoveryLive = Layer.mergeAll(
 const FullLive = WorkspaceDiscoveryLive.pipe(
   Layer.provide(WorkspaceRootLive)
 );
+```
+
+## Effect.Service Pattern
+
+The modern `Effect.Service` pattern combines service definition and layer
+creation in a single declaration. This is simpler and more self-contained
+than the separate `Context.Tag` + `Layer.effect` approach:
+
+```typescript
+class Cache extends Effect.Service<Cache>()("app/Cache", {
+  effect: Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const lookup = (key: string) => fs.readFileString(`cache/${key}`)
+    return { lookup } as const
+  }),
+  dependencies: [NodeFileSystem.layer]
+}) {}
+
+// Auto-generates:
+// Cache.Default           -- Layer<Cache, never, never> (deps included)
+// Cache.DefaultWithoutDependencies -- Layer<Cache, never, FileSystem>
+```
+
+`Cache.Default` is a fully wired layer (dependencies baked in), while
+`Cache.DefaultWithoutDependencies` exposes the dependency requirements in
+the `R` channel for manual wiring.
+
+**Note on `scoped`:** Use `scoped` instead of `effect` when the service
+manages resources that need cleanup (e.g., open file handles, connections).
+The `scoped` variant ensures resources are released when the layer is torn
+down:
+
+```typescript
+class DbPool extends Effect.Service<DbPool>()("app/DbPool", {
+  scoped: Effect.gen(function* () {
+    const pool = yield* Effect.acquireRelease(
+      createPool(),
+      (pool) => pool.close()
+    )
+    return { query: (sql: string) => pool.query(sql) } as const
+  }),
+}) {}
+```
+
+**Migration note:** Our existing code uses `Context.Tag` + `Layer.effect`
+separately (see [Service Definition](#service-definition) and
+[Layer Composition](#layer-composition)). Consider migrating to
+`Effect.Service` for new services where the combined pattern reduces
+boilerplate. Existing services do not need to be migrated unless they are
+being significantly refactored.
+
+## Dynamic Layer Patterns
+
+### Layer.unwrapEffect for runtime-dependent layers
+
+`Layer.unwrapEffect` creates layers whose construction depends on runtime
+information (e.g., environment variables, config files). It takes an
+`Effect<Layer>` and "unwraps" it into a plain `Layer`:
+
+```typescript
+const LogLevelLive = Config.logLevel("LOG_LEVEL").pipe(
+  Effect.andThen((level) => Logger.minimumLogLevel(level)),
+  Layer.unwrapEffect
+)
+```
+
+This is useful when a layer's behavior must be determined at startup from
+config, environment, or other effectful sources.
+
+### Layer.orElse for fallback layers
+
+`Layer.orElse` provides a fallback when a layer's construction fails. The
+fallback layer is only constructed if the primary layer fails:
+
+```typescript
+const database = postgresDatabaseLayer.pipe(
+  Layer.orElse(() => inMemoryDatabaseLayer)
+)
+```
+
+**Relevance to workspaces-effect:** `Layer.orElse` could be used for
+fallback package manager detection -- try pnpm lockfile layer, fall back
+to npm, etc. This provides graceful degradation without complex branching
+logic:
+
+```typescript
+const PackageManagerLive = pnpmDetectorLayer.pipe(
+  Layer.orElse(() => yarnDetectorLayer),
+  Layer.orElse(() => npmDetectorLayer),
+  Layer.orElse(() => bunDetectorLayer),
+)
 ```
 
 ## Testing
