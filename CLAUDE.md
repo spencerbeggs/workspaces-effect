@@ -6,7 +6,8 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 ## Status
 
 Phases 1-3 complete. 104 tests passing. Phase 4 (Configuration & Lockfiles)
-in design. Development plans in `.claude/plans/` (gitignored).
+design at 85% — service interface drafted, test fixtures created, all schemas
+defined. Ready to prototype parsing pipelines. Plans in `.claude/plans/`.
 
 ## Design Documents
 
@@ -16,6 +17,8 @@ Load these when working on the corresponding area:
 - `.claude/design/effect-best-practices.md` — Effect patterns and conventions
 - `.claude/design/phase3-change-detection.md` — git change detection design
 - `.claude/design/phase4-configuration-lockfiles.md` — lockfile parsing design
+- `.claude/design/lockfile-reader-service.md` — LockfileReader service interface
+- `.claude/design/lockfile-schemas.md` — all 4 lockfile format schemas
 - `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference
 - `.claude/design/code-review-findings.md` — known issues (5/10 fixed)
 - `.claude/design/research-notes.md` — patterns from sibling repos
@@ -27,6 +30,8 @@ Load these when working on the corresponding area:
 - `Data.TaggedError` with exported Base constants
 - CommandExecutor resolved at layer construction for R=never methods
 - Eager data construction in `Layer.effect`
+- `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
+- Test fixtures in `src/test-fixtures/` (lockfiles for all 4 PMs)
 
 ## Commands
 
