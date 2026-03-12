@@ -28,7 +28,8 @@ tags:
 - [Sibling Repo Analysis](#sibling-repo-analysis)
 - [Effect Documentation Insights](#effect-documentation-insights)
 - [Workspace Detection Patterns](#workspace-detection-patterns)
-- [Service Patterns Across Sibling Repos](#service-patterns-across-sibling-repos)
+- [Service Patterns Across Sibling Repos (2026-03-12)](#service-patterns-across-sibling-repos-2026-03-12)
+- [Silk Deployment Publishability Pattern](#silk-deployment-publishability-pattern)
 - [Rationale](#rationale)
 
 <!-- /TOC -->
@@ -425,7 +426,7 @@ Walk up from cwd looking for:
 
 The root is the highest ancestor directory containing a workspace marker.
 
-## Service Patterns Across Sibling Repos
+## Service Patterns Across Sibling Repos (2026-03-12)
 
 Research from runtime-resolver, semver-effect, type-registry-effect, and
 github-action-effects.
