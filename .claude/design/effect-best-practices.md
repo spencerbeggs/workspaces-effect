@@ -10,6 +10,8 @@ tags:
   - effect
   - patterns
   - best-practices
+  - platform-error
+  - testing
 ---
 
 ## Effect Best Practices & Patterns
@@ -20,6 +22,7 @@ tags:
 - [Current State](#current-state)
 - [Service Definition](#service-definition)
 - [Error Handling](#error-handling)
+- [Platform Error Handling](#platform-error-handling)
 - [Schema Patterns](#schema-patterns)
 - [Layer Composition](#layer-composition)
 - [Testing](#testing)
@@ -38,8 +41,10 @@ and sibling repos. Updated continuously as we learn.
 
 ## Current State
 
-Initial patterns catalogued from research phase (2026-03-12). Will grow
-as implementation progresses.
+Initial patterns catalogued from research phase (2026-03-12). Updated with
+platform error handling and filesystem testing patterns discovered during
+Iteration 3 (WorkspaceRootLive and PackageManagerDetectorLive implementation).
+Will continue to grow as implementation progresses.
 
 ## Service Definition
 
@@ -165,6 +170,51 @@ Effect.forEach(
 )
 ```
 
+## Platform Error Handling
+
+### Converting PlatformError to clean values with orElseSucceed
+
+`@effect/platform` FileSystem operations fail with `PlatformError`, which
+would leak into the error channel of your service methods. Use
+`Effect.orElseSucceed` to convert these to clean values when the FS operation
+is exploratory (checking existence, reading optional files):
+
+```typescript
+// Convert fs.exists PlatformError to boolean
+const exists = yield* fs.exists(filePath).pipe(
+  Effect.orElseSucceed(() => false)
+);
+
+// Convert fs.readFileString PlatformError to safe default
+const content = yield* fs.readFileString(filePath).pipe(
+  Effect.orElseSucceed(() => "{}")
+);
+```
+
+This keeps the error channel clean -- your service methods expose only your
+own typed errors (e.g., `WorkspaceRootNotFoundError`), not platform-level
+filesystem errors.
+
+### Effect.option for directory walking
+
+When walking up directories to find a workspace root, use `Effect.option`
+to convert expected failures (reaching filesystem root without finding a
+marker) into `Option` values:
+
+```typescript
+const parent = yield* Effect.option(getParentDir(currentDir));
+// Option.None means we've exhausted the search
+```
+
+### When to use which pattern
+
+| Scenario | Pattern | Result Type |
+| -------- | ------- | ----------- |
+| File existence check | `Effect.orElseSucceed(() => false)` | `boolean` |
+| Optional file read | `Effect.orElseSucceed(() => defaultValue)` | `string` |
+| Search that may exhaust | `Effect.option` | `Option<T>` |
+| Must-succeed FS op | Let PlatformError propagate | Caller handles |
+
 ## Schema Patterns
 
 ### Schema.Literal for enums
@@ -267,6 +317,46 @@ const mockFs = FileSystem.layerNoop({
   readFileString: (path) => Effect.succeed('{"name": "test"}'),
   exists: (path) => Effect.succeed(true),
   readDirectory: (path) => Effect.succeed(["pkg-a", "pkg-b"]),
+});
+```
+
+### FileSystem.layerNoop with Path.layer for layer tests
+
+When testing layers that depend on both `FileSystem` and `Path`, combine
+`FileSystem.layerNoop` (mock FS methods) with `Path.layer` (real Path
+operations). This lets you control filesystem behavior while getting correct
+cross-platform path joining:
+
+```typescript
+const testLayer = WorkspaceRootLive.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      FileSystem.layerNoop({
+        exists: (path) => {
+          if (path === "/project/pnpm-workspace.yaml") return Effect.succeed(true);
+          return Effect.succeed(false);
+        },
+        readFileString: (path) => Effect.succeed("{}"),
+      }),
+      Path.layer,
+    )
+  )
+);
+```
+
+### Effect.die for unreachable FS errors in tests
+
+In tests, when a mock FS method should never be called for a particular
+code path, use `Effect.die` instead of constructing a proper `PlatformError`.
+This is simpler and makes test failures obvious:
+
+```typescript
+FileSystem.layerNoop({
+  exists: (_path) => Effect.die("exists should not be called in this test"),
+  readFileString: (path) => {
+    if (path === "/expected/path") return Effect.succeed(content);
+    return Effect.die(`unexpected readFileString call: ${path}`);
+  },
 });
 ```
 

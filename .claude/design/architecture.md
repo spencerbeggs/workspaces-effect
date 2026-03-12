@@ -45,9 +45,18 @@ abstractions. Users compose only the services they need and provide platform lay
 
 ## Current State
 
-The project is in the design phase. The monorepo scaffold exists with build
-tooling (Rslib, Turbo, Vitest, Biome) configured. No packages or source code
-beyond placeholder stubs exist yet. The design docs system is initialized.
+The project is in Phase 1 (Discovery Services) implementation. The monorepo
+scaffold exists with build tooling (Rslib, Turbo, Vitest, Biome) configured.
+Core schemas, error types, and two of three discovery service layers are
+implemented:
+
+- **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
+  WorkspacePackage, WorkspaceInfo, DetectedPackageManager
+- **Errors**: WorkspaceRootNotFoundError, PackageManagerDetectionError,
+  WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError
+- **Layers**: WorkspaceRootLive, PackageManagerDetectorLive
+- **Tests**: 36 tests passing (17 schema/error + 19 layer tests)
+- **Remaining**: WorkspaceDiscovery service, integration layer, Promise API
 
 ## Design Goals
 
@@ -296,10 +305,18 @@ class WorkspaceInfo extends Schema.Class<WorkspaceInfo>("WorkspaceInfo")({
 
 ## Layer Composition
 
+### Platform Error Handling in Layers
+
+Layer implementations use `@effect/platform` FileSystem and Path services
+exclusively (no direct `node:` imports). PlatformError from FS operations is
+converted to clean values using `Effect.orElseSucceed`, so service methods
+expose only our own typed errors. See `effect-best-practices.md` for the
+full pattern catalog.
+
 ### Live Layers (Platform-dependent)
 
 ```typescript
-// Core layers
+// Core layers (implemented)
 const WorkspaceRootLive: Layer.Layer<
   WorkspaceRoot, never, FileSystem | Path
 >
