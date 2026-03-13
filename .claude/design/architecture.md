@@ -3,10 +3,10 @@ title: "Module Architecture Design"
 module: core
 category: architecture
 status: current
-completeness: 85
+completeness: 95
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-13
+last-synced: 2026-03-13
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -56,24 +56,30 @@ abstractions. Users compose only the services they need and provide platform lay
 
 ## Current State
 
-Phases 1 (Discovery Services), 2 (Package Analysis), and 3 (Change Detection)
-are complete. 104 tests passing, all typechecking.
+Phases 1 (Discovery), 2 (Package Analysis), 3 (Change Detection), and
+4 (Configuration & Lockfiles) are complete. 154 tests passing, all typechecking.
+Full observability (spans + structured logging) across all services.
 
 - **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
   WorkspacePackage, WorkspaceInfo, DetectedPackageManager,
-  ChangeDetectionOptions
-- **Errors** (9 total): WorkspaceRootNotFoundError, PackageManagerDetectionError,
+  ChangeDetectionOptions, ResolvedPackage, WorkspaceDependency, LockfileData,
+  LockfileIntegrity, PnpmExtension, BunExtension
+- **Errors** (12 total): WorkspaceRootNotFoundError, PackageManagerDetectionError,
   WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError,
   CyclicDependencyError, DependencyResolutionError, GitNotAvailableError,
-  ChangeDetectionError
+  ChangeDetectionError, LockfileReadError, LockfileParseError,
+  LockfileIntegrityError
 - **Discovery Layers** (Phase 1): WorkspaceRootLive, PackageManagerDetectorLive,
   WorkspaceDiscoveryLive, DiscoveryLive (composite)
 - **Package Analysis Layers** (Phase 2): DependencyGraphLive,
   TopologicalSorterLive
 - **Change Detection Layers** (Phase 3): PackageResolverLive,
   ChangeDetectorLive, ChangeDetectionLive (composite)
-- **Tests**: 104 tests passing across 9 test files
-- **Next**: Phase 4 design (Configuration & Lockfiles)
+- **Configuration Layers** (Phase 4): LockfileReaderLive, ConfigurationLive,
+  FullConfigLive (composite), parsers for pnpm/npm/yarn/bun, integrity checker
+- **Tests**: 154 tests passing across 15 test files
+- **Observability**: Effect.withSpan on all service methods and layer
+  construction; structured logging at Info/Debug/Trace levels
 
 ## Design Goals
 
@@ -124,7 +130,7 @@ reads package.json). `DependencyGraph` consumes discovery output directly.
 `WorkspaceDiscoveryLive` is sufficient for current needs. Can be
 extracted if future phases need general-purpose glob matching.
 
-### Group 4: Configuration (design in progress)
+### Group 4: Configuration (implemented)
 
 | Service | Purpose | Dependencies |
 | ------- | ------- | ------------ |
@@ -544,9 +550,8 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    (changed + transitive dependents via DependencyGraph). See
    `phase3-change-detection.md` for full design.
 
-5. **Dual API priority**: Should the Promise wrapper API be in the main
-   package or a separate `/node` entry point (following type-registry-effect
-   pattern)?
+5. **Dual API priority**: RESOLVED. Skipped — this is an Effect-ful library;
+   no Promise wrappers needed. Non-Effect consumers are not a target audience.
 
 6. **pnpm catalogs**: RESOLVED. Yes, parse catalogs from lockfile.
    Available via `PnpmExtension.catalogs` on `LockfileData.pmSpecific`.
@@ -564,28 +569,32 @@ Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
    overrides) preserved via discriminated `pmSpecific` extension field.
    See `phase4-configuration-lockfiles.md`.
 
-10. **Effect.Service migration**: Consider `Effect.Service` migration for new
-    services (simpler API, auto-generates Default layer). Existing services
-    using `Context.Tag` + `Layer.effect` work fine; migration is optional
-    and only recommended for new service definitions.
+10. **Effect.Service migration**: PLANNED. Migrate existing services from
+    `Context.Tag` + `Layer.effect` to `Effect.Service` pattern. New services
+    (e.g., PublishabilityDetector) should use `Effect.Service` from the start.
 
-11. **Request/RequestResolver for batch lookups**: Evaluate
+11. **Request/RequestResolver for batch lookups**: PLANNED. Evaluate
     `Request`/`RequestResolver` for batch dependency lookups in workspace
     graph traversal. This pattern could optimize scenarios where many
     packages need resolution simultaneously (e.g., full lockfile parsing,
     cross-workspace dependency analysis).
 
-12. **Effect-native parser modules**: Consider extracting `jsonc-effect` and
-    `yaml-effect` as standalone packages wrapping `jsonc-parser` and `yaml`
-    into Effect-native APIs. Both source libraries are battle-tested; the
-    lift to Effect idioms (Schema integration, typed errors, composable
-    pipelines) should be manageable. Having Effect-native parsers makes the
-    entire parsing pipeline more composable. Could live as sibling packages
-    in the monorepo (like `semver-effect`).
+12. **Effect-native parser modules**: RESOLVED. `jsonc-effect` already
+    published on npm. `yaml-effect` in progress as sibling repo. Will
+    eventually replace direct `yaml` dependency in pnpm/yarn parsers.
 
-13. **Publishable package detection**: Add a composable
-    `PublishabilityDetector` layer. Default strategy: check `"private"`
-    field and `publishConfig` in `package.json`. Design should allow users
-    to compose their own service to override the detection strategy (e.g.,
-    Silk Deployment uses a custom approach in `workflow-release-action`).
-    This keeps the module spec-compliant by default but extensible.
+13. **Publishable package detection**: PLANNED. Add a composable
+    `PublishabilityDetector` service. Base case: check `private` field,
+    `publishConfig.access` (overrides private), `publishConfig.registry`,
+    `publishConfig.directory`. Must be pluggable so consumers can override
+    the detection strategy (e.g., workflow-release-action has multi-registry
+    target resolution, JSR support, provenance handling).
+
+14. **Composite WorkspacesLive layer**: PLANNED. Single top-level layer
+    wiring all services together. Currently users must compose DiscoveryLive,
+    ChangeDetectionLive, and ConfigurationLive manually.
+
+15. **Observability**: RESOLVED. Full span coverage on all service methods
+    and layer construction. Structured logging at Info/Debug/Trace levels.
+    `workspace.*` attribute namespace. See
+    `docs/superpowers/specs/2026-03-13-observability-design.md`.

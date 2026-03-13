@@ -2,8 +2,8 @@
 title: "LockfileReader Service Interface Design"
 module: core
 category: architecture
-status: draft
-completeness: 50
+status: complete
+completeness: 95
 created: 2026-03-12
 updated: 2026-03-12
 last-synced: 2026-03-12

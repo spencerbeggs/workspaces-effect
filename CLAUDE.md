@@ -5,9 +5,10 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-Phases 1-3 complete. 104 tests passing. Phase 4 (Configuration & Lockfiles)
-design at 85% — service interface drafted, test fixtures created, all schemas
-defined. Ready to prototype parsing pipelines. Plans in `.claude/plans/`.
+Phases 1-4 complete. 154 tests passing. Full observability (spans + structured
+logging) across all services. Planning next: PublishabilityDetector service,
+composite WorkspacesLive layer, Effect.Service migration, Request/RequestResolver
+batch optimization.
 
 ## Design Documents
 

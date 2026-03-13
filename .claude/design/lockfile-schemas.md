@@ -2,8 +2,8 @@
 title: "Lockfile Schema Definitions"
 module: core
 category: reference
-status: draft
-completeness: 70
+status: complete
+completeness: 95
 created: 2026-03-12
 updated: 2026-03-12
 last-synced: 2026-03-12
