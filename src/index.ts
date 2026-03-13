@@ -22,11 +22,8 @@ export {
 	WorkspaceRootNotFoundError,
 } from "./errors/index.js";
 // ── Layers ──────────────────────────────────────────────────────────
-export { ChangeDetectionLive } from "./layers/ChangeDetectionLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
-export { ConfigurationLive, FullConfigLive } from "./layers/ConfigurationLive.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
-export { DiscoveryLive } from "./layers/DiscoveryLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
@@ -34,6 +31,7 @@ export { PublishabilityDetectorLive } from "./layers/PublishabilityDetectorLive.
 export { TopologicalSorterLive } from "./layers/TopologicalSorterLive.js";
 export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
+export { WorkspacesFullLive, WorkspacesLive } from "./layers/WorkspacesLive.js";
 export type {
 	PackageJsonType,
 	PackageManagerType,
