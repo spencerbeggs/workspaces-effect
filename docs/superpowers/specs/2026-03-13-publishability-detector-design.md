@@ -73,20 +73,26 @@ class PublishTarget extends Schema.Class<PublishTarget>(
 
 ### WorkspacePackage
 
-Two new fields:
+One new field to carry raw `publishConfig` data from `package.json`:
 
 ```typescript
-publishable: Schema.optionalWith(Schema.Boolean, {
-  default: () => false,
-}),
-publishTargets: Schema.optionalWith(
-  Schema.Array(PublishTarget),
-  { default: () => [] },
-),
+publishConfig: Schema.optional(PublishConfigSchema),
 ```
 
-`publishable` is derived (true when `publishTargets.length > 0`) but
-having it explicit makes filtering easy without importing PublishTarget.
+Note: `publishable` and `publishTargets` are **not** added to
+`WorkspacePackage`. These are outputs of `PublishabilityDetector.detect()`
+returned as `ReadonlyArray<PublishTarget>`. `WorkspacePackage` is
+constructed by `WorkspaceDiscovery` before detection runs, so embedding
+derived publish state would create a chicken-and-egg problem
+(`Schema.Class` instances are immutable). The service returns targets
+directly; consumers derive publishability from `targets.length > 0`.
+
+### PublishConfig provenance note
+
+`PublishConfigSchema` does not include `provenance` because standard
+`package.json` `publishConfig` does not define it. The `provenance`
+field on `PublishTarget` defaults to `false` and is only settable by
+custom layers that have their own provenance logic.
 
 ## Service Interface
 
@@ -94,7 +100,7 @@ having it explicit makes filtering easy without importing PublishTarget.
 
 ```typescript
 class PublishabilityDetector extends Context.Tag(
-  "PublishabilityDetector",
+  "@spencerbeggs/workspaces-effect/PublishabilityDetector",
 )<
   PublishabilityDetector,
   {
@@ -147,7 +153,28 @@ new PublishTarget({
 ```
 
 The layer is pure — no dependencies. It interprets data already on
-`WorkspacePackage`.
+`WorkspacePackage`. The span and logging from the Observability section
+wrap the detection logic:
+
+```typescript
+detect: (pkg, root) =>
+  Effect.gen(function* () {
+    const publishConfig = pkg.publishConfig;
+    // ... detection logic above ...
+    yield* Effect.logDebug("Publishability resolved").pipe(
+      Effect.annotateLogs({
+        "workspace.package": pkg.name,
+        "workspace.publishable": targets.length > 0,
+        "workspace.targets.count": targets.length,
+      }),
+    );
+    return targets;
+  }).pipe(
+    Effect.withSpan("PublishabilityDetector.detect", {
+      attributes: { "workspace.package": pkg.name },
+    }),
+  ),
+```
 
 ### Custom layer example
 
@@ -221,9 +248,13 @@ Test cases:
 ## WorkspaceDiscoveryLive Changes
 
 `WorkspaceDiscoveryLive` already reads each package's `package.json` via
-`PackageJsonSchema`. After the schema enrichment, `publishConfig` is
-parsed automatically. The discovery layer passes it through when
-constructing `WorkspacePackage` instances — no additional file reads.
+`PackageJsonSchema`. After adding `publishConfig` to the schema, it is
+parsed automatically. However, `readWorkspacePackage` (the function that
+constructs `WorkspacePackage` from parsed `PackageJsonSchema`) must be
+updated to explicitly extract and pass through the `publishConfig` field.
+Currently it manually maps `name`, `version`, `private`, `dependencies`,
+`devDependencies` — `publishConfig` must be added to this mapping. No
+additional file reads are needed.
 
 ## Files Modified
 
@@ -231,7 +262,7 @@ constructing `WorkspacePackage` instances — no additional file reads.
 - Create: `src/services/PublishabilityDetector.ts` — service interface
 - Create: `src/layers/PublishabilityDetectorLive.ts` — default layer + observability
 - Create: `src/layers/PublishabilityDetectorLive.test.ts` — tests
-- Modify: `src/schemas/core.ts` — add PublishConfigSchema to PackageJsonSchema, add publishable/publishTargets to WorkspacePackage
+- Modify: `src/schemas/core.ts` — add PublishConfigSchema to PackageJsonSchema, add publishConfig to WorkspacePackage
 - Modify: `src/layers/WorkspaceDiscoveryLive.ts` — pass through publishConfig when constructing WorkspacePackage
 - Modify: `src/index.ts` — export new schemas, service, layer
 
