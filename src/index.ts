@@ -12,6 +12,9 @@ export {
 	CyclicDependencyError,
 	DependencyResolutionError,
 	GitNotAvailableError,
+	LockfileIntegrityError,
+	LockfileParseError,
+	LockfileReadError,
 	PackageJsonParseError,
 	PackageManagerDetectionError,
 	PackageNotFoundError,
@@ -21,8 +24,10 @@ export {
 // ── Layers ──────────────────────────────────────────────────────────
 export { ChangeDetectionLive } from "./layers/ChangeDetectionLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
+export { ConfigurationLive, FullConfigLive } from "./layers/ConfigurationLive.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export { DiscoveryLive } from "./layers/DiscoveryLive.js";
+export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
 export { TopologicalSorterLive } from "./layers/TopologicalSorterLive.js";
@@ -43,8 +48,17 @@ export {
 	WorkspacePackage,
 	WorkspacePath,
 } from "./schemas/core.js";
+export {
+	BunExtension,
+	LockfileData,
+	LockfileIntegrity,
+	PnpmExtension,
+	ResolvedPackage,
+	WorkspaceDependency,
+} from "./schemas/lockfile.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
 export { DependencyGraph } from "./services/DependencyGraph.js";
+export { LockfileReader } from "./services/LockfileReader.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
 export { PackageResolver } from "./services/PackageResolver.js";
