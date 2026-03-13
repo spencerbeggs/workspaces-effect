@@ -26,6 +26,15 @@ const WorkspaceField = Schema.Union(
 	Schema.Struct({ packages: Schema.Array(Schema.String) }),
 );
 
+/** publishConfig field from package.json. */
+export const PublishConfigSchema = Schema.Struct({
+	access: Schema.optional(Schema.Literal("public", "restricted")),
+	registry: Schema.optional(Schema.String),
+	directory: Schema.optional(Schema.String),
+});
+
+export type PublishConfigType = Schema.Schema.Type<typeof PublishConfigSchema>;
+
 /** Minimal package.json schema for workspace discovery. */
 export const PackageJsonSchema = Schema.Struct({
 	name: Schema.optional(Schema.String),
@@ -36,6 +45,7 @@ export const PackageJsonSchema = Schema.Struct({
 	devDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	peerDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	packageManager: Schema.optional(Schema.String),
+	publishConfig: Schema.optional(PublishConfigSchema),
 });
 
 export type PackageJsonType = Schema.Schema.Type<typeof PackageJsonSchema>;
@@ -55,6 +65,7 @@ export class WorkspacePackage extends Schema.Class<WorkspacePackage>("WorkspaceP
 	devDependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
 		default: () => ({}),
 	}),
+	publishConfig: Schema.optional(PublishConfigSchema),
 }) {}
 
 /** Top-level workspace info for a monorepo. */
