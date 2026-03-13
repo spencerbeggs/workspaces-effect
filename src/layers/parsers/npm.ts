@@ -85,8 +85,20 @@ export const parseNpmLockfile = (
 			),
 		);
 
+		const workspaceCount = Object.values(validated.packages).filter((p) => p.link === true).length;
+		yield* Effect.logDebug("Parsed npm lockfile").pipe(
+			Effect.annotateLogs({
+				"workspace.workspaces.count": workspaceCount,
+				"workspace.packages.count": Object.keys(validated.packages).length,
+			}),
+		);
+
 		return toLockfileData(validated);
-	});
+	}).pipe(
+		Effect.withSpan("LockfileReader.parse.npm", {
+			attributes: { "workspace.lockfile": lockfilePath },
+		}),
+	);
 
 // -- Transform --
 
