@@ -129,13 +129,24 @@ export const parseYarnLockfile = (
 
 		const wsDeps = extractWorkspaceDeps(workspaceEntries, workspaceNames);
 
+		yield* Effect.logDebug("Parsed yarn lockfile").pipe(
+			Effect.annotateLogs({
+				"workspace.workspaces.count": workspaceNames.size,
+				"workspace.packages.count": packages.length,
+			}),
+		);
+
 		return new LockfileData({
 			packageManager: "yarn",
 			lockfileVersion,
 			packages,
 			workspaceDependencies: [...wsDeps],
 		});
-	});
+	}).pipe(
+		Effect.withSpan("LockfileReader.parse.yarn", {
+			attributes: { "workspace.lockfile": lockfilePath },
+		}),
+	);
 
 /** Extract package name from yarn key like
  * "\@scope/name\@npm:^1.0.0" or
