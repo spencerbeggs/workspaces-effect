@@ -105,7 +105,14 @@ export const ChangeDetectorLive = Layer.effect(
 						Effect.annotateLogs("workspace.files.count", sorted.length),
 					);
 					return sorted;
-				}).pipe(Effect.withSpan("ChangeDetector.changedFiles")),
+				}).pipe(
+					Effect.withSpan("ChangeDetector.changedFiles", {
+						attributes: {
+							"workspace.base": options.base,
+							"workspace.head": options.head,
+						},
+					}),
+				),
 
 			changedPackages: (options: ChangeDetectionOptions) =>
 				Effect.gen(function* () {

@@ -106,7 +106,7 @@ const checkConstraints = (
 							Effect.annotateLogs({
 								"workspace.package": depName,
 								constraint,
-								resolved: resolved ?? "unknown",
+								resolved,
 							}),
 						);
 						continue;
