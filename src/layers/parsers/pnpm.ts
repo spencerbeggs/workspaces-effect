@@ -97,9 +97,21 @@ export const parsePnpmLockfile = (
 			),
 		);
 
-		// Step 3: Transform to unified model
+		// Step 3: Log parsed data
+		yield* Effect.logDebug("Parsed pnpm lockfile").pipe(
+			Effect.annotateLogs({
+				"workspace.importers.count": Object.keys(validated.importers).length,
+				"workspace.packages.count": Object.keys(validated.packages ?? {}).length,
+			}),
+		);
+
+		// Step 4: Transform to unified model
 		return toLockfileData(validated);
-	});
+	}).pipe(
+		Effect.withSpan("LockfileReader.parse.pnpm", {
+			attributes: { "workspace.lockfile": lockfilePath },
+		}),
+	);
 
 // -- Transform --
 
