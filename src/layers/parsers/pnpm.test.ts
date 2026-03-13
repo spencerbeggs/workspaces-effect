@@ -76,4 +76,30 @@ describe("parsePnpmLockfile", () => {
 		const result = await Effect.runPromiseExit(parsePnpmLockfile("{{invalid yaml", "/bad/path"));
 		expect(result._tag).toBe("Failure");
 	});
+
+	it("extracts pnpm catalogs into pmSpecific", async () => {
+		const content = `lockfileVersion: "9.0"
+catalogs:
+  default:
+    lodash: ^4.17.21
+    chalk: ^5.0.0
+importers:
+  .:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.3.3
+packages:
+  typescript@5.3.3:
+    resolution:
+      integrity: sha512-abc
+`;
+		const result = await Effect.runPromise(parsePnpmLockfile(content, "/project/pnpm-lock.yaml"));
+		expect(result.pmSpecific).toBeDefined();
+		expect(result.pmSpecific?._tag).toBe("pnpm");
+		if (result.pmSpecific?._tag === "pnpm") {
+			expect(result.pmSpecific.catalogs).toBeDefined();
+			expect(result.pmSpecific.catalogs?.default?.lodash).toBe("^4.17.21");
+		}
+	});
 });
