@@ -241,6 +241,7 @@ const readWorkspacePackage = (
 			private: decoded.private ?? false,
 			dependencies: (decoded.dependencies as Record<string, string>) ?? {},
 			devDependencies: (decoded.devDependencies as Record<string, string>) ?? {},
+			publishConfig: decoded.publishConfig,
 		});
 	});
 
