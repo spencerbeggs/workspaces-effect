@@ -28,6 +28,27 @@ All three are pure Effect-compatible libraries. `jsonc-effect` and
 `semver-effect` are sibling repos with `effect` as their only runtime
 dependency.
 
+### Supersedes
+
+This spec supersedes the earlier drafts in
+`.claude/design/lockfile-reader-service.md` and refines
+`.claude/design/phase4-configuration-lockfiles.md`. Key departures:
+
+- **Simplified interface**: 4 methods instead of 6. Dropped
+  `importersFor()`, `catalogEntries()`, `overrides()` — consumers
+  access PM-specific data via `readLockfile().pmSpecific` instead
+  of dedicated methods. This reduces API surface and avoids
+  PM-specific methods that only apply to pnpm/bun.
+- **`resolvedVersion()` returns `Option`** instead of failing with
+  `PackageNotInLockfileError`. Absence is normal for lockfile
+  lookups, not exceptional.
+- **Error hierarchy simplified**: `LockfileReadError` replaces
+  `LockfileNotFoundError`. `LockfileVersionError` is folded into
+  `LockfileParseError` (unsupported versions produce a parse error
+  with descriptive `cause`). `LockfileIntegrityError` is new.
+- **`optionalDependencies`** added to all dep type enumerations
+  (missing from the earlier Phase 4 design doc).
+
 ## File Layout
 
 ```text
@@ -61,9 +82,11 @@ src/
 - **Parsers** are pure functions: `(content: string, lockfilePath: string) =>
   Effect<LockfileData, LockfileParseError>`. No service dependencies.
   Independently testable with fixture strings.
-- **Integrity** is a pure function: `(lockfileData, root, fs, path) =>
-  Effect<LockfileIntegrity, LockfileIntegrityError>`. Uses `semver-effect`
-  but no service dependencies.
+- **Integrity** is a standalone function (not a Layer, not in Context):
+  `(lockfileData, root, fs, path) =>
+  Effect<LockfileIntegrity, LockfileIntegrityError>`. Receives platform
+  services as explicit arguments. Uses `semver-effect` for constraint
+  checking. Performs I/O (reads `package.json` files).
 - **LockfileReaderLive** is orchestration only: reads the file, dispatches to
   the right parser, runs integrity checks.
 
@@ -378,34 +401,48 @@ export const LockfileReaderLive = Layer.effect(
     const path = yield* Path.Path;
 
     // 2. Find root and detect PM
-    const root = yield* rootService.find(process.cwd());
+    const root = yield* rootService.root();
     const pm = yield* detector.detect();
 
     // 3. Resolve lockfile path
     const lockfilePath = path.join(root, lockfileNameFor(pm));
 
     // 4. Read lockfile (LockfileReadError if missing)
-    const content = yield* fs.readFileString(lockfilePath).pipe(
-      Effect.mapError(() => new LockfileReadError({
-        lockfilePath,
-        reason: "file not found or unreadable",
-      })),
-    );
+    const content = yield* fs
+      .readFileString(lockfilePath)
+      .pipe(
+        Effect.mapError(() => new LockfileReadError({
+          lockfilePath,
+          reason: "file not found or unreadable",
+        })),
+      );
 
     // 5. Parse and cache (LockfileParseError if malformed)
-    const lockfileData = yield* parseLockfile(content, lockfilePath, pm);
-
-    // 6. Build lookup index
-    const packageIndex = new Map(
-      lockfileData.packages.map((pkg) => [pkg.name, pkg]),
+    const lockfileData = yield* parseLockfile(
+      content, lockfilePath, pm,
     );
+
+    // 6. Build lookup index (multi-version aware)
+    const packageIndex = new Map<
+      string,
+      Array<ResolvedPackage>
+    >();
+    for (const pkg of lockfileData.packages) {
+      const existing = packageIndex.get(pkg.name) ?? [];
+      existing.push(pkg);
+      packageIndex.set(pkg.name, existing);
+    }
 
     // 7. Return service — all methods query cached data
     return {
       readLockfile: () => Effect.succeed(lockfileData),
 
       resolvedVersion: (packageName: string) =>
-        Effect.succeed(Option.fromNullable(packageIndex.get(packageName))),
+        Effect.succeed(
+          Option.fromNullable(
+            packageIndex.get(packageName)?.[0],
+          ),
+        ),
 
       workspaceDependencies: () =>
         Effect.succeed(lockfileData.workspaceDependencies),

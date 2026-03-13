@@ -3,9 +3,9 @@ title: "Phase 4: Configuration & Lockfiles Design"
 module: core
 category: architecture
 status: draft
-completeness: 65
+completeness: 75
 created: 2026-03-12
-updated: 2026-03-12
+updated: 2026-03-13
 last-synced: 2026-03-12
 authors:
   - C. Spencer Beggs
@@ -227,6 +227,7 @@ class WorkspaceDependency extends Schema.Class<WorkspaceDependency>(
     "dependencies",
     "devDependencies",
     "peerDependencies",
+    "optionalDependencies",
   ),
   /** Version constraint */
   constraint: Schema.String,
@@ -371,18 +372,47 @@ Effect has no built-in YAML parser. Options:
 
 ### JSONC parsing for bun.lock
 
-Options:
+**Decision**: Use `jsonc-effect` v0.1.0 (npm) / `@spencerbeggs/jsonc-effect` (GitHub).
+**Status**: Library complete and published.
 
-1. **Strip trailing commas + JSON.parse** — simple regex replacement
-2. **jsonc-parser** — VS Code's JSONC parser, handles comments too
-3. **Custom Effect.try wrapper** — strip commas in preprocessing
+A pure Effect-TS JSONC parser — no dependency on Microsoft's `jsonc-parser`.
+Scanner, parser, AST, formatter all implemented natively in Effect.
 
-**Decision**: Use `jsonc-parser` package. Rationale:
+Key API for bun.lock parsing:
 
-- Robust handling of trailing commas AND comments
-- Battle-tested (used by VS Code internally)
-- Small footprint, no dependencies
-- Handles edge cases that regex stripping misses
+```typescript
+import { makeJsoncSchema } from "jsonc-effect"
+
+// Composes JSONC parsing + Schema validation in one step
+const BunLockfileFromJsonc = makeJsoncSchema(BunLockfileRaw)
+
+// Usage: JSONC string → validated BunLockfileRaw
+const parsed = yield* Schema.decodeUnknown(BunLockfileFromJsonc)(content)
+```
+
+Full API: `parse`, `parseTree`, `stripComments`, `createScanner`,
+`makeJsoncSchema`, `findNode`, `visit` (Stream), `format`, `modify`.
+Typed errors: `JsoncParseError`, `JsoncNodeNotFoundError`, `JsoncModificationError`.
+
+Rationale:
+
+- Pure Effect — zero impedance mismatch, no wrapper overhead
+- Only runtime dependency is `effect`
+- Full JSONC support: comments (line + block), trailing commas
+- Effect-native: typed errors, Schema integration, Stream visitor
+- Reusable across repos (tsconfig.json, biome.jsonc, VS Code settings)
+
+### YAML parsing for pnpm-lock.yaml and yarn.lock
+
+**Decision**: Use `yaml` v2.x package as direct production dependency, wrapped
+in Effect.try + Schema.decodeUnknown.
+
+`yaml` is currently only a transitive devDependency (via `@effect/cli`, `vite`).
+Must be added to `dependencies` for the published package.
+
+Future consideration: `yaml-effect` sister package with typed errors,
+`makeYamlSchema()`, Stream-based multi-document iteration. Deferred because
+YAML 1.2 is significantly more complex than JSONC to reimplement from scratch.
 
 ### Parsing pipeline pattern
 
@@ -603,10 +633,13 @@ validation. The pnpm lockfile structure is well-documented and stable.
 - [x] package-lock.json v3 schema → see `lockfile-schemas.md`
 - [ ] yarn.lock Berry format → research agent dispatched
 - [x] YAML parser options → decided: `yaml` package (already transitive dep)
-- [x] JSONC parsing approach → decided: `jsonc-parser` package
+- [x] JSONC parsing approach → decided: `jsonc-effect` (v0.1.0, published)
 - [x] How sibling repos handle lockfile reading (pnpm-config-dependency-action)
 - [x] Effect Stream patterns for lazy lockfile parsing → deferred (eager first)
 - [x] pnpm catalogs format and use cases
 - [ ] Effect Schema.transformOrFail patterns → research agent dispatched
 - [ ] Validate schemas against real lockfile data
-- [ ] Prototype YAML + JSONC parsing pipelines
+- [ ] Prototype YAML parsing pipeline (pnpm, yarn Berry)
+- [ ] Prototype JSONC parsing pipeline (bun.lock via jsonc-effect)
+- [ ] Add `yaml` as direct production dependency (currently transitive only)
+- [ ] Add `jsonc-effect` as direct production dependency
