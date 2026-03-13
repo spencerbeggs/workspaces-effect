@@ -193,9 +193,33 @@ export const TopologicalSorterLive: Layer.Layer<TopologicalSorter, never, Depend
 		const adjacency = yield* graph.adjacencyMap();
 
 		return {
-			sort: () => kahnSort(adjacency),
-			sortSubset: (names: ReadonlyArray<string>) => kahnSortSubset(adjacency, names),
-			levels: () => kahnLevels(adjacency),
+			sort: () =>
+				Effect.gen(function* () {
+					const result = yield* kahnSort(adjacency);
+					yield* Effect.logDebug("Topological sort complete").pipe(
+						Effect.annotateLogs("workspace.sorted.count", result.length),
+					);
+					return result;
+				}).pipe(Effect.withSpan("TopologicalSorter.sort")),
+			sortSubset: (names: ReadonlyArray<string>) =>
+				Effect.gen(function* () {
+					const result = yield* kahnSortSubset(adjacency, names);
+					yield* Effect.logDebug("Topological sort subset complete").pipe(
+						Effect.annotateLogs({
+							"workspace.subset.size": names.length,
+							"workspace.sorted.count": result.length,
+						}),
+					);
+					return result;
+				}).pipe(Effect.withSpan("TopologicalSorter.sortSubset")),
+			levels: () =>
+				Effect.gen(function* () {
+					const result = yield* kahnLevels(adjacency);
+					yield* Effect.logDebug("Topological levels computed").pipe(
+						Effect.annotateLogs("workspace.levels.count", result.length),
+					);
+					return result;
+				}).pipe(Effect.withSpan("TopologicalSorter.levels")),
 		};
-	}),
+	}).pipe(Effect.withSpan("TopologicalSorter.construct")),
 );
