@@ -107,8 +107,20 @@ export const parseBunLockfile = (
 			),
 		);
 
+		const workspaceCount = lockfile.workspaces ? Object.keys(lockfile.workspaces).length - 1 : 0;
+		yield* Effect.logDebug("Parsed bun lockfile").pipe(
+			Effect.annotateLogs({
+				"workspace.workspaces.count": Math.max(0, workspaceCount),
+				"workspace.packages.count": Object.keys(lockfile.packages ?? {}).length,
+			}),
+		);
+
 		return toLockfileData(lockfile);
-	});
+	}).pipe(
+		Effect.withSpan("LockfileReader.parse.bun", {
+			attributes: { "workspace.lockfile": lockfilePath },
+		}),
+	);
 
 const toLockfileData = (raw: BunLockfileRaw): LockfileData => {
 	const packages: ResolvedPackage[] = [];
