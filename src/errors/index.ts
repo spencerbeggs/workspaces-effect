@@ -131,3 +131,45 @@ export class ChangeDetectionError extends ChangeDetectionErrorBase<{
 		return `Change detection failed during "${this.operation}": ${this.reason}`;
 	}
 }
+
+// ── Lockfile Errors ─────────────────────────────────────────────────
+
+/** @internal */
+export const LockfileReadErrorBase = Data.TaggedError("LockfileReadError");
+
+/** Emitted when a lockfile cannot be read from disk. */
+export class LockfileReadError extends LockfileReadErrorBase<{
+	readonly lockfilePath: string;
+	readonly reason: string;
+}> {
+	get message(): string {
+		return `Failed to read lockfile at "${this.lockfilePath}": ${this.reason}`;
+	}
+}
+
+/** @internal */
+export const LockfileParseErrorBase = Data.TaggedError("LockfileParseError");
+
+/** Emitted when a lockfile exists but cannot be parsed. */
+export class LockfileParseError extends LockfileParseErrorBase<{
+	readonly lockfilePath: string;
+	readonly format: "pnpm" | "npm" | "yarn" | "bun";
+	readonly cause: unknown;
+}> {
+	get message(): string {
+		return `Failed to parse ${this.format} lockfile at "${this.lockfilePath}"`;
+	}
+}
+
+/** @internal */
+export const LockfileIntegrityErrorBase = Data.TaggedError("LockfileIntegrityError");
+
+/** Emitted when integrity checking cannot complete. */
+export class LockfileIntegrityError extends LockfileIntegrityErrorBase<{
+	readonly reason: string;
+	readonly cause: unknown;
+}> {
+	get message(): string {
+		return `Integrity check failed: ${this.reason}`;
+	}
+}
