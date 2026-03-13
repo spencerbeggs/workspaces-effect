@@ -170,6 +170,7 @@ yield* Effect.logTrace("Skipping unparseable constraint").pipe(
 - TopologicalSorter.sort -- sorted count
 - TopologicalSorter.sortSubset -- subset size and sorted count
 - TopologicalSorter.levels -- level count
+- WorkspaceDiscovery.getPackage -- queried package name
 - LockfileReader.resolvedVersion -- resolved version or none
 - Each parser -- importer/workspace count and package count
 
