@@ -1,8 +1,8 @@
 /**
- * Integration tests for composed discovery layers.
+ * Integration tests for composed workspace layers.
  *
- * Tests that WorkspaceRootLive and PackageManagerDetectorLive compose
- * correctly and can be used together in a single Effect program.
+ * Tests that individual layers compose correctly and can be used
+ * together in a single Effect program.
  */
 
 import { FileSystem, Path } from "@effect/platform";
@@ -174,7 +174,7 @@ describe("Discovery layers integration", () => {
 	});
 });
 
-describe("DiscoveryLive composite layer", () => {
+describe("Workspace layers composition", () => {
 	it("provides WorkspaceRoot and PackageManagerDetector together", async () => {
 		const files: Record<string, string | true> = {
 			"/projects/monorepo/pnpm-workspace.yaml": "packages:\n  - 'packages/*'",
