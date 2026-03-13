@@ -75,29 +75,35 @@ const detectPackageManager = (
 		// 1. pnpm: pnpm-workspace.yaml exists
 		const hasPnpmWorkspace = yield* fileExists(fs, path, root, "pnpm-workspace.yaml");
 		if (hasPnpmWorkspace) {
-			return {
+			const result = {
 				type: "pnpm" as PackageManagerType,
 				version: pmInfo?.name === "pnpm" ? pmInfo.version : undefined,
 			};
+			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			return result;
 		}
 
 		// 2. bun: bun.lock exists AND packageManager starts with "bun@"
 		const hasBunLock = yield* fileExists(fs, path, root, "bun.lock");
 		const hasBunLockb = yield* fileExists(fs, path, root, "bun.lockb");
 		if ((hasBunLock || hasBunLockb) && pmInfo?.name === "bun") {
-			return {
+			const result = {
 				type: "bun" as PackageManagerType,
 				version: pmInfo.version,
 			};
+			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			return result;
 		}
 
 		// 3. yarn: yarn.lock exists AND packageManager starts with "yarn@"
 		const hasYarnLock = yield* fileExists(fs, path, root, "yarn.lock");
 		if (hasYarnLock && pmInfo?.name === "yarn") {
-			return {
+			const result = {
 				type: "yarn" as PackageManagerType,
 				version: pmInfo.version,
 			};
+			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			return result;
 		}
 
 		// 4. npm: fallback if package.json has workspaces field
@@ -107,10 +113,12 @@ const detectPackageManager = (
 			const content = yield* fs.readFileString(pkgJsonPath).pipe(Effect.orElseSucceed(() => "{}"));
 			const parsed = JSON.parse(content) as Record<string, unknown>;
 			if ("workspaces" in parsed && parsed.workspaces != null) {
-				return {
+				const result = {
 					type: "npm" as PackageManagerType,
 					version: pmInfo?.name === "npm" ? pmInfo.version : undefined,
 				};
+				yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+				return result;
 			}
 		}
 
