@@ -85,7 +85,15 @@ const checkConstraints = (
 				if (!depMap) continue;
 
 				for (const [depName, constraint] of Object.entries(depMap)) {
-					if (isWorkspaceSpecifier(constraint)) continue;
+					if (isWorkspaceSpecifier(constraint)) {
+						yield* Effect.logTrace("Skipping workspace specifier").pipe(
+							Effect.annotateLogs({
+								"workspace.package": depName,
+								constraint,
+							}),
+						);
+						continue;
+					}
 
 					const resolved = resolvedIndex.get(depName);
 					if (!resolved) continue;
@@ -94,7 +102,14 @@ const checkConstraints = (
 					const versionExit = yield* Effect.exit(SemVer.fromString(resolved));
 
 					if (Exit.isFailure(rangeExit) || Exit.isFailure(versionExit)) {
-						continue; // skip unparseable
+						yield* Effect.logTrace("Skipping unparseable constraint").pipe(
+							Effect.annotateLogs({
+								"workspace.package": depName,
+								constraint,
+								resolved: resolved ?? "unknown",
+							}),
+						);
+						continue;
 					}
 
 					if (!Range.satisfies(versionExit.value, rangeExit.value)) {
