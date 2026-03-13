@@ -170,8 +170,7 @@ yield* Effect.logTrace("Skipping unparseable constraint").pipe(
 - TopologicalSorter.sort -- sorted count
 - TopologicalSorter.sortSubset -- subset size and sorted count
 - TopologicalSorter.levels -- level count
-- PackageResolver.resolveFile -- matched or not
-- PackageResolver.resolveFiles -- matched count
+- LockfileReader.resolvedVersion -- resolved version or none
 - Each parser -- importer/workspace count and package count
 
 **Trace** (per-item, high-volume):
@@ -195,8 +194,8 @@ yield* Effect.logTrace("Skipping unparseable constraint").pipe(
 | TopologicalSorter | sort | No | Yes | Debug |
 | TopologicalSorter | sortSubset | No | Yes | Debug |
 | TopologicalSorter | levels | No | Yes | Debug |
-| PackageResolver | resolveFile | No | No | Debug |
-| PackageResolver | resolveFiles | No | No | Debug |
+| PackageResolver | resolveFile | No | No | No |
+| PackageResolver | resolveFiles | No | No | No |
 | PackageResolver | packagePaths | No | No | No |
 | ChangeDetector | changedFiles | Yes | No | Info |
 | ChangeDetector | changedPackages | Yes | No | Info |
@@ -293,6 +292,29 @@ export const LockfileReaderLive = Layer.effect(
   ),
 );
 ```
+
+### Adding span via pipe (delegation methods)
+
+For methods that delegate to a single call (e.g., `checkIntegrity`),
+use `.pipe(Effect.withSpan(...))` instead of wrapping in `Effect.gen`:
+
+```typescript
+checkIntegrity: () =>
+  checkLockfileIntegrity(lockfileData, root, fs, path).pipe(
+    Effect.withSpan("LockfileReader.checkIntegrity"),
+  ),
+```
+
+### Implementation notes
+
+**`resolvedVersion` returns `Option`, not an error.** The current
+implementation returns `Option.Option<ResolvedPackage>` -- it never
+fails. The span and Debug log still provide value for tracing lookups,
+but there is no error path to log.
+
+**`resolveFile` and `resolveFiles` get no observability.** These are
+in-memory array scans called per-file during change detection. Adding
+spans or logs would produce excessive noise with no meaningful signal.
 
 ## Testing Strategy
 
