@@ -209,6 +209,7 @@ describe("PackageManagerDetectorLive", () => {
 
 		expect(result).toBeInstanceOf(PackageManagerDetectionError);
 		expect(result._tag).toBe("PackageManagerDetectionError");
+		expect(result.message).toContain("Cannot detect package manager");
 	});
 
 	it("fails when no package.json exists at all", async () => {

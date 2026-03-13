@@ -249,6 +249,7 @@ describe("WorkspaceDiscoveryLive", () => {
 
 			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
 			expect(result._tag).toBe("WorkspaceDiscoveryError");
+			expect(result.message).toContain("Workspace discovery failed");
 		});
 	});
 

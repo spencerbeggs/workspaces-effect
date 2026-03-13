@@ -102,4 +102,12 @@ packages:
 			expect(result.pmSpecific.catalogs?.default?.lodash).toBe("^4.17.21");
 		}
 	});
+
+	it("fails with LockfileParseError on structurally invalid pnpm-lock.yaml", async () => {
+		// Valid YAML but missing required 'importers' field
+		const result = await Effect.runPromiseExit(
+			parsePnpmLockfile("lockfileVersion: '9.0'\n", "/project/pnpm-lock.yaml"),
+		);
+		expect(result._tag).toBe("Failure");
+	});
 });

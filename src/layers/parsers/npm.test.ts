@@ -87,4 +87,25 @@ describe("parseNpmLockfile", () => {
 		const result = await Effect.runPromiseExit(parseNpmLockfile("{invalid", "/bad/path"));
 		expect(result._tag).toBe("Failure");
 	});
+
+	it("fails with LockfileParseError on structurally invalid package-lock.json", async () => {
+		const result = await Effect.runPromiseExit(parseNpmLockfile('{"name": "x"}', "/bad/path"));
+		expect(result._tag).toBe("Failure");
+	});
+
+	it("handles link entry with no matching workspace path entry (wsEntry falsy)", async () => {
+		// node_modules/@foo/bar links to packages/bar but that path doesn't exist in packages
+		const DANGLING_LINK = JSON.stringify({
+			lockfileVersion: 3,
+			packages: {
+				"": { name: "root", version: "1.0.0" },
+				"node_modules/@foo/bar": { name: "@foo/bar", resolved: "packages/bar", link: true },
+			},
+		});
+		const result = await Effect.runPromise(parseNpmLockfile(DANGLING_LINK, "/project/package-lock.json"));
+		expect(result.packageManager).toBe("npm");
+		const ws = result.packages.find((p) => p.name === "@foo/bar");
+		expect(ws).toBeDefined();
+		expect(ws?.isWorkspace).toBe(true);
+	});
 });

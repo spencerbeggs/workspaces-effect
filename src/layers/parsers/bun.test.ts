@@ -84,4 +84,45 @@ describe("parseBunLockfile", () => {
 		const result = await Effect.runPromiseExit(parseBunLockfile("{invalid content", "/bad"));
 		expect(result._tag).toBe("Failure");
 	});
+
+	it("fails with LockfileParseError on structurally invalid bun.lock", async () => {
+		const result = await Effect.runPromiseExit(parseBunLockfile('{"lockfileVersion": "wrong"}', "/bad"));
+		expect(result._tag).toBe("Failure");
+	});
+
+	it("handles bun.lock with no workspaces field", async () => {
+		const NO_WS = `{ "lockfileVersion": 0, "packages": { "zod": ["zod@3.23.8", "", {}, "sha512-abc"] } }`;
+		const result = await Effect.runPromise(parseBunLockfile(NO_WS, "/project/bun.lock"));
+		expect(result.packageManager).toBe("bun");
+		expect(result.packages.find((p) => p.name === "zod")).toBeDefined();
+	});
+
+	it("handles bun.lock with no packages field", async () => {
+		const NO_PKGS = `{ "lockfileVersion": 0, "workspaces": { "": { "name": "root" } } }`;
+		const result = await Effect.runPromise(parseBunLockfile(NO_PKGS, "/project/bun.lock"));
+		expect(result.packageManager).toBe("bun");
+		expect(result.packages).toHaveLength(0);
+	});
+
+	it("uses wsPath as name fallback when workspace entry has no name", async () => {
+		const NO_NAME = `{ "lockfileVersion": 0, "workspaces": { "": { "name": "root" }, "packages/lib": { "version": "1.0.0" } } }`;
+		const result = await Effect.runPromise(parseBunLockfile(NO_NAME, "/project/bun.lock"));
+		const lib = result.packages.find((p) => p.name === "packages/lib");
+		expect(lib).toBeDefined();
+		expect(lib?.isWorkspace).toBe(true);
+	});
+
+	it("uses 0.0.0 version fallback when workspace entry has no version", async () => {
+		const NO_VER = `{ "lockfileVersion": 0, "workspaces": { "": { "name": "root" }, "packages/lib": { "name": "@my/lib" } } }`;
+		const result = await Effect.runPromise(parseBunLockfile(NO_VER, "/project/bun.lock"));
+		const lib = result.packages.find((p) => p.name === "@my/lib");
+		expect(lib?.version).toBe("0.0.0");
+	});
+
+	it("skips package tuples with unscoped name at index 0 (atIdx <= 0)", async () => {
+		// A tuple whose id string has no '@' would be skipped
+		const EDGE = `{ "lockfileVersion": 0, "packages": { "bare": ["barepackage", "", {}, "sha512-abc"] } }`;
+		const result = await Effect.runPromise(parseBunLockfile(EDGE, "/project/bun.lock"));
+		expect(result.packageManager).toBe("bun");
+	});
 });

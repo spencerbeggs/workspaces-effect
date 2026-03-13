@@ -4,7 +4,12 @@ import {
 	ChangeDetectionError,
 	ChangeDetectionOptions,
 	ChangeDetector,
+	DependencyResolutionError,
 	GitNotAvailableError,
+	LockfileIntegrityError,
+	LockfileParseError,
+	LockfileReadError,
+	LockfileReader,
 	PackageJsonParseError,
 	PackageJsonSchema,
 	PackageManager,
@@ -130,12 +135,21 @@ describe("WorkspaceRootNotFoundError", () => {
 });
 
 describe("PackageNotFoundError", () => {
-	it("includes available count in message", () => {
+	it("includes available count in message (plural)", () => {
 		const err = new PackageNotFoundError({
 			name: "@scope/missing",
 			available: ["pkg-a", "pkg-b", "pkg-c"],
 		});
 		expect(err.message).toContain("3 packages available");
+	});
+
+	it("uses singular 'package' when exactly one is available", () => {
+		const err = new PackageNotFoundError({
+			name: "@scope/missing",
+			available: ["pkg-a"],
+		});
+		expect(err.message).toContain("1 package available");
+		expect(err.message).not.toContain("packages");
 	});
 });
 
@@ -169,6 +183,67 @@ describe("ChangeDetectionError", () => {
 		expect(err._tag).toBe("ChangeDetectionError");
 		expect(err.message).toContain("git diff");
 		expect(err.message).toContain("invalid ref");
+	});
+});
+
+describe("DependencyResolutionError", () => {
+	it("has correct _tag and message", () => {
+		const err = new DependencyResolutionError({
+			packageName: "pkg-a",
+			dependency: "lodash",
+			reason: "not in workspace",
+		});
+		expect(err._tag).toBe("DependencyResolutionError");
+		expect(err.message).toContain("lodash");
+		expect(err.message).toContain("pkg-a");
+	});
+});
+
+describe("LockfileReadError", () => {
+	it("has correct _tag and message", () => {
+		const err = new LockfileReadError({
+			lockfilePath: "/project/pnpm-lock.yaml",
+			reason: "file not found",
+		});
+		expect(err._tag).toBe("LockfileReadError");
+		expect(err.message).toContain("/project/pnpm-lock.yaml");
+		expect(err.message).toContain("file not found");
+	});
+});
+
+describe("LockfileParseError", () => {
+	it("has correct _tag and message", () => {
+		const err = new LockfileParseError({
+			lockfilePath: "/project/bun.lock",
+			format: "bun",
+			cause: new Error("unexpected token"),
+		});
+		expect(err._tag).toBe("LockfileParseError");
+		expect(err.message).toContain("bun");
+		expect(err.message).toContain("/project/bun.lock");
+	});
+});
+
+describe("LockfileIntegrityError", () => {
+	it("has correct _tag and message", () => {
+		const err = new LockfileIntegrityError({
+			reason: "mismatched workspace",
+			cause: new Error("oops"),
+		});
+		expect(err._tag).toBe("LockfileIntegrityError");
+		expect(err.message).toContain("mismatched workspace");
+	});
+});
+
+describe("LockfileReader tag", () => {
+	it("is accessible in Effect.gen", () => {
+		const program = Effect.gen(function* () {
+			const reader = yield* LockfileReader;
+			return yield* reader.readLockfile();
+		});
+		type _R = Effect.Effect.Context<typeof program>;
+		const _check: _R extends LockfileReader ? true : never = true;
+		expect(_check).toBe(true);
 	});
 });
 

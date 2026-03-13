@@ -94,4 +94,16 @@ describe("parseYarnLockfile", () => {
 		const result = await Effect.runPromiseExit(parseYarnLockfile("{{bad", "/bad"));
 		expect(result._tag).toBe("Failure");
 	});
+
+	it("fails with LockfileParseError on yarn.lock entry that is not an object", async () => {
+		// Valid YAML structure but an entry value is a scalar, not a struct
+		const BAD_ENTRY = `\
+__metadata:
+  version: 8
+
+"pkg@npm:1.0.0": "this is a string not an object"
+`;
+		const result = await Effect.runPromiseExit(parseYarnLockfile(BAD_ENTRY, "/bad"));
+		expect(result._tag).toBe("Failure");
+	});
 });

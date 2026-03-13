@@ -106,6 +106,7 @@ describe("TopologicalSorterLive", () => {
 			expect(result._tag).toBe("CyclicDependencyError");
 			expect(result.cycle).toContain("pkg-a");
 			expect(result.cycle).toContain("pkg-b");
+			expect(result.message).toContain("Cyclic dependency detected");
 		});
 
 		it("fails for indirect cycle (A -> B -> C -> A)", async () => {
