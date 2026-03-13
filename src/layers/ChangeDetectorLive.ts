@@ -89,6 +89,9 @@ export const ChangeDetectorLive = Layer.effect(
 					const committedFiles = yield* runGitLines(cwd, "diff", "--name-only", `${options.base}...${options.head}`);
 
 					if (!options.includeUncommitted) {
+						yield* Effect.logInfo("Changed files detected").pipe(
+							Effect.annotateLogs("workspace.files.count", committedFiles.length),
+						);
 						return committedFiles;
 					}
 
@@ -97,7 +100,11 @@ export const ChangeDetectorLive = Layer.effect(
 					const untrackedFiles = yield* runGitLines(cwd, "ls-files", "--others", "--exclude-standard");
 
 					const allFiles = new Set([...committedFiles, ...unstagedFiles, ...stagedFiles, ...untrackedFiles]);
-					return Array.from(allFiles).sort();
+					const sorted = Array.from(allFiles).sort();
+					yield* Effect.logInfo("Changed files detected").pipe(
+						Effect.annotateLogs("workspace.files.count", sorted.length),
+					);
+					return sorted;
 				}).pipe(Effect.withSpan("ChangeDetector.changedFiles")),
 
 			changedPackages: (options: ChangeDetectionOptions) =>
@@ -125,7 +132,11 @@ export const ChangeDetectorLive = Layer.effect(
 							packages.push(pkg);
 						}
 					}
-					return packages.sort((a, b) => a.name.localeCompare(b.name));
+					const sorted = packages.sort((a, b) => a.name.localeCompare(b.name));
+					yield* Effect.logInfo("Changed packages detected").pipe(
+						Effect.annotateLogs("workspace.packages.count", sorted.length),
+					);
+					return sorted;
 				}).pipe(Effect.withSpan("ChangeDetector.changedPackages")),
 
 			affectedPackages: (options: ChangeDetectionOptions) =>
@@ -172,10 +183,14 @@ export const ChangeDetectorLive = Layer.effect(
 					const paths = yield* resolver.packagePaths();
 					const packageMap = new Map(paths.map((p) => [p.package.name, p.package]));
 
-					return Array.from(affected)
+					const result = Array.from(affected)
 						.map((name) => packageMap.get(name))
 						.filter((pkg): pkg is WorkspacePackage => pkg !== undefined)
 						.sort((a, b) => a.name.localeCompare(b.name));
+					yield* Effect.logInfo("Affected packages detected").pipe(
+						Effect.annotateLogs("workspace.packages.count", result.length),
+					);
+					return result;
 				}).pipe(Effect.withSpan("ChangeDetector.affectedPackages")),
 		};
 	}),
