@@ -96,39 +96,73 @@ export const DependencyGraphLive = Layer.effect(
 		const discovery = yield* WorkspaceDiscovery;
 		const packages = yield* discovery.listPackages();
 		const graph = buildGraph(packages);
+		const edgeCount = Array.from(graph.edges.values()).reduce((sum, deps) => sum + deps.size, 0);
+		yield* Effect.logDebug("Dependency graph constructed").pipe(
+			Effect.annotateLogs({
+				"workspace.nodes.count": graph.nodes.size,
+				"workspace.edges.count": edgeCount,
+			}),
+		);
 
 		return {
-			dependenciesOf: (name: string) => {
-				const deps = graph.edges.get(name);
-				if (deps === undefined) {
-					return Effect.fail(
-						new PackageNotFoundError({
-							name,
-							available: Array.from(graph.nodes),
+			dependenciesOf: (name: string) =>
+				Effect.gen(function* () {
+					const deps = graph.edges.get(name);
+					if (deps === undefined) {
+						return yield* Effect.fail(
+							new PackageNotFoundError({
+								name,
+								available: Array.from(graph.nodes),
+							}),
+						);
+					}
+					yield* Effect.logDebug("Resolved dependencies").pipe(
+						Effect.annotateLogs({
+							"workspace.package": name,
+							"workspace.deps.count": deps.size,
 						}),
 					);
-				}
-				return Effect.succeed(Array.from(deps).sort());
-			},
+					return Array.from(deps).sort();
+				}).pipe(
+					Effect.withSpan("DependencyGraph.dependenciesOf", {
+						attributes: { "workspace.package": name },
+					}),
+				),
 
-			dependentsOf: (name: string) => {
-				const dependents = graph.reverseEdges.get(name);
-				if (dependents === undefined) {
-					return Effect.fail(
-						new PackageNotFoundError({
-							name,
-							available: Array.from(graph.nodes),
+			dependentsOf: (name: string) =>
+				Effect.gen(function* () {
+					const dependents = graph.reverseEdges.get(name);
+					if (dependents === undefined) {
+						return yield* Effect.fail(
+							new PackageNotFoundError({
+								name,
+								available: Array.from(graph.nodes),
+							}),
+						);
+					}
+					yield* Effect.logDebug("Resolved dependents").pipe(
+						Effect.annotateLogs({
+							"workspace.package": name,
+							"workspace.deps.count": dependents.size,
 						}),
 					);
-				}
-				return Effect.succeed(Array.from(dependents).sort());
-			},
+					return Array.from(dependents).sort();
+				}).pipe(
+					Effect.withSpan("DependencyGraph.dependentsOf", {
+						attributes: { "workspace.package": name },
+					}),
+				),
 
 			packages: () => Effect.succeed(Array.from(graph.nodes).sort()),
 
-			hasCycle: () => Effect.succeed(detectCycle(graph)),
+			hasCycle: () =>
+				Effect.gen(function* () {
+					const result = detectCycle(graph);
+					yield* Effect.logDebug("Cycle detection complete").pipe(Effect.annotateLogs("workspace.hasCycle", result));
+					return result;
+				}).pipe(Effect.withSpan("DependencyGraph.hasCycle")),
 
 			adjacencyMap: () => Effect.succeed(graph.edges),
 		};
-	}),
+	}).pipe(Effect.withSpan("DependencyGraph.construct")),
 );
