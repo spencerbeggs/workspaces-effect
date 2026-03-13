@@ -80,5 +80,5 @@ export const PackageResolverLive = Layer.effect(
 					})),
 				),
 		};
-	}),
+	}).pipe(Effect.withSpan("PackageResolver.construct")),
 );
