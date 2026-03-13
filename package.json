@@ -46,7 +46,10 @@
 	"dependencies": {
 		"@effect/platform": "^0.94.5",
 		"@effect/platform-node": "^0.104.1",
-		"effect": "^3.19.19"
+		"effect": "^3.19.19",
+		"jsonc-effect": "^0.1.0",
+		"semver-effect": "^0.1.0",
+		"yaml": "^2.8.2"
 	},
 	"devDependencies": {
 		"@savvy-web/changesets": "^0.4.2",
