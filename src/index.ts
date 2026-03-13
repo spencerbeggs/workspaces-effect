@@ -30,6 +30,7 @@ export { DiscoveryLive } from "./layers/DiscoveryLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
+export { PublishabilityDetectorLive } from "./layers/PublishabilityDetectorLive.js";
 export { TopologicalSorterLive } from "./layers/TopologicalSorterLive.js";
 export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
@@ -37,6 +38,7 @@ export type {
 	PackageJsonType,
 	PackageManagerType,
 	PackageNameType,
+	PublishConfigType,
 	WorkspacePathType,
 } from "./schemas/core.js";
 // ── Schemas ──────────────────────────────────────────────────────────
@@ -44,6 +46,7 @@ export {
 	PackageJsonSchema,
 	PackageManager,
 	PackageName,
+	PublishConfigSchema,
 	WorkspaceInfo,
 	WorkspacePackage,
 	WorkspacePath,
@@ -56,12 +59,14 @@ export {
 	ResolvedPackage,
 	WorkspaceDependency,
 } from "./schemas/lockfile.js";
+export { PublishTarget } from "./schemas/publish.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
 export { DependencyGraph } from "./services/DependencyGraph.js";
 export { LockfileReader } from "./services/LockfileReader.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
 export { PackageResolver } from "./services/PackageResolver.js";
+export { PublishabilityDetector } from "./services/PublishabilityDetector.js";
 export { TopologicalSorter } from "./services/TopologicalSorter.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
 // ── Services ─────────────────────────────────────────────────────────
