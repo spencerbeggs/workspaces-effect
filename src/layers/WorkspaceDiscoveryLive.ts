@@ -288,6 +288,9 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				});
 
 				cachedPackages = packages;
+				yield* Effect.logInfo("Workspace packages discovered").pipe(
+					Effect.annotateLogs("workspace.packages.count", packages.length),
+				);
 				return packages;
 			}).pipe(Effect.withSpan("WorkspaceDiscovery.listPackages"));
 
@@ -298,7 +301,10 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				Effect.gen(function* () {
 					const packages = yield* discoverPackages();
 					const found = packages.find((p) => p.name === name);
-					if (found) return found;
+					if (found) {
+						yield* Effect.logDebug("Package resolved").pipe(Effect.annotateLogs("workspace.package", name));
+						return found;
+					}
 					return yield* Effect.fail(
 						new PackageNotFoundError({
 							name,
@@ -307,7 +313,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					);
 				}).pipe(
 					Effect.withSpan("WorkspaceDiscovery.getPackage", {
-						attributes: { "package.name": name },
+						attributes: { "workspace.package": name },
 					}),
 				),
 		};
