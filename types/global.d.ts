@@ -7,4 +7,15 @@ declare global {
 			__PACKAGE_VERSION__: string;
 		}
 	}
+
+	/** Minimal process type for layer construction (cwd discovery). */
+	const process: {
+		cwd(): string;
+		env: NodeJS.ProcessEnv;
+	};
+
+	/** Standard Web API available in Node.js and modern runtimes. */
+	class TextEncoder {
+		encode(input?: string): Uint8Array;
+	}
 }

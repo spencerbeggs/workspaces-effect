@@ -6,7 +6,8 @@ import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { LockfileReaderLive } from "./LockfileReaderLive.js";
 
-// Inline fixture (shortened for test focus)
+// ── Fixtures ─────────────────────────────────────────────────────────
+
 const PNPM_FIXTURE = `lockfileVersion: "9.0"
 importers:
   .:
@@ -27,6 +28,57 @@ packages:
     resolution:
       integrity: sha512-def
 `;
+
+const NPM_FIXTURE = JSON.stringify({
+	name: "my-monorepo",
+	version: "1.0.0",
+	lockfileVersion: 3,
+	requires: true,
+	packages: {
+		"": { name: "my-monorepo", version: "1.0.0", devDependencies: { typescript: "^5.3.0" } },
+		"node_modules/@my-monorepo/core": { resolved: "packages/core", link: true },
+		"packages/core": { name: "@my-monorepo/core", version: "1.0.0" },
+		"node_modules/typescript": { version: "5.3.3", integrity: "sha512-ghi", dev: true },
+	},
+});
+
+const YARN_FIXTURE = `\
+__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"my-monorepo@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "my-monorepo@workspace:."
+  devDependencies:
+    typescript: "npm:^5.3.0"
+  languageName: unknown
+  linkType: soft
+
+"typescript@npm:^5.3.0":
+  version: 5.3.3
+  resolution: "typescript@npm:5.3.3"
+  checksum: ghi789
+  languageName: node
+  linkType: hard
+`;
+
+const BUN_FIXTURE = `{
+  "lockfileVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "my-monorepo",
+      "devDependencies": {
+        "typescript": "^5.3.0",
+      },
+    },
+  },
+  "packages": {
+    "typescript": ["typescript@5.3.3", "", {}, "sha512-ghi"],
+  },
+}`;
+
+// ── Helpers ───────────────────────────────────────────────────────────
 
 const notFound = (filePath: string) =>
 	new PlatformError.SystemError({
@@ -67,6 +119,8 @@ const testLayer = (pm: "pnpm" | "npm" | "yarn" | "bun", lockfileContent: string)
 		),
 	);
 
+// ── Tests ─────────────────────────────────────────────────────────────
+
 describe("LockfileReaderLive", () => {
 	it("reads pnpm lockfile end-to-end", async () => {
 		const layer = testLayer("pnpm", PNPM_FIXTURE);
@@ -77,6 +131,42 @@ describe("LockfileReaderLive", () => {
 			}).pipe(Effect.provide(layer)),
 		);
 		expect(result.packageManager).toBe("pnpm");
+		expect(result.packages.length).toBeGreaterThan(0);
+	});
+
+	it("reads npm lockfile end-to-end", async () => {
+		const layer = testLayer("npm", NPM_FIXTURE);
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const reader = yield* LockfileReader;
+				return yield* reader.readLockfile();
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(result.packageManager).toBe("npm");
+		expect(result.packages.length).toBeGreaterThan(0);
+	});
+
+	it("reads yarn lockfile end-to-end", async () => {
+		const layer = testLayer("yarn", YARN_FIXTURE);
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const reader = yield* LockfileReader;
+				return yield* reader.readLockfile();
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(result.packageManager).toBe("yarn");
+		expect(result.packages.length).toBeGreaterThan(0);
+	});
+
+	it("reads bun lockfile end-to-end", async () => {
+		const layer = testLayer("bun", BUN_FIXTURE);
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const reader = yield* LockfileReader;
+				return yield* reader.readLockfile();
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(result.packageManager).toBe("bun");
 		expect(result.packages.length).toBeGreaterThan(0);
 	});
 
@@ -103,6 +193,17 @@ describe("LockfileReaderLive", () => {
 			}).pipe(Effect.provide(layer)),
 		);
 		expect(Option.isNone(result)).toBe(true);
+	});
+
+	it("workspaceDependencies returns the dependency list", async () => {
+		const layer = testLayer("pnpm", PNPM_FIXTURE);
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const reader = yield* LockfileReader;
+				return yield* reader.workspaceDependencies();
+			}).pipe(Effect.provide(layer)),
+		);
+		expect(Array.isArray(result)).toBe(true);
 	});
 
 	it("fails with LockfileReadError when lockfile missing", async () => {

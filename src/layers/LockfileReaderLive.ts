@@ -56,7 +56,7 @@ export const LockfileReaderLive = Layer.effect(
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
 
-		const root = yield* rootService.find(globalThis.process?.cwd() ?? "/");
+		const root = yield* rootService.find(process.cwd());
 		const { type: pm } = yield* detector.detect(root);
 
 		const lockfilePath = path.join(root, lockfileNameFor(pm));

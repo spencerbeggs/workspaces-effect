@@ -138,8 +138,8 @@ export const parseYarnLockfile = (
 	});
 
 /** Extract package name from yarn key like
- * "@scope/name@npm:^1.0.0" or
- * "@scope/name@workspace:packages/foo" */
+ * "\@scope/name\@npm:^1.0.0" or
+ * "\@scope/name\@workspace:packages/foo" */
 const extractYarnPackageName = (key: string): string | undefined => {
 	// Find the last @npm: or @workspace: segment
 	const npmIdx = key.lastIndexOf("@npm:");
