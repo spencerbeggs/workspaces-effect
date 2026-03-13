@@ -108,4 +108,11 @@ describe("PublishabilityDetectorLive", () => {
 		expect(result[0].directory).toBe("dist/npm");
 		expect(result[0].registry).toBe("https://registry.npmjs.org/");
 	});
+
+	it("returns empty array for private package with publishConfig but no access", async () => {
+		const result = await Effect.runPromise(
+			detect(pkg("private-no-access", { private: true, publishConfig: { registry: "https://custom/" } })),
+		);
+		expect(result).toEqual([]);
+	});
 });
