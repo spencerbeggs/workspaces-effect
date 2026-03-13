@@ -81,14 +81,46 @@ export const LockfileReaderLive = Layer.effect(
 			packageIndex.set(pkg.name, existing);
 		}
 
+		yield* Effect.logInfo("Lockfile reader initialized").pipe(
+			Effect.annotateLogs({
+				"workspace.pm": pm,
+				"workspace.packages.count": lockfileData.packages.length,
+			}),
+		);
+
 		return {
 			readLockfile: () => Effect.succeed(lockfileData),
 
-			resolvedVersion: (packageName: string) => Effect.succeed(Option.fromNullable(packageIndex.get(packageName)?.[0])),
+			resolvedVersion: (packageName: string) =>
+				Effect.gen(function* () {
+					const result = Option.fromNullable(packageIndex.get(packageName)?.[0]);
+					yield* Effect.logDebug("Resolved version lookup").pipe(
+						Effect.annotateLogs({
+							"workspace.package": packageName,
+							"workspace.found": Option.isSome(result),
+						}),
+					);
+					return result;
+				}).pipe(
+					Effect.withSpan("LockfileReader.resolvedVersion", {
+						attributes: { "workspace.package": packageName },
+					}),
+				),
 
 			workspaceDependencies: () => Effect.succeed(lockfileData.workspaceDependencies),
 
-			checkIntegrity: () => checkLockfileIntegrity(lockfileData, root, fs, path),
+			checkIntegrity: () =>
+				Effect.gen(function* () {
+					const result = yield* checkLockfileIntegrity(lockfileData, root, fs, path);
+					yield* Effect.logInfo("Lockfile integrity check complete").pipe(
+						Effect.annotateLogs({
+							"workspace.integrity.valid": result.valid,
+							"workspace.integrity.issues":
+								result.missingWorkspaces.length + result.extraWorkspaces.length + result.unsatisfiedConstraints.length,
+						}),
+					);
+					return result;
+				}).pipe(Effect.withSpan("LockfileReader.checkIntegrity")),
 		};
-	}),
+	}).pipe(Effect.withSpan("LockfileReader.construct")),
 );
