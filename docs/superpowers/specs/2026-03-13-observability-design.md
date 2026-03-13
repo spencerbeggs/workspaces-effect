@@ -30,9 +30,11 @@ WorkspaceDiscoveryLive, and ChangeDetectorLive.
 
 ## Supersedes
 
-This spec covers the full observability surface. It does not change any
-existing span names or attributes -- only adds new ones and adds logging
-alongside them.
+This spec covers the full observability surface. It adds new spans and
+logging alongside existing ones. One existing attribute is normalized:
+`WorkspaceDiscovery.getPackage` currently uses `package.name` -- this
+work renames it to `workspace.package` for consistency with the
+`workspace.*` namespace used everywhere else.
 
 ## Span Naming Convention
 
@@ -51,12 +53,9 @@ DependencyGraph.hasCycle
 TopologicalSorter.sort
 TopologicalSorter.sortSubset
 TopologicalSorter.levels
-PackageResolver.resolveFile
-PackageResolver.resolveFiles
 ChangeDetector.changedFiles
 ChangeDetector.changedPackages
 ChangeDetector.affectedPackages
-LockfileReader.readLockfile
 LockfileReader.resolvedVersion
 LockfileReader.checkIntegrity
 ```
@@ -85,11 +84,15 @@ LockfileReader.parse.bun
 
 ### Trivial methods excluded from spans
 
-These are direct Map/Array lookups with no meaningful duration:
+These are direct Map/Array lookups or pre-computed getters with no
+meaningful duration:
 
 - `DependencyGraph.packages`
 - `DependencyGraph.adjacencyMap`
 - `PackageResolver.packagePaths`
+- `PackageResolver.resolveFile` -- in-memory sorted array scan
+- `PackageResolver.resolveFiles` -- reduce over resolveFile
+- `LockfileReader.readLockfile` -- returns pre-loaded lockfile data
 - `LockfileReader.workspaceDependencies`
 
 ## Span Attributes
@@ -105,7 +108,8 @@ code.
 | `workspace.pm` | LockfileReader.construct | `pnpm` |
 | `workspace.lockfile` | LockfileReader.parse.* | `/project/pnpm-lock.yaml` |
 | `workspace.packages.count` | listPackages, LockfileReader.construct | `15` |
-| `workspace.files.count` | changedFiles, resolveFiles | `42` |
+| `workspace.deps.count` | dependenciesOf, dependentsOf | `5` |
+| `workspace.files.count` | changedFiles | `42` |
 | `workspace.base` | changedFiles | `main` |
 | `workspace.head` | changedFiles | `HEAD` |
 
@@ -191,13 +195,13 @@ yield* Effect.logTrace("Skipping unparseable constraint").pipe(
 | TopologicalSorter | sort | No | Yes | Debug |
 | TopologicalSorter | sortSubset | No | Yes | Debug |
 | TopologicalSorter | levels | No | Yes | Debug |
-| PackageResolver | resolveFile | No | Yes | Debug |
-| PackageResolver | resolveFiles | No | Yes | Debug |
+| PackageResolver | resolveFile | No | No | Debug |
+| PackageResolver | resolveFiles | No | No | Debug |
 | PackageResolver | packagePaths | No | No | No |
 | ChangeDetector | changedFiles | Yes | No | Info |
 | ChangeDetector | changedPackages | Yes | No | Info |
 | ChangeDetector | affectedPackages | Yes | No | Info |
-| LockfileReader | readLockfile | No | Yes | No |
+| LockfileReader | readLockfile | No | No | No |
 | LockfileReader | resolvedVersion | No | Yes | Debug |
 | LockfileReader | workspaceDependencies | No | No | No |
 | LockfileReader | checkIntegrity | No | Yes | Info |
@@ -293,13 +297,13 @@ export const LockfileReaderLive = Layer.effect(
 ## Testing Strategy
 
 No new test files. Spans and logs are transparent -- they do not change
-inputs, outputs, or error behavior. The existing 154 tests cover all
+inputs, outputs, or error behavior. The existing test suite covers all
 service methods. If a span or log annotation introduces a type error or
 runtime issue, the existing tests catch it.
 
 Verification after each file change:
 
-1. Full test suite passes (154 tests)
+1. Full test suite passes
 2. Typecheck passes
 3. Build passes
 
