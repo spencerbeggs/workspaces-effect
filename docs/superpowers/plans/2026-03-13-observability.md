@@ -924,7 +924,15 @@ pnpm vitest run src/layers/parsers/pnpm.test.ts
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Run typecheck**
+
+```bash
+pnpm run typecheck
+```
+
+Expected: No errors.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/layers/parsers/pnpm.ts
@@ -997,7 +1005,15 @@ pnpm vitest run src/layers/parsers/npm.test.ts
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Run typecheck**
+
+```bash
+pnpm run typecheck
+```
+
+Expected: No errors.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/layers/parsers/npm.ts
@@ -1059,7 +1075,15 @@ pnpm vitest run src/layers/parsers/yarn.test.ts
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Run typecheck**
+
+```bash
+pnpm run typecheck
+```
+
+Expected: No errors.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/layers/parsers/yarn.ts
@@ -1133,7 +1157,15 @@ pnpm vitest run src/layers/parsers/bun.test.ts
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Run typecheck**
+
+```bash
+pnpm run typecheck
+```
+
+Expected: No errors.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/layers/parsers/bun.ts
@@ -1195,7 +1227,15 @@ pnpm vitest run src/layers/integrity.test.ts
 
 Expected: All tests pass.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Run typecheck**
+
+```bash
+pnpm run typecheck
+```
+
+Expected: No errors.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/layers/integrity.ts
