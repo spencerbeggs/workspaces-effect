@@ -6,7 +6,7 @@
  * workspace packages (external npm deps are excluded).
  */
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Request, RequestResolver } from "effect";
 import { PackageNotFoundError } from "../errors/index.js";
 import type { WorkspacePackage } from "../schemas/core.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
@@ -18,6 +18,20 @@ interface GraphState {
 	readonly reverseEdges: ReadonlyMap<string, ReadonlySet<string>>;
 	readonly nodes: ReadonlySet<string>;
 }
+
+/** @internal Request for dependenciesOf lookups. */
+class DependenciesOfRequest extends Request.TaggedClass("DependenciesOfRequest")<
+	ReadonlyArray<string>,
+	PackageNotFoundError,
+	{ readonly name: string }
+> {}
+
+/** @internal Request for dependentsOf lookups. */
+class DependentsOfRequest extends Request.TaggedClass("DependentsOfRequest")<
+	ReadonlyArray<string>,
+	PackageNotFoundError,
+	{ readonly name: string }
+> {}
 
 /**
  * Build the dependency graph from workspace packages.
@@ -104,50 +118,65 @@ export const DependencyGraphLive = Layer.effect(
 			}),
 		);
 
+		// Create a per-layer cache so that repeated calls within the same layer
+		// instance are deduplicated, while test isolation is preserved (each test
+		// builds a fresh layer → fresh cache, no cross-test contamination).
+		const cache = yield* Request.makeCache({ capacity: 1024, timeToLive: "1 minute" });
+
+		const DependenciesOfResolver = RequestResolver.fromEffect((req: DependenciesOfRequest) => {
+			const deps = graph.edges.get(req.name);
+			if (deps === undefined) {
+				return Effect.fail(
+					new PackageNotFoundError({
+						name: req.name,
+						available: Array.from(graph.nodes),
+					}),
+				);
+			}
+			return Effect.succeed(Array.from(deps).sort());
+		});
+
+		const DependentsOfResolver = RequestResolver.fromEffect((req: DependentsOfRequest) => {
+			const dependents = graph.reverseEdges.get(req.name);
+			if (dependents === undefined) {
+				return Effect.fail(
+					new PackageNotFoundError({
+						name: req.name,
+						available: Array.from(graph.nodes),
+					}),
+				);
+			}
+			return Effect.succeed(Array.from(dependents).sort());
+		});
+
 		return {
 			dependenciesOf: (name: string) =>
-				Effect.gen(function* () {
-					const deps = graph.edges.get(name);
-					if (deps === undefined) {
-						return yield* Effect.fail(
-							new PackageNotFoundError({
-								name,
-								available: Array.from(graph.nodes),
+				Effect.request(new DependenciesOfRequest({ name }), DependenciesOfResolver).pipe(
+					Effect.withRequestCache(cache),
+					Effect.tap(() =>
+						Effect.logDebug("Resolved dependencies").pipe(
+							Effect.annotateLogs({
+								"workspace.package": name,
+								"workspace.deps.count": graph.edges.get(name)?.size ?? 0,
 							}),
-						);
-					}
-					yield* Effect.logDebug("Resolved dependencies").pipe(
-						Effect.annotateLogs({
-							"workspace.package": name,
-							"workspace.deps.count": deps.size,
-						}),
-					);
-					return Array.from(deps).sort();
-				}).pipe(
+						),
+					),
 					Effect.withSpan("DependencyGraph.dependenciesOf", {
 						attributes: { "workspace.package": name },
 					}),
 				),
 
 			dependentsOf: (name: string) =>
-				Effect.gen(function* () {
-					const dependents = graph.reverseEdges.get(name);
-					if (dependents === undefined) {
-						return yield* Effect.fail(
-							new PackageNotFoundError({
-								name,
-								available: Array.from(graph.nodes),
+				Effect.request(new DependentsOfRequest({ name }), DependentsOfResolver).pipe(
+					Effect.withRequestCache(cache),
+					Effect.tap(() =>
+						Effect.logDebug("Resolved dependents").pipe(
+							Effect.annotateLogs({
+								"workspace.package": name,
+								"workspace.deps.count": graph.reverseEdges.get(name)?.size ?? 0,
 							}),
-						);
-					}
-					yield* Effect.logDebug("Resolved dependents").pipe(
-						Effect.annotateLogs({
-							"workspace.package": name,
-							"workspace.deps.count": dependents.size,
-						}),
-					);
-					return Array.from(dependents).sort();
-				}).pipe(
+						),
+					),
 					Effect.withSpan("DependencyGraph.dependentsOf", {
 						attributes: { "workspace.package": name },
 					}),
