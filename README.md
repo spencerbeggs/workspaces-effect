@@ -4,10 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 
-An Effect-TS library for monorepo workspace tooling. Discover workspaces,
-analyze dependency graphs, detect changes, parse lockfiles, and check
-publishability across npm, pnpm, yarn Berry, and Bun -- all through composable
-Effect services with typed errors and platform independence.
+An Effect-TS library for monorepo workspace tooling. Discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry, and Bun through composable Effect services with typed errors and platform independence.
 
 ## Features
 
@@ -51,7 +48,7 @@ Two composite layers cover most use cases:
 
 ## Documentation
 
-For architecture details, API reference, and advanced usage, see [docs/](./docs/).
+For architecture details, API reference, and advanced usage, see [docs](./docs/).
 
 ## License
 
