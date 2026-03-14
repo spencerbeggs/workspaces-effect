@@ -4,7 +4,7 @@
 
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
-import { PackageNotFoundError } from "../errors/index.js";
+import { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 import { WorkspacePackage } from "../schemas/core.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";

@@ -13,7 +13,7 @@
 
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer } from "effect";
-import { PackageManagerDetectionError } from "../errors/index.js";
+import { PackageManagerDetectionError } from "../errors/PackageManagerDetectionError.js";
 import type { PackageManagerType } from "../schemas/core.js";
 import type { DetectedPackageManager } from "../services/PackageManagerDetector.js";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";

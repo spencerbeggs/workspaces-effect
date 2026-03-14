@@ -6,7 +6,9 @@
 
 import type { Effect } from "effect";
 import { Context, Schema } from "effect";
-import type { ChangeDetectionError, CyclicDependencyError, GitNotAvailableError } from "../errors/index.js";
+import type { ChangeDetectionError } from "../errors/ChangeDetectionError.js";
+import type { CyclicDependencyError } from "../errors/CyclicDependencyError.js";
+import type { GitNotAvailableError } from "../errors/GitNotAvailableError.js";
 import type { WorkspacePackage } from "../schemas/core.js";
 
 /**

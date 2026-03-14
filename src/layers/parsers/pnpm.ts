@@ -15,7 +15,7 @@
 
 import { Effect, Schema } from "effect";
 import { parse as parseYaml } from "yaml-effect";
-import { LockfileParseError } from "../../errors/index.js";
+import { LockfileParseError } from "../../errors/LockfileParseError.js";
 import { LockfileData, PnpmExtension, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
 import { extractWorkspaceDeps } from "./shared.js";

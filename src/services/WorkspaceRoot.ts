@@ -6,7 +6,7 @@
 
 import type { Effect } from "effect";
 import { Context } from "effect";
-import type { WorkspaceRootNotFoundError } from "../errors/index.js";
+import type { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFoundError.js";
 
 /**
  * Service for finding the workspace root directory.

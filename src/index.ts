@@ -71,20 +71,21 @@
  */
 
 // ── Errors ───────────────────────────────────────────────────────────
+export { ChangeDetectionError, ChangeDetectionErrorBase } from "./errors/ChangeDetectionError.js";
+export { CyclicDependencyError, CyclicDependencyErrorBase } from "./errors/CyclicDependencyError.js";
+export { DependencyResolutionError, DependencyResolutionErrorBase } from "./errors/DependencyResolutionError.js";
+export { GitNotAvailableError, GitNotAvailableErrorBase } from "./errors/GitNotAvailableError.js";
+export { LockfileIntegrityError, LockfileIntegrityErrorBase } from "./errors/LockfileIntegrityError.js";
+export { LockfileParseError, LockfileParseErrorBase } from "./errors/LockfileParseError.js";
+export { LockfileReadError, LockfileReadErrorBase } from "./errors/LockfileReadError.js";
+export { PackageJsonParseError, PackageJsonParseErrorBase } from "./errors/PackageJsonParseError.js";
 export {
-	ChangeDetectionError,
-	CyclicDependencyError,
-	DependencyResolutionError,
-	GitNotAvailableError,
-	LockfileIntegrityError,
-	LockfileParseError,
-	LockfileReadError,
-	PackageJsonParseError,
 	PackageManagerDetectionError,
-	PackageNotFoundError,
-	WorkspaceDiscoveryError,
-	WorkspaceRootNotFoundError,
-} from "./errors/index.js";
+	PackageManagerDetectionErrorBase,
+} from "./errors/PackageManagerDetectionError.js";
+export { PackageNotFoundError, PackageNotFoundErrorBase } from "./errors/PackageNotFoundError.js";
+export { WorkspaceDiscoveryError, WorkspaceDiscoveryErrorBase } from "./errors/WorkspaceDiscoveryError.js";
+export { WorkspaceRootNotFoundError, WorkspaceRootNotFoundErrorBase } from "./errors/WorkspaceRootNotFoundError.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";

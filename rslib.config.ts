@@ -2,6 +2,9 @@ import { NodeLibraryBuilder } from "@savvy-web/rslib-builder";
 
 export default NodeLibraryBuilder.create({
 	externals: ["effect", "@effect/platform", "@effect/platform-node", "typescript", "@typescript/vfs"],
+	apiModel: {
+		suppressWarnings: [{ messageId: "ae-forgotten-export", pattern: "_base" }],
+	},
 	transform({ pkg, target }) {
 		if (target?.registry === "https://npm.pkg.github.com/") {
 			pkg.name = "@spencerbeggs/workspaces-effect";

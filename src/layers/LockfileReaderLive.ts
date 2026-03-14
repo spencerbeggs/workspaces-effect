@@ -10,8 +10,8 @@
 
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer, Option, Request, RequestResolver } from "effect";
-import type { LockfileParseError } from "../errors/index.js";
-import { LockfileReadError } from "../errors/index.js";
+import type { LockfileParseError } from "../errors/LockfileParseError.js";
+import { LockfileReadError } from "../errors/LockfileReadError.js";
 import type { PackageManagerType } from "../schemas/core.js";
 import type { ResolvedPackage } from "../schemas/lockfile.js";
 import { LockfileReader } from "../services/LockfileReader.js";

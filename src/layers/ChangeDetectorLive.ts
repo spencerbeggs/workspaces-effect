@@ -11,7 +11,8 @@
 
 import { Command, CommandExecutor } from "@effect/platform";
 import { Effect, Layer } from "effect";
-import { ChangeDetectionError, GitNotAvailableError } from "../errors/index.js";
+import { ChangeDetectionError } from "../errors/ChangeDetectionError.js";
+import { GitNotAvailableError } from "../errors/GitNotAvailableError.js";
 import type { WorkspacePackage } from "../schemas/core.js";
 import type { ChangeDetectionOptions } from "../services/ChangeDetector.js";
 import { ChangeDetector } from "../services/ChangeDetector.js";

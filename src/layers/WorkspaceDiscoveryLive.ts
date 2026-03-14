@@ -10,7 +10,8 @@
 
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer, Schema } from "effect";
-import { PackageNotFoundError, WorkspaceDiscoveryError } from "../errors/index.js";
+import { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
+import { WorkspaceDiscoveryError } from "../errors/WorkspaceDiscoveryError.js";
 import { PackageJsonSchema, WorkspacePackage } from "../schemas/core.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";

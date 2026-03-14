@@ -6,7 +6,8 @@
 
 import type { Effect } from "effect";
 import { Context } from "effect";
-import type { CyclicDependencyError, PackageNotFoundError } from "../errors/index.js";
+import type { CyclicDependencyError } from "../errors/CyclicDependencyError.js";
+import type { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 
 /**
  * Service for topological sorting of workspace packages.

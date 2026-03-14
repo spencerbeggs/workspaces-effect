@@ -10,7 +10,7 @@
  */
 
 import { Effect, Layer, Request, RequestResolver } from "effect";
-import { PackageNotFoundError } from "../errors/index.js";
+import { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 import type { WorkspacePackage } from "../schemas/core.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";

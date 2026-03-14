@@ -6,7 +6,7 @@
 
 import type { Effect } from "effect";
 import { Context } from "effect";
-import type { PackageNotFoundError } from "../errors/index.js";
+import type { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 
 /**
  * Service for querying the inter-workspace dependency graph.

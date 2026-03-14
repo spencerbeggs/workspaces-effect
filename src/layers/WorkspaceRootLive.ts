@@ -11,7 +11,7 @@
 
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer } from "effect";
-import { WorkspaceRootNotFoundError } from "../errors/index.js";
+import { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFoundError.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 
 /**

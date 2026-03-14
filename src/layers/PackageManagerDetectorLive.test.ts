@@ -1,7 +1,7 @@
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
-import { PackageManagerDetectionError } from "../errors/index.js";
+import { PackageManagerDetectionError } from "../errors/PackageManagerDetectionError.js";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import { PackageManagerDetectorLive } from "./PackageManagerDetectorLive.js";
 

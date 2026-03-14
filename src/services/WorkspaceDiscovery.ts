@@ -6,7 +6,8 @@
 
 import type { Effect } from "effect";
 import { Context } from "effect";
-import type { PackageNotFoundError, WorkspaceDiscoveryError } from "../errors/index.js";
+import type { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
+import type { WorkspaceDiscoveryError } from "../errors/WorkspaceDiscoveryError.js";
 import type { WorkspacePackage } from "../schemas/core.js";
 
 /**

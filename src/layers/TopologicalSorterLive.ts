@@ -9,7 +9,8 @@
  */
 
 import { Effect, Layer } from "effect";
-import { CyclicDependencyError, PackageNotFoundError } from "../errors/index.js";
+import { CyclicDependencyError } from "../errors/CyclicDependencyError.js";
+import { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
 import { TopologicalSorter } from "../services/TopologicalSorter.js";
 

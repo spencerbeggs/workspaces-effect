@@ -6,7 +6,7 @@
 
 import type { Effect, Option } from "effect";
 import { Context } from "effect";
-import type { LockfileIntegrityError } from "../errors/index.js";
+import type { LockfileIntegrityError } from "../errors/LockfileIntegrityError.js";
 import type { LockfileData, LockfileIntegrity, ResolvedPackage, WorkspaceDependency } from "../schemas/lockfile.js";
 
 /**

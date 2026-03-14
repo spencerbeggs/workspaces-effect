@@ -12,7 +12,7 @@
 import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Exit } from "effect";
 import { Range, SemVer } from "semver-effect";
-import { LockfileIntegrityError } from "../errors/index.js";
+import { LockfileIntegrityError } from "../errors/LockfileIntegrityError.js";
 import type { LockfileData } from "../schemas/lockfile.js";
 import { LockfileIntegrity } from "../schemas/lockfile.js";
 import { isWorkspaceSpecifier } from "./parsers/shared.js";

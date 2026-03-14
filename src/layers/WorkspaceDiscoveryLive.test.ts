@@ -5,7 +5,7 @@
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
-import { WorkspaceDiscoveryError } from "../errors/index.js";
+import { WorkspaceDiscoveryError } from "../errors/WorkspaceDiscoveryError.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { WorkspaceDiscoveryLive } from "./WorkspaceDiscoveryLive.js";
