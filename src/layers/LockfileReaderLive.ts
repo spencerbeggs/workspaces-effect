@@ -1,5 +1,5 @@
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Request, RequestResolver } from "effect";
 import type { LockfileParseError } from "../errors/index.js";
 import { LockfileReadError } from "../errors/index.js";
 import type { PackageManagerType } from "../schemas/core.js";
@@ -38,6 +38,13 @@ const parseLockfile = (content: string, lockfilePath: string, pm: PackageManager
 			return parseBunLockfile(content, lockfilePath);
 	}
 };
+
+/** @internal Request for resolvedVersion lookups. */
+class ResolvedVersionRequest extends Request.TaggedClass("ResolvedVersionRequest")<
+	Option.Option<ResolvedPackage>,
+	never,
+	{ readonly packageName: string }
+> {}
 
 // Exported type for consumers who want to annotate explicitly.
 // The inferred error union includes WorkspaceRootNotFoundError and
@@ -88,20 +95,28 @@ export const LockfileReaderLive = Layer.effect(
 			}),
 		);
 
+		// Per-layer cache for request deduplication (same pattern as DependencyGraphLive).
+		const cache = yield* Request.makeCache({ capacity: 1024, timeToLive: "1 minute" });
+
+		const ResolvedVersionResolver = RequestResolver.fromEffect((req: ResolvedVersionRequest) =>
+			Effect.succeed(Option.fromNullable(packageIndex.get(req.packageName)?.[0])),
+		);
+
 		return {
 			readLockfile: () => Effect.succeed(lockfileData),
 
 			resolvedVersion: (packageName: string) =>
-				Effect.gen(function* () {
-					const result = Option.fromNullable(packageIndex.get(packageName)?.[0]);
-					yield* Effect.logDebug("Resolved version lookup").pipe(
-						Effect.annotateLogs({
-							"workspace.package": packageName,
-							"workspace.found": Option.isSome(result),
-						}),
-					);
-					return result;
-				}).pipe(
+				Effect.request(new ResolvedVersionRequest({ packageName }), ResolvedVersionResolver).pipe(
+					Effect.withRequestCache(cache),
+					Effect.withRequestCaching(true),
+					Effect.tap((result) =>
+						Effect.logDebug("Resolved version lookup").pipe(
+							Effect.annotateLogs({
+								"workspace.package": packageName,
+								"workspace.found": Option.isSome(result),
+							}),
+						),
+					),
 					Effect.withSpan("LockfileReader.resolvedVersion", {
 						attributes: { "workspace.package": packageName },
 					}),
