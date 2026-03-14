@@ -1,3 +1,18 @@
+/**
+ * Parser for pnpm `pnpm-lock.yaml` lockfiles.
+ *
+ * Parses YAML content, validates against {@link PnpmLockfileRaw}, and
+ * transforms into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Uses the `yaml` library for YAML parsing and `Schema.decodeUnknown`
+ * for structural validation. Importers are treated as workspace entries;
+ * `link:` version prefixes identify inter-workspace dependencies.
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import { Effect, Schema } from "effect";
 import YAML from "yaml";
 import { LockfileParseError } from "../../errors/index.js";
@@ -5,7 +20,11 @@ import { LockfileData, PnpmExtension, ResolvedPackage } from "../../schemas/lock
 import type { WorkspaceEntry } from "./shared.js";
 import { extractWorkspaceDeps } from "./shared.js";
 
-// -- Raw schema (internal) --
+/**
+ * Raw schema for pnpm lockfile validation.
+ *
+ * @internal
+ */
 
 const PnpmImporterDeps = Schema.optional(
 	Schema.Record({
@@ -67,8 +86,15 @@ const PnpmLockfileRaw = Schema.Struct({
 
 type PnpmLockfileRawType = Schema.Schema.Type<typeof PnpmLockfileRaw>;
 
-// -- Parser --
-
+/**
+ * Parse a pnpm `pnpm-lock.yaml` lockfile into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Pipeline: YAML parse -\> Schema validation -\> transform to `LockfileData`.
+ * Populates {@link PnpmExtension} with catalogs, overrides, and settings.
+ *
+ * @internal
+ */
 export const parsePnpmLockfile = (
 	content: string,
 	lockfilePath: string,
@@ -113,8 +139,11 @@ export const parsePnpmLockfile = (
 		}),
 	);
 
-// -- Transform --
-
+/**
+ * Transform validated pnpm lockfile data into the unified model.
+ *
+ * @internal
+ */
 const toLockfileData = (raw: PnpmLockfileRawType): LockfileData => {
 	const workspaceEntries = new Map<string, WorkspaceEntry>();
 	const workspaceNames = new Set<string>();

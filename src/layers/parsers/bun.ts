@@ -1,3 +1,21 @@
+/**
+ * Parser for Bun `bun.lock` lockfiles (JSONC format).
+ *
+ * Parses JSONC content via `jsonc-effect`, validates against
+ * {@link BunLockfileRawSchema}, and transforms into the unified
+ * {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Bun lockfiles use JSONC (JSON with comments) and encode resolved
+ * packages as tuples where the first element is `"name@version"`.
+ * Workspace entries are stored under the `workspaces` key with the
+ * root entry keyed as `""`. Uses the `jsonc-effect` sibling package
+ * for pure-Effect JSONC parsing.
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import { Effect, Schema } from "effect";
 import { parse as parseJsonc } from "jsonc-effect";
 import { LockfileParseError } from "../../errors/index.js";
@@ -5,7 +23,11 @@ import { BunExtension, LockfileData, ResolvedPackage } from "../../schemas/lockf
 import type { WorkspaceEntry } from "./shared.js";
 import { extractWorkspaceDeps } from "./shared.js";
 
-// -- Raw schema (internal) --
+/**
+ * Raw schema for bun lockfile validation.
+ *
+ * @internal
+ */
 
 const BunWorkspaceEntrySchema = Schema.Struct({
 	name: Schema.optional(Schema.String),
@@ -76,8 +98,16 @@ const BunLockfileRawSchema = Schema.Struct({
 
 type BunLockfileRaw = Schema.Schema.Type<typeof BunLockfileRawSchema>;
 
-// -- Parser --
-
+/**
+ * Parse a Bun `bun.lock` lockfile into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Pipeline: JSONC parse (via `jsonc-effect`) -\> Schema validation -\>
+ * transform to `LockfileData`. Populates {@link BunExtension} with
+ * catalog, catalogs, overrides, and trustedDependencies.
+ *
+ * @internal
+ */
 export const parseBunLockfile = (
 	content: string,
 	lockfilePath: string,
@@ -122,6 +152,11 @@ export const parseBunLockfile = (
 		}),
 	);
 
+/**
+ * Transform validated bun lockfile data into the unified model.
+ *
+ * @internal
+ */
 const toLockfileData = (raw: BunLockfileRaw): LockfileData => {
 	const packages: ResolvedPackage[] = [];
 	const workspaceNames = new Set<string>();

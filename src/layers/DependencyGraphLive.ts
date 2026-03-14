@@ -1,9 +1,12 @@
 /**
- * Live implementation of DependencyGraph service.
+ * Live implementation of the {@link DependencyGraph} service.
  *
  * Builds a directed graph of inter-workspace dependencies from the
- * WorkspaceDiscovery package list. Only includes edges between
+ * {@link WorkspaceDiscovery} package list. Only includes edges between
  * workspace packages (external npm deps are excluded).
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { Effect, Layer, Request, RequestResolver } from "effect";
@@ -12,7 +15,11 @@ import type { WorkspacePackage } from "../schemas/core.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 
-/** Internal graph state with forward and reverse edge maps. */
+/**
+ * Internal graph state with forward and reverse edge maps.
+ *
+ * @internal
+ */
 interface GraphState {
 	readonly edges: ReadonlyMap<string, ReadonlySet<string>>;
 	readonly reverseEdges: ReadonlyMap<string, ReadonlySet<string>>;
@@ -36,6 +43,8 @@ class DependentsOfRequest extends Request.TaggedClass("DependentsOfRequest")<
 /**
  * Build the dependency graph from workspace packages.
  * Only includes edges where the dependency name matches a workspace package.
+ *
+ * @internal
  */
 const buildGraph = (packages: ReadonlyArray<WorkspacePackage>): GraphState => {
 	const packageNames = new Set(packages.map((p) => p.name));
@@ -74,6 +83,8 @@ const buildGraph = (packages: ReadonlyArray<WorkspacePackage>): GraphState => {
 
 /**
  * Detect if the graph has any cycles using DFS.
+ *
+ * @internal
  */
 const detectCycle = (graph: GraphState): boolean => {
 	const visited = new Set<string>();
@@ -103,7 +114,46 @@ const detectCycle = (graph: GraphState): boolean => {
 	return false;
 };
 
-/** Live layer for DependencyGraph. Depends on WorkspaceDiscovery. */
+/**
+ * Live layer for the {@link DependencyGraph} service.
+ *
+ * Builds a directed dependency graph of inter-workspace packages at
+ * construction time. Provides cached lookups for forward dependencies,
+ * reverse dependents, and cycle detection.
+ *
+ * @remarks
+ * Requires {@link WorkspaceDiscovery}. The graph is built eagerly at
+ * layer construction and uses an Effect `Request.Cache` for deduplicating
+ * `dependenciesOf` and `dependentsOf` lookups.
+ *
+ * @privateRemarks
+ * Graph construction happens via {@link buildGraph}, which scans both
+ * `dependencies` and `devDependencies` for inter-workspace edges. Uses
+ * `RequestResolver.fromEffect` with per-layer caching to avoid redundant
+ * lookups within the same fiber.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { DependencyGraph, WorkspacesLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const graph = yield* DependencyGraph;
+ *   const deps = yield* graph.dependenciesOf("@my/package");
+ *   return deps;
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspacesLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
+ */
 export const DependencyGraphLive = Layer.effect(
 	DependencyGraph,
 	Effect.gen(function* () {

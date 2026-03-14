@@ -1,10 +1,29 @@
+/**
+ * Parser for npm `package-lock.json` lockfiles (v2/v3 format).
+ *
+ * Parses JSON content, validates against {@link NpmLockfileRaw}, and
+ * transforms into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Workspace packages in npm lockfiles are identified by `link: true`
+ * entries under `node_modules/`. Their actual dependency data comes
+ * from the resolved workspace path entry (e.g., `packages/foo`).
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import { Effect, Schema } from "effect";
 import { LockfileParseError } from "../../errors/index.js";
 import { LockfileData, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
 import { extractWorkspaceDeps } from "./shared.js";
 
-// -- Raw schema (internal) --
+/**
+ * Raw schema for npm lockfile validation.
+ *
+ * @internal
+ */
 
 const NpmPackageEntry = Schema.Struct({
 	name: Schema.optional(Schema.String),
@@ -57,8 +76,16 @@ const NpmLockfileRaw = Schema.Struct({
 
 type NpmLockfileRawType = Schema.Schema.Type<typeof NpmLockfileRaw>;
 
-// -- Parser --
-
+/**
+ * Parse an npm `package-lock.json` lockfile into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Pipeline: JSON parse -\> Schema validation -\> transform to `LockfileData`.
+ * Two-pass approach: first identifies workspace link entries, then builds
+ * package and workspace dependency data.
+ *
+ * @internal
+ */
 export const parseNpmLockfile = (
 	content: string,
 	lockfilePath: string,
@@ -100,8 +127,11 @@ export const parseNpmLockfile = (
 		}),
 	);
 
-// -- Transform --
-
+/**
+ * Transform validated npm lockfile data into the unified model.
+ *
+ * @internal
+ */
 const toLockfileData = (raw: NpmLockfileRawType): LockfileData => {
 	const packages: ResolvedPackage[] = [];
 	const workspaceNames = new Set<string>();

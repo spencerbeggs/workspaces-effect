@@ -3,15 +3,15 @@ title: "Lockfile Schema Definitions"
 module: core
 category: reference
 status: complete
-completeness: 95
+completeness: 100
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 related:
   - architecture.md
   - phase4-configuration-lockfiles.md
   - bun-lockfile.md
-  - effect-best-practices.md
+  - effect-patterns-parsing.md
 authors:
   - C. Spencer Beggs
 tags:

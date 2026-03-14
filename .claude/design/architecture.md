@@ -3,15 +3,17 @@ title: "Module Architecture Design"
 module: core
 category: architecture
 status: current
-completeness: 95
+completeness: 100
 created: 2026-03-12
-updated: 2026-03-13
-last-synced: 2026-03-13
+updated: 2026-03-14
+last-synced: 2026-03-14
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
   - phase4-configuration-lockfiles.md
-  - effect-best-practices.md
+  - effect-patterns-core.md
+  - effect-patterns-parsing.md
+  - effect-patterns-testing.md
   - code-review-findings.md
   - research-notes.md
   - bun-lockfile.md
@@ -25,59 +27,33 @@ tags:
 
 ## Module Architecture Design
 
-<!-- TOC -->
-
-- [Overview](#overview)
-- [Current State](#current-state)
-- [Design Goals](#design-goals)
-- [Service Architecture](#service-architecture)
-- [Error Hierarchy](#error-hierarchy)
-- [Schema Definitions](#schema-definitions)
-- [Layer Composition](#layer-composition)
-- [Platform Abstraction](#platform-abstraction)
-- [Package Manager Support](#package-manager-support)
-- [Rationale](#rationale)
-- [Open Questions](#open-questions)
-
-<!-- /TOC -->
-
 ## Overview
 
-`@spencerbeggs/workspaces-effect` is an Effect-TS library for monorepo workspace
-tooling. It provides composable services for workspace discovery, dependency graph
-analysis, package resolution, and change detection across npm, pnpm, yarn Berry,
-and Bun workspaces.
+`workspaces-effect` is an Effect-TS library for monorepo workspace tooling.
+It provides composable services for workspace discovery, dependency graph
+analysis, package resolution, change detection, lockfile reading, and
+publishability detection across npm, pnpm, yarn Berry, and Bun workspaces.
 
 Inspired by Microsoft's
 [workspace-tools](https://github.com/microsoft/workspace-tools), this library
-replaces imperative APIs with Effect services, typed errors, schemas, and platform
-abstractions. Users compose only the services they need and provide platform layers
-(Node.js or Bun) at the edge.
+replaces imperative APIs with Effect services, typed errors, schemas, and
+platform abstractions. Users compose only the services they need and provide
+platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-Phases 1 (Discovery), 2 (Package Analysis), 3 (Change Detection), and
-4 (Configuration & Lockfiles) are complete. 154 tests passing, all typechecking.
-Full observability (spans + structured logging) across all services.
+All phases complete. 174 tests passing, all typechecking. Full observability
+(spans + structured logging) across all services.
 
-- **Schemas**: PackageManager, PackageName, WorkspacePath, PackageJsonSchema,
-  WorkspacePackage, WorkspaceInfo, DetectedPackageManager,
-  ChangeDetectionOptions, ResolvedPackage, WorkspaceDependency, LockfileData,
-  LockfileIntegrity, PnpmExtension, BunExtension
-- **Errors** (12 total): WorkspaceRootNotFoundError, PackageManagerDetectionError,
-  WorkspaceDiscoveryError, PackageJsonParseError, PackageNotFoundError,
-  CyclicDependencyError, DependencyResolutionError, GitNotAvailableError,
-  ChangeDetectionError, LockfileReadError, LockfileParseError,
-  LockfileIntegrityError
-- **Discovery Layers** (Phase 1): WorkspaceRootLive, PackageManagerDetectorLive,
-  WorkspaceDiscoveryLive, DiscoveryLive (composite)
-- **Package Analysis Layers** (Phase 2): DependencyGraphLive,
-  TopologicalSorterLive
-- **Change Detection Layers** (Phase 3): PackageResolverLive,
-  ChangeDetectorLive, ChangeDetectionLive (composite)
-- **Configuration Layers** (Phase 4): LockfileReaderLive, ConfigurationLive,
-  FullConfigLive (composite), parsers for pnpm/npm/yarn/bun, integrity checker
-- **Tests**: 154 tests passing across 15 test files
+- **Phase 1 (Discovery)**: WorkspaceRootLive, PackageManagerDetectorLive,
+  WorkspaceDiscoveryLive
+- **Phase 2 (Package Analysis)**: DependencyGraphLive, TopologicalSorterLive
+- **Phase 3 (Change Detection)**: PackageResolverLive, ChangeDetectorLive
+- **Phase 4 (Configuration & Lockfiles)**: LockfileReaderLive,
+  PublishabilityDetectorLive, integrity checker, parsers for pnpm/npm/yarn/bun
+- **Composite layers**: WorkspacesLive (no git), WorkspacesFullLive (with git)
+- **Internal patterns**: Request/RequestResolver with per-layer caching for
+  DependencyGraph and LockfileReader lookups
 - **Observability**: Effect.withSpan on all service methods and layer
   construction; structured logging at Info/Debug/Trace levels
 
@@ -93,347 +69,138 @@ Full observability (spans + structured logging) across all services.
    "workspace manager" class
 5. **Testable** -- every service has a test layer; FileSystem.layerNoop enables
    unit testing without disk
-6. **Dual API** -- Effect programs as primary API, with thin Promise wrappers
-   for non-Effect consumers
-7. **Observability** -- Effect.withSpan on key operations for tracing integration
+6. **Observability** -- Effect.withSpan on key operations for tracing integration
 
 ## Service Architecture
 
-The library is organized into four service groups:
+The library provides 9 services organized into four groups:
 
 ### Group 1: Discovery
 
 | Service | Purpose | Dependencies |
-| ------- | ------- | ------------ |
+| --- | --- | --- |
 | `WorkspaceRoot` | Find monorepo root from cwd | FileSystem, Path |
 | `PackageManagerDetector` | Detect PM type and version | FileSystem, Path |
 | `WorkspaceDiscovery` | List workspace packages | FileSystem, Path, WorkspaceRoot |
 
-### Group 2: Package Analysis (implemented)
+### Group 2: Package Analysis
 
 | Service | Purpose | Dependencies |
-| ------- | ------- | ------------ |
+| --- | --- | --- |
 | `DependencyGraph` | Build directed graph of inter-package deps | WorkspaceDiscovery |
 | `TopologicalSorter` | Topological sort for build ordering | DependencyGraph |
 
-**Note**: `PackageJsonReader` was merged into `WorkspaceDiscovery` (already
-reads package.json). `DependencyGraph` consumes discovery output directly.
+DependencyGraph uses Request/RequestResolver internally for `dependenciesOf`
+and `dependentsOf` with per-layer caching. See `phase2-dependency-graph.md`.
 
-### Group 3: Resolution (implemented)
+### Group 3: Change Detection
 
 | Service | Purpose | Dependencies |
-| ------- | ------- | ------------ |
+| --- | --- | --- |
 | `PackageResolver` | Map file paths to owning workspace packages | WorkspaceDiscovery |
 | `ChangeDetector` | Git-based change detection + affected computation | PackageResolver, DependencyGraph, CommandExecutor |
 
-**Note**: `GlobResolver` was deferred — the glob resolution logic in
-`WorkspaceDiscoveryLive` is sufficient for current needs. Can be
-extracted if future phases need general-purpose glob matching.
-
-### Group 4: Configuration (implemented)
+### Group 4: Configuration & Lockfiles
 
 | Service | Purpose | Dependencies |
-| ------- | ------- | ------------ |
+| --- | --- | --- |
 | `LockfileReader` | Parse lockfile metadata + PM-specific config | FileSystem, Path, WorkspaceRoot, PackageManagerDetector |
+| `PublishabilityDetector` | Detect which workspace packages are publishable | (none -- pure logic) |
 
-**Note**: `WorkspaceConfigReader` was merged into `LockfileReader`. Rationale:
-WorkspaceDiscoveryLive already handles workspace config reading; PM-specific
-config (catalogs, overrides) is lockfile-adjacent. PM-specific data accessible
-via optional `pmSpecific` extension field on `LockfileData`.
+LockfileReader uses Request/RequestResolver internally for `resolvedVersion`
+with per-layer caching. See `phase4-configuration-lockfiles.md`.
 
-**Architectural notes for LockfileReader layer construction:**
-
-- `Layer.unwrapEffect` can be used to dynamically construct the LockfileReader
-  layer based on which lockfile format is detected at runtime (e.g., read the
-  detected PM, then return the appropriate PM-specific parser layer).
-- `Layer.orElse` provides a fallback chain for PM detection -- try pnpm
-  lockfile parsing first, fall back to npm, then yarn, then bun.
-- Consider using `Request`/`RequestResolver` for batch package resolution
-  across workspaces in future phases. This would enable efficient batched
-  lookups when resolving many packages from lockfile data simultaneously.
+PublishabilityDetector checks `private` field and `publishConfig.access`.
+Users can provide custom layers to override detection strategy.
 
 ### Service Interface Pattern
 
-Following the `Context.Tag` class pattern (consistent with Effect docs):
+Class-based `Context.Tag` pattern (GenericTag deprecated):
 
 ```typescript
-class WorkspaceDiscovery extends Context.Tag("WorkspaceDiscovery")<
-  WorkspaceDiscovery,
+class LockfileReader extends Context.Tag(
+  "workspaces-effect/LockfileReader"
+)<
+  LockfileReader,
   {
-    readonly listPackages: () => Effect.Effect<
-      ReadonlyArray<WorkspacePackage>,
-      WorkspaceDiscoveryError
-    >
-    readonly getPackage: (name: string) => Effect.Effect<
-      WorkspacePackage,
-      PackageNotFoundError
-    >
-    readonly getRoot: () => Effect.Effect<
-      WorkspaceRoot,
-      WorkspaceRootNotFoundError
+    readonly readLockfile: () => Effect.Effect<LockfileData>
+    readonly resolvedVersion: (
+      packageName: string,
+    ) => Effect.Effect<Option.Option<ResolvedPackage>>
+    readonly workspaceDependencies: () => Effect.Effect<
+      ReadonlyArray<WorkspaceDependency>
     >
   }
 >() {}
 ```
 
-**Tag pattern decision (resolved 2026-03-12)**: `Context.GenericTag` is
-deprecated. The class-based `Context.Tag` pattern works correctly with
-our Rslib + api-extractor DTS bundling pipeline. The `_base` constants
-are inlined as `declare const` in the bundled `.d.ts` (not exported),
-which is the expected behavior. "Forgotten exports" warnings from
-api-extractor are cosmetic and do not affect the output.
+Key principles:
 
-**Note:** Effect now provides `Effect.Service` which combines Context.Tag and
-Layer.effect into a single declaration. New services may use this pattern.
-See effect-best-practices.md for details.
+- Service methods have `R = never` (dependencies resolved at layer construction)
+- Tag identifiers use `workspaces-effect/ServiceName` namespace
+- `_base` symbols from Context.Tag are correctly inlined by api-extractor DTS bundling
 
 ## Error Hierarchy
 
-All errors use `Data.TaggedError` with descriptive fields:
+11 error types using `Data.TaggedError` with exported `*Base` constants for
+api-extractor DTS bundling. All have computed `message` getters.
 
-### Discovery Errors
-
-```typescript
-class WorkspaceRootNotFoundError extends Data.TaggedError(
-  "WorkspaceRootNotFoundError"
-)<{
-  readonly searchPath: string
-  readonly reason: string
-}> {}
-
-class PackageManagerDetectionError extends Data.TaggedError(
-  "PackageManagerDetectionError"
-)<{
-  readonly searchPath: string
-  readonly reason: string
-}> {}
-
-class WorkspaceDiscoveryError extends Data.TaggedError(
-  "WorkspaceDiscoveryError"
-)<{
-  readonly root: string
-  readonly reason: string
-}> {}
-```
-
-### Package Errors
-
-```typescript
-class PackageJsonParseError extends Data.TaggedError(
-  "PackageJsonParseError"
-)<{
-  readonly filePath: string
-  readonly cause: unknown
-}> {}
-
-class PackageNotFoundError extends Data.TaggedError(
-  "PackageNotFoundError"
-)<{
-  readonly name: string
-  readonly available: ReadonlyArray<string>
-}> {}
-```
-
-### Graph Errors
-
-```typescript
-class CyclicDependencyError extends Data.TaggedError(
-  "CyclicDependencyError"
-)<{
-  readonly cycle: ReadonlyArray<string>
-}> {}
-
-class DependencyResolutionError extends Data.TaggedError(
-  "DependencyResolutionError"
-)<{
-  readonly packageName: string
-  readonly dependency: string
-  readonly reason: string
-}> {}
-```
-
-### Change Detection Errors
-
-```typescript
-class GitNotAvailableError extends Data.TaggedError(
-  "GitNotAvailableError"
-)<{
-  readonly reason: string
-}> {}
-
-class ChangeDetectionError extends Data.TaggedError(
-  "ChangeDetectionError"
-)<{
-  readonly operation: string
-  readonly reason: string
-}> {}
-```
-
-### Error Pattern Notes
-
-Following the pattern from sibling repos:
-
-- Export `*Base` constants for api-extractor DTS bundling
-- Use computed `message` getters for human-readable output
-- Include enough context for actionable error reporting
-
-## Schema Definitions
-
-### Core Types
-
-```typescript
-const PackageManager = Schema.Literal("npm", "pnpm", "yarn", "bun")
-type PackageManager = Schema.Schema.Type<typeof PackageManager>
-
-const PackageName = Schema.NonEmptyString.pipe(Schema.brand("PackageName"))
-type PackageName = Schema.Schema.Type<typeof PackageName>
-
-const WorkspacePath = Schema.String.pipe(Schema.brand("WorkspacePath"))
-type WorkspacePath = Schema.Schema.Type<typeof WorkspacePath>
-```
-
-### Package.json Schema
-
-```typescript
-const WorkspaceField = Schema.Union(
-  Schema.Array(Schema.String),
-  Schema.Struct({ packages: Schema.Array(Schema.String) })
-)
-
-const PackageJsonSchema = Schema.Struct({
-  name: Schema.optional(Schema.String),
-  version: Schema.optional(Schema.String),
-  private: Schema.optional(Schema.Boolean),
-  workspaces: Schema.optional(WorkspaceField),
-  dependencies: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String })
-  ),
-  devDependencies: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String })
-  ),
-  peerDependencies: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String })
-  ),
-  packageManager: Schema.optional(Schema.String),
-})
-```
-
-### Workspace Package
-
-```typescript
-class WorkspacePackage extends Schema.Class<WorkspacePackage>(
-  "WorkspacePackage"
-)({
-  name: PackageName,
-  version: Schema.String,
-  path: WorkspacePath,
-  relativePath: Schema.String,
-  private: Schema.optional(Schema.Boolean),
-  dependencies: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String })
-  ),
-  devDependencies: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String })
-  ),
-}) {}
-```
-
-### Workspace Info
-
-```typescript
-class WorkspaceInfo extends Schema.Class<WorkspaceInfo>("WorkspaceInfo")({
-  root: WorkspacePath,
-  packageManager: PackageManager,
-  packageManagerVersion: Schema.optional(Schema.String),
-  patterns: Schema.Array(Schema.String),
-  packages: Schema.Array(WorkspacePackage),
-}) {}
-```
+| Error | Phase | When Raised |
+| --- | --- | --- |
+| `WorkspaceRootNotFoundError` | Discovery | No workspace root found from search path |
+| `PackageManagerDetectionError` | Discovery | Cannot determine PM type |
+| `WorkspaceDiscoveryError` | Discovery | Package discovery fails |
+| `PackageJsonParseError` | Discovery | Malformed package.json |
+| `PackageNotFoundError` | Analysis | Named package not in workspace |
+| `CyclicDependencyError` | Analysis | Cycle detected in dependency graph |
+| `DependencyResolutionError` | Analysis | Dependency cannot be resolved |
+| `GitNotAvailableError` | Change Detection | Git not installed or not a git repo |
+| `ChangeDetectionError` | Change Detection | Git operation fails |
+| `LockfileReadError` | Lockfiles | Lockfile cannot be read from disk |
+| `LockfileParseError` | Lockfiles | Lockfile cannot be parsed |
+| `LockfileIntegrityError` | Lockfiles | Integrity check fails |
 
 ## Layer Composition
 
-### Platform Error Handling in Layers
+### Composite Layers
 
-Layer implementations use `@effect/platform` FileSystem and Path services
-exclusively (no direct `node:` imports). PlatformError from FS operations is
-converted to clean values using `Effect.orElseSucceed`, so service methods
-expose only our own typed errors. See `effect-best-practices.md` for the
-full pattern catalog.
-
-### Live Layers (Platform-dependent)
+Two pre-wired composite layers cover most use cases:
 
 ```typescript
-// Core layers (implemented)
-const WorkspaceRootLive: Layer.Layer<
-  WorkspaceRoot, never, FileSystem | Path
->
-
-const PackageManagerDetectorLive: Layer.Layer<
-  PackageManagerDetector, never, FileSystem | Path
->
-
-const WorkspaceDiscoveryLive: Layer.Layer<
-  WorkspaceDiscovery, never, FileSystem | Path | WorkspaceRoot
->
-
-// Composite layer providing all discovery services
-const DiscoveryLive: Layer.Layer<
-  WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery,
+// All services except git-dependent ones
+// Requires: FileSystem + Path
+const WorkspacesLive: Layer.Layer<
+  WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery |
+  DependencyGraph | TopologicalSorter |
+  LockfileReader | PublishabilityDetector,
   never,
   FileSystem | Path
 >
 
-// Full library layer (future — when all phases are implemented)
-const WorkspacesLive: Layer.Layer<
+// All services including git-dependent ones
+// Requires: FileSystem + Path + CommandExecutor
+const WorkspacesFullLive: Layer.Layer<
   WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery |
   DependencyGraph | TopologicalSorter |
+  LockfileReader | PublishabilityDetector |
   PackageResolver | ChangeDetector,
   never,
   FileSystem | Path | CommandExecutor
 >
 ```
 
+Individual `*Live` layers remain available for fine-grained composition.
+
 ### Platform Entry Points
 
 ```typescript
 // Node.js
 import { NodeContext } from "@effect/platform-node"
-
-const program = myWorkspaceEffect.pipe(
-  Effect.provide(WorkspacesLive),
-  Effect.provide(NodeContext.layer)
-)
+program.pipe(Effect.provide(WorkspacesLive), Effect.provide(NodeContext.layer))
 
 // Bun
 import { BunContext } from "@effect/platform-bun"
-
-const program = myWorkspaceEffect.pipe(
-  Effect.provide(WorkspacesLive),
-  Effect.provide(BunContext.layer)
-)
-```
-
-### Test Layers
-
-Every service gets a corresponding test layer:
-
-```typescript
-const WorkspaceDiscoveryTest = (
-  packages: ReadonlyArray<WorkspacePackage>
-): Layer.Layer<WorkspaceDiscovery> =>
-  Layer.succeed(WorkspaceDiscovery, {
-    listPackages: () => Effect.succeed(packages),
-    getPackage: (name) => {
-      const found = packages.find((p) => p.name === name)
-      return found
-        ? Effect.succeed(found)
-        : Effect.fail(new PackageNotFoundError({
-            name,
-            available: packages.map((p) => p.name)
-          }))
-    },
-    getRoot: () => Effect.succeed({ path: "/mock/root" }),
-  })
+program.pipe(Effect.provide(WorkspacesLive), Effect.provide(BunContext.layer))
 ```
 
 ## Platform Abstraction
@@ -441,20 +208,14 @@ const WorkspaceDiscoveryTest = (
 The library depends on these `@effect/platform` services:
 
 | Service | Usage |
-| ------- | ----- |
+| --- | --- |
 | `FileSystem` | Read package.json, workspace configs, lockfiles |
 | `Path` | Cross-platform path joining, resolution |
 | `Command` | Git operations for change detection |
 
-No direct `node:fs`, `node:path`, or `node:child_process` imports. This enables:
-
-- Unit testing via `FileSystem.layerNoop()`
-- Bun compatibility via `@effect/platform-bun`
-- Future WASM/browser compatibility
+No direct `node:fs`, `node:path`, or `node:child_process` imports.
 
 ## Package Manager Support
-
-### Detection Strategy
 
 Detection order (first match wins):
 
@@ -464,137 +225,26 @@ Detection order (first match wins):
 3. **yarn** -- `yarn.lock` exists AND `packageManager` starts with `yarn@`
 4. **npm** -- fallback if `package.json` has `workspaces` field
 
-### Workspace Config Parsing
-
 | PM | Config Source | Patterns |
-| -- | ------------ | -------- |
+| --- | --- | --- |
 | pnpm | `pnpm-workspace.yaml` | `packages: ["pkgs/*"]` |
 | npm | `package.json` | `workspaces: ["packages/*"]` or `workspaces.packages` |
 | yarn | `package.json` | `workspaces: ["packages/*"]` or `workspaces.packages` |
 | bun | `package.json` | `workspaces: ["packages/*"]` |
 
-### Glob Resolution
+## Resolved Design Decisions
 
-Workspace patterns like `packages/*` are resolved to actual directories using
-platform FileSystem. The glob logic is currently embedded in
-`WorkspaceDiscoveryLive` (not a separate service). It handles:
+All major design decisions have been resolved. See phase-specific docs for
+details. Key decisions:
 
-- Simple wildcards: `packages/*`
-- Nested wildcards: `packages/**`
-- Negation: `!packages/internal-*`
-- Multiple patterns with merge/exclude
-
-**Note**: A separate `GlobResolver` service was deferred. The current
-implementation in WorkspaceDiscoveryLive is sufficient. See
-`phase3-change-detection.md` for the deferral decision.
-
-**Future consideration**: Node 24 and Bun both have native glob support
-(`fs.glob`, `Bun.Glob`). If a GlobResolver is extracted in the future,
-it could leverage these platform-native APIs via `@effect/platform`
-rather than reimplementing glob matching manually.
-
-## Rationale
-
-### Why Effect-TS?
-
-- **Typed errors** eliminate "package.json not found" runtime surprises
-- **Services + layers** enable dependency injection without frameworks
-- **Platform abstraction** via `@effect/platform` provides cross-runtime support
-- **Schema** provides runtime validation of external data (package.json, configs)
-- **Observability** via spans enables tracing in CI/CD pipelines
-
-### Why not wrap workspace-tools?
-
-Microsoft's workspace-tools is a solid library but:
-
-- Uses imperative APIs with thrown exceptions
-- No typed error handling
-- No platform abstraction (Node.js only)
-- No service composition
-- Limited observability
-
-Building on Effect from the ground up provides a better foundation for the
-Effect ecosystem while maintaining feature parity.
-
-### Why separate services instead of one WorkspaceManager?
-
-Composability. A CI action that only needs package listing shouldn't pull in
-git change detection. Users compose the services they need:
-
-```typescript
-// Just discovery
-Effect.provide(DiscoveryLive)
-
-// Discovery + change detection
-Effect.provide(Layer.merge(DiscoveryLive, ChangeDetectorLive))
-```
-
-## Open Questions
-
-1. **Context.Tag vs Context.GenericTag**: RESOLVED. `GenericTag` is deprecated.
-   Class-based `Context.Tag` works with Rslib DTS bundling. The `_base`
-   symbols appear as "forgotten exports" warnings but are correctly inlined
-   in the bundled `.d.ts`. Verified on 2026-03-12.
-
-2. **Glob implementation**: RESOLVED. No `@effect/platform` glob support.
-   Using `readDirectory` + manual pattern matching in WorkspaceDiscoveryLive.
-   GlobResolver deferred as separate service (current approach sufficient).
-
-3. **Lockfile parsing depth**: RESOLVED. Full parse (importers + packages),
-   with packages section optional in schema. Eager parsing at layer
-   construction. See `phase4-configuration-lockfiles.md` for details.
-
-4. **Change detection scope**: RESOLVED. ChangeDetector provides three
-   progressive methods: `changedFiles` (raw git diff), `changedPackages`
-   (files mapped to packages via PackageResolver), `affectedPackages`
-   (changed + transitive dependents via DependencyGraph). See
-   `phase3-change-detection.md` for full design.
-
-5. **Dual API priority**: RESOLVED. Skipped — this is an Effect-ful library;
-   no Promise wrappers needed. Non-Effect consumers are not a target audience.
-
-6. **pnpm catalogs**: RESOLVED. Yes, parse catalogs from lockfile.
-   Available via `PnpmExtension.catalogs` on `LockfileData.pmSpecific`.
-
-7. **Bun workspace quirks**: Bun's workspace implementation has some
-   differences from npm/yarn. Research and document edge cases.
-
-8. **Bun lockfile parsing**: RESOLVED. `bun.lock` is JSONC format since
-   Bun v1.2. Schema documented in `.claude/design/bun-lockfile.md`.
-   Decision: support only text `bun.lock` (not binary `bun.lockb`).
-   Parser: `jsonc-parser` package.
-
-9. **Lockfile abstraction**: RESOLVED. Unified `LockfileReader` interface
-   with PM-agnostic `LockfileData` base model. PM-specific data (catalogs,
-   overrides) preserved via discriminated `pmSpecific` extension field.
-   See `phase4-configuration-lockfiles.md`.
-
-10. **Effect.Service migration**: PLANNED. Migrate existing services from
-    `Context.Tag` + `Layer.effect` to `Effect.Service` pattern. New services
-    (e.g., PublishabilityDetector) should use `Effect.Service` from the start.
-
-11. **Request/RequestResolver for batch lookups**: PLANNED. Evaluate
-    `Request`/`RequestResolver` for batch dependency lookups in workspace
-    graph traversal. This pattern could optimize scenarios where many
-    packages need resolution simultaneously (e.g., full lockfile parsing,
-    cross-workspace dependency analysis).
-
-12. **Effect-native parser modules**: RESOLVED. `jsonc-effect` already
-    published on npm. `yaml-effect` in progress as sibling repo. Will
-    eventually replace direct `yaml` dependency in pnpm/yarn parsers.
-
-13. **Publishable package detection**: PLANNED. Add a composable
-    `PublishabilityDetector` service. Base case: check `private` field,
-    `publishConfig.access` (overrides private), `publishConfig.registry`,
-    `publishConfig.directory`. Must be pluggable so consumers can override
-    the detection strategy (e.g., workflow-release-action has multi-registry
-    target resolution, JSR support, provenance handling).
-
-14. **Composite WorkspacesLive layer**: PLANNED. Single top-level layer
-    wiring all services together. Currently users must compose DiscoveryLive,
-    ChangeDetectionLive, and ConfigurationLive manually.
-
-15. **Observability**: RESOLVED. Full span coverage on all service methods
-    and layer construction. Structured logging at Info/Debug/Trace levels.
-    `workspace.*` attribute namespace. See
-    `docs/superpowers/specs/2026-03-13-observability-design.md`.
+- **Context.Tag** over GenericTag (deprecated) and Effect.Service (not used)
+- **Eager graph/index construction** in `Layer.effect` for all data services
+- **Native Map/Set** for internal data structures (better perf for string keys)
+- **Request/RequestResolver** for `dependenciesOf`, `dependentsOf`, `resolvedVersion`
+- **Per-layer Request.makeCache** for deduplication without global cache contamination
+- **CommandExecutor resolved at layer construction** for R=never service methods
+- **WorkspacesLive / WorkspacesFullLive** as composite layers (replaces old
+  DiscoveryLive, ConfigurationLive, FullConfigLive, ChangeDetectionLive)
+- **PublishabilityDetector** as separate composable service (not embedded in LockfileReader)
+- **Unified LockfileReader** (merged WorkspaceConfigReader)
+- **GlobResolver** deferred (WorkspaceDiscoveryLive handles workspace patterns)

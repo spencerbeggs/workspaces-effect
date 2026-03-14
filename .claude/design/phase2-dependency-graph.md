@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 90
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 authors:
   - C. Spencer Beggs
 tags:
@@ -16,6 +16,7 @@ tags:
 related:
   - architecture.md
   - phase3-change-detection.md
+  - effect-patterns-core.md
 ---
 
 ## Phase 2: Dependency Graph Design
@@ -100,7 +101,7 @@ Default: include `dependencies` and `devDependencies`, exclude
 
 ```typescript
 class DependencyGraph extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/DependencyGraph"
+  "workspaces-effect/DependencyGraph"
 )<
   DependencyGraph,
   {
@@ -132,7 +133,7 @@ class DependencyGraph extends Context.Tag(
 
 ```typescript
 class TopologicalSorter extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/TopologicalSorter"
+  "workspaces-effect/TopologicalSorter"
 )<
   TopologicalSorter,
   {
@@ -306,6 +307,11 @@ appropriate because:
 - Graph construction is fast (O(packages * deps))
 - All queries benefit from the precomputed reverse edges
 
+**Note (2026-03-14):** `dependenciesOf` and `dependentsOf` now use
+`Effect.request` with per-layer `Request.makeCache` internally for
+deduplication of repeated lookups. See the Request/RequestResolver
+open question resolution below.
+
 ### TopologicalSorterLive
 
 Depends on: `DependencyGraph`
@@ -383,3 +389,8 @@ const testDiscovery = (packages: WorkspacePackage[]) =>
 2. **Graph caching across runs**: For watch-mode or daemon scenarios,
    should the graph be incrementally updated rather than rebuilt?
    Not needed for CLI usage; revisit if daemon mode is added.
+
+3. **Request/RequestResolver for batch lookups**: RESOLVED. DependencyGraph's
+   `dependenciesOf` and `dependentsOf` now use `Effect.request` with per-layer
+   `Request.makeCache` for deduplication. Reference equality proves caching is
+   active. Implemented 2026-03-14.

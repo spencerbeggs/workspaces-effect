@@ -1,5 +1,10 @@
 /**
- * Live layer implementations for workspace services.
+ * Live layer implementations for all workspace services.
+ *
+ * Re-exports individual service layers and the composite
+ * {@link WorkspacesLive} / {@link WorkspacesFullLive} convenience layers.
+ *
+ * @packageDocumentation
  */
 
 export { ChangeDetectorLive } from "./ChangeDetectorLive.js";

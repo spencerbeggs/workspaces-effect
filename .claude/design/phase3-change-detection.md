@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 authors:
   - C. Spencer Beggs
 tags:
@@ -17,7 +17,7 @@ tags:
 related:
   - architecture.md
   - phase2-dependency-graph.md
-  - effect-best-practices.md
+  - effect-patterns-core.md
 ---
 
 ## Phase 3: Change Detection Design
@@ -69,7 +69,7 @@ Maps file paths to their owning workspace package.
 
 ```typescript
 class PackageResolver extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/PackageResolver"
+  "workspaces-effect/PackageResolver"
 )<
   PackageResolver,
   {
@@ -114,7 +114,7 @@ Git-based change detection with affected package computation.
 
 ```typescript
 class ChangeDetector extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/ChangeDetector"
+  "workspaces-effect/ChangeDetector"
 )<
   ChangeDetector,
   {
@@ -368,8 +368,14 @@ letting consumers provide `NodeContext.layer` or `BunContext.layer`.
 
 ### Composite layer
 
+**Note (2026-03-14):** The Phase 3 services (PackageResolver, ChangeDetector)
+are now provided via the `WorkspacesFullLive` composite layer, which wires all
+discovery, graph, and change detection services together. The standalone
+`ChangeDetectionLive` composite shown below is superseded but retained for
+reference:
+
 ```typescript
-// All Phase 3 services
+// Historical: standalone Phase 3 composite (now part of WorkspacesFullLive)
 const ChangeDetectionLive: Layer.Layer<
   PackageResolver | ChangeDetector,
   never,

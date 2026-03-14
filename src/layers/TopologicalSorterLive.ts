@@ -1,8 +1,11 @@
 /**
- * Live implementation of TopologicalSorter service.
+ * Live implementation of the {@link TopologicalSorter} service.
  *
  * Uses Kahn's algorithm (BFS-based) for deterministic topological
  * ordering with natural parallel level detection.
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { Effect, Layer } from "effect";
@@ -12,8 +15,10 @@ import { TopologicalSorter } from "../services/TopologicalSorter.js";
 
 /**
  * Kahn's algorithm for topological sorting.
- * Returns packages grouped by execution level (level 0 = no deps).
- * Fails with CyclicDependencyError if a cycle is detected.
+ * Returns packages grouped by execution level (level 0 = no inter-workspace deps).
+ * Fails with {@link CyclicDependencyError} if a cycle is detected.
+ *
+ * @internal
  */
 const kahnLevels = (
 	adjacency: ReadonlyMap<string, ReadonlySet<string>>,
@@ -123,6 +128,8 @@ const kahnLevels = (
 
 /**
  * Flatten levels into a single sorted array.
+ *
+ * @internal
  */
 const kahnSort = (
 	adjacency: ReadonlyMap<string, ReadonlySet<string>>,
@@ -131,6 +138,12 @@ const kahnSort = (
 
 /**
  * Sort a subset of packages including their transitive dependencies.
+ *
+ * @privateRemarks
+ * Collects the transitive closure of dependencies via BFS, builds a
+ * sub-adjacency map, then delegates to {@link kahnSort}.
+ *
+ * @internal
  */
 const kahnSortSubset = (
 	adjacency: ReadonlyMap<string, ReadonlySet<string>>,
@@ -185,7 +198,44 @@ const kahnSortSubset = (
 		return yield* kahnSort(subAdjacency);
 	});
 
-/** Live layer for TopologicalSorter. Depends on DependencyGraph. */
+/**
+ * Live layer for the {@link TopologicalSorter} service.
+ *
+ * Provides deterministic topological ordering of workspace packages
+ * using Kahn's algorithm with parallel level detection.
+ *
+ * @remarks
+ * Requires {@link DependencyGraph}. The adjacency map is resolved eagerly
+ * at construction time. Results are sorted lexicographically within each
+ * level for deterministic output.
+ *
+ * @privateRemarks
+ * Retrieves the adjacency map from `DependencyGraph.adjacencyMap()` once
+ * at construction, then uses it for all `sort`, `sortSubset`, and `levels`
+ * calls.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { TopologicalSorter, WorkspacesLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const sorter = yield* TopologicalSorter;
+ *   const buildOrder = yield* sorter.sort();
+ *   return buildOrder;
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspacesLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
+ */
 export const TopologicalSorterLive: Layer.Layer<TopologicalSorter, never, DependencyGraph> = Layer.effect(
 	TopologicalSorter,
 	Effect.gen(function* () {

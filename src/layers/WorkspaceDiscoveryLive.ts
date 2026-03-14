@@ -1,8 +1,11 @@
 /**
- * Live implementation of WorkspaceDiscovery service.
+ * Live implementation of the {@link WorkspaceDiscovery} service.
  *
  * Reads workspace patterns from PM-specific config, resolves them
- * to directories, and reads package.json for each workspace package.
+ * to directories, and reads `package.json` for each workspace package.
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { FileSystem, Path } from "@effect/platform";
@@ -13,7 +16,9 @@ import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 
 /**
- * Read workspace patterns from pnpm-workspace.yaml or package.json.
+ * Read workspace patterns from `pnpm-workspace.yaml` or `package.json`.
+ *
+ * @internal
  */
 const readWorkspacePatterns = (
 	fs: FileSystem.FileSystem,
@@ -65,8 +70,14 @@ const readWorkspacePatterns = (
 	});
 
 /**
- * Simple parser for pnpm-workspace.yaml packages field.
+ * Simple parser for `pnpm-workspace.yaml` `packages` field.
  * Handles the common format without a full YAML parser dependency.
+ *
+ * @privateRemarks
+ * Uses line-by-line parsing to avoid pulling in a YAML library for
+ * a well-known, simple format. Supports quoted and unquoted list items.
+ *
+ * @internal
  */
 const parsePnpmWorkspacePatterns = (content: string): string[] => {
 	const patterns: string[] = [];
@@ -106,8 +117,10 @@ const parsePnpmWorkspacePatterns = (content: string): string[] => {
 
 /**
  * Resolve workspace patterns to actual directory paths.
- * Handles simple wildcard patterns like "packages/*".
- * Negation patterns (starting with "!") are used to exclude matches.
+ * Handles simple wildcard patterns like `"packages/*"`.
+ * Negation patterns (starting with `"!"`) are used to exclude matches.
+ *
+ * @internal
  */
 const resolvePatterns = (
 	fs: FileSystem.FileSystem,
@@ -139,7 +152,9 @@ const resolvePatterns = (
 
 /**
  * Resolve a single workspace pattern to directory paths.
- * Supports: "packages/*", "apps/*", exact paths like "tools/cli".
+ * Supports: `"packages/*"`, `"apps/*"`, exact paths like `"tools/cli"`.
+ *
+ * @internal
  */
 const resolvePattern = (
 	fs: FileSystem.FileSystem,
@@ -182,7 +197,9 @@ const resolvePattern = (
 	});
 
 /**
- * Read a package.json and construct a WorkspacePackage.
+ * Read a `package.json` and construct a {@link WorkspacePackage}.
+ *
+ * @internal
  */
 const readWorkspacePackage = (
 	fs: FileSystem.FileSystem,
@@ -246,8 +263,43 @@ const readWorkspacePackage = (
 	});
 
 /**
- * Live layer for WorkspaceDiscovery.
- * Depends on WorkspaceRoot, FileSystem, and Path.
+ * Live layer for the {@link WorkspaceDiscovery} service.
+ *
+ * Discovers all workspace packages by reading PM-specific configuration,
+ * resolving glob patterns to directories, and parsing each `package.json`.
+ *
+ * @remarks
+ * Requires {@link WorkspaceRoot}, `FileSystem`, and `Path`. The workspace
+ * root is eagerly resolved at layer construction time using `process.cwd()`
+ * as the starting directory. Discovered packages are cached for the lifetime
+ * of the layer.
+ *
+ * @privateRemarks
+ * Uses `process.cwd()` for root resolution. Consumers needing a different
+ * starting directory should provide a custom `WorkspaceRoot` layer. Package
+ * results are cached in a mutable closure variable.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { WorkspaceDiscovery, WorkspaceDiscoveryLive, WorkspaceRootLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const discovery = yield* WorkspaceDiscovery;
+ *   return yield* discovery.listPackages();
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspaceDiscoveryLive),
+ *     Effect.provide(WorkspaceRootLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
  */
 export const WorkspaceDiscoveryLive: Layer.Layer<
 	WorkspaceDiscovery,

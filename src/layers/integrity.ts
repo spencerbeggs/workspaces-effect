@@ -1,3 +1,14 @@
+/**
+ * Lockfile integrity checking utilities.
+ *
+ * Validates that the parsed lockfile data is consistent with the
+ * actual workspace `package.json` files on disk. Checks for missing
+ * or extra workspaces and unsatisfied version constraints.
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import type { FileSystem, Path } from "@effect/platform";
 import { Effect, Exit } from "effect";
 import { Range, SemVer } from "semver-effect";
@@ -6,10 +17,25 @@ import type { LockfileData } from "../schemas/lockfile.js";
 import { LockfileIntegrity } from "../schemas/lockfile.js";
 import { isWorkspaceSpecifier } from "./parsers/shared.js";
 
+/**
+ * Dependency type keys to inspect in `package.json`.
+ *
+ * @internal
+ */
 const DEP_TYPES = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
 
+/**
+ * Union type of dependency map keys from `package.json`.
+ *
+ * @internal
+ */
 type DepType = (typeof DEP_TYPES)[number];
 
+/**
+ * Subset of `package.json` fields relevant to dependency constraint checking.
+ *
+ * @internal
+ */
 interface PackageJsonDeps {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
@@ -17,6 +43,21 @@ interface PackageJsonDeps {
 	optionalDependencies?: Record<string, string>;
 }
 
+/**
+ * Check the integrity of parsed lockfile data against workspace `package.json` files.
+ *
+ * Verifies that:
+ * - All workspace packages in `package.json` appear in the lockfile
+ * - No extra workspaces exist in the lockfile that are not on disk
+ * - Resolved versions satisfy the declared semver constraints
+ *
+ * @privateRemarks
+ * Reads `package.json` for each workspace package concurrently, then
+ * delegates constraint checking to {@link checkConstraints}. Uses
+ * `semver-effect` for range/version parsing and satisfaction checks.
+ *
+ * @internal
+ */
 export const checkLockfileIntegrity = (
 	lockfileData: LockfileData,
 	root: string,
@@ -64,6 +105,16 @@ export const checkLockfileIntegrity = (
 		});
 	});
 
+/**
+ * Check that resolved versions in the lockfile satisfy the declared
+ * semver constraints in each workspace's `package.json`.
+ *
+ * @privateRemarks
+ * Skips workspace specifiers (`workspace:`, `link:`, `file:`) and
+ * unparseable semver ranges/versions. Uses `semver-effect` for parsing.
+ *
+ * @internal
+ */
 const checkConstraints = (
 	lockfileData: LockfileData,
 	packageJsons: ReadonlyArray<readonly [string, PackageJsonDeps]>,

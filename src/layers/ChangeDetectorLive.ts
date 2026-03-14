@@ -1,9 +1,12 @@
 /**
- * Live implementation of ChangeDetector service.
+ * Live implementation of the {@link ChangeDetector} service.
  *
- * Uses Effect platform Command API for git operations.
- * CommandExecutor is resolved at layer construction time so that
- * service methods have R = never (matching the service interface).
+ * Uses the Effect platform `Command` API for git operations.
+ * `CommandExecutor` is resolved at layer construction time so that
+ * service methods have `R = never` (matching the service interface).
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { Command, CommandExecutor } from "@effect/platform";
@@ -16,7 +19,13 @@ import { DependencyGraph } from "../services/DependencyGraph.js";
 import { PackageResolver } from "../services/PackageResolver.js";
 
 /**
- * Create git helper functions that use a resolved CommandExecutor.
+ * Create git helper functions that use a resolved `CommandExecutor`.
+ *
+ * @privateRemarks
+ * Returns closures over the executor so callers do not need to thread
+ * the executor through each git call.
+ *
+ * @internal
  */
 const makeGitHelpers = (executor: CommandExecutor.CommandExecutor) => {
 	/** Run a git command and return trimmed stdout. */
@@ -60,10 +69,47 @@ const makeGitHelpers = (executor: CommandExecutor.CommandExecutor) => {
 };
 
 /**
- * Live layer for ChangeDetector.
+ * Live layer for the {@link ChangeDetector} service.
  *
- * Depends on PackageResolver, DependencyGraph, and CommandExecutor.
- * CommandExecutor is resolved at construction time.
+ * Provides git-based change detection for monorepo packages. Compares
+ * commits to identify changed files, maps them to owning packages,
+ * and optionally walks the dependency graph to find transitively
+ * affected packages.
+ *
+ * @remarks
+ * Requires {@link PackageResolver}, {@link DependencyGraph}, and
+ * `CommandExecutor` from `@effect/platform`. The `CommandExecutor` is
+ * resolved at construction time so all service methods have `R = never`.
+ *
+ * @privateRemarks
+ * Git commands are executed via `Command.make` + `CommandExecutor.string`.
+ * The working directory for git operations is derived from the first
+ * entry in the package path index.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { ChangeDetector, WorkspacesFullLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const detector = yield* ChangeDetector;
+ *   const affected = yield* detector.affectedPackages({
+ *     base: "main",
+ *     head: "HEAD",
+ *   });
+ *   return affected;
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspacesFullLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
  */
 export const ChangeDetectorLive = Layer.effect(
 	ChangeDetector,

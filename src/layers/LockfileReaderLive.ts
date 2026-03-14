@@ -1,3 +1,13 @@
+/**
+ * Live implementation of the {@link LockfileReader} service.
+ *
+ * Reads and parses lockfiles for all four supported package managers
+ * (pnpm, npm, yarn Berry, bun) into a unified {@link LockfileData} model.
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Layer, Option, Request, RequestResolver } from "effect";
 import type { LockfileParseError } from "../errors/index.js";
@@ -13,6 +23,11 @@ import { parseNpmLockfile } from "./parsers/npm.js";
 import { parsePnpmLockfile } from "./parsers/pnpm.js";
 import { parseYarnLockfile } from "./parsers/yarn.js";
 
+/**
+ * Map a package manager type to its lockfile filename.
+ *
+ * @internal
+ */
 const lockfileNameFor = (pm: PackageManagerType): string => {
 	switch (pm) {
 		case "pnpm":
@@ -26,6 +41,11 @@ const lockfileNameFor = (pm: PackageManagerType): string => {
 	}
 };
 
+/**
+ * Dispatch lockfile content to the appropriate format-specific parser.
+ *
+ * @internal
+ */
 const parseLockfile = (content: string, lockfilePath: string, pm: PackageManagerType) => {
 	switch (pm) {
 		case "pnpm":
@@ -46,15 +66,61 @@ class ResolvedVersionRequest extends Request.TaggedClass("ResolvedVersionRequest
 	{ readonly packageName: string }
 > {}
 
-// Exported type for consumers who want to annotate explicitly.
-// The inferred error union includes WorkspaceRootNotFoundError and
-// PackageManagerDetectionError because find() and detect() can fail.
+/**
+ * Convenience type alias for the {@link LockfileReaderLive} layer signature.
+ *
+ * Useful for consumers who want to annotate layer types explicitly. The
+ * error union includes `LockfileReadError` and `LockfileParseError` because
+ * the lockfile is read and parsed eagerly at construction time.
+ *
+ * @public
+ */
 export type LockfileReaderLiveLayer = Layer.Layer<
 	LockfileReader,
 	LockfileReadError | LockfileParseError,
 	WorkspaceRoot | PackageManagerDetector | FileSystem.FileSystem | Path.Path
 >;
 
+/**
+ * Live layer for the {@link LockfileReader} service.
+ *
+ * Reads, parses, and indexes the lockfile for the detected package manager
+ * at construction time. Provides cached version lookups, workspace dependency
+ * extraction, and lockfile integrity checking.
+ *
+ * @remarks
+ * Requires {@link WorkspaceRoot}, {@link PackageManagerDetector}, `FileSystem`,
+ * and `Path` from `@effect/platform`. The lockfile is read and parsed eagerly
+ * at construction time; the parsed data is cached for the lifetime of the layer.
+ *
+ * @privateRemarks
+ * Delegates to format-specific parsers in `./parsers/`. Uses an Effect
+ * `Request.Cache` for deduplicating `resolvedVersion` lookups (same pattern
+ * as `DependencyGraphLive`). Integrity checking delegates to
+ * {@link checkLockfileIntegrity}.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { LockfileReader, WorkspacesLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const reader = yield* LockfileReader;
+ *   const data = yield* reader.readLockfile();
+ *   return data.packages.length;
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspacesLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
+ */
 export const LockfileReaderLive = Layer.effect(
 	LockfileReader,
 	Effect.gen(function* () {

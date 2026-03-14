@@ -5,8 +5,8 @@ category: architecture
 status: complete
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 authors:
   - C. Spencer Beggs
 tags:
@@ -17,7 +17,7 @@ related:
   - architecture.md
   - phase4-configuration-lockfiles.md
   - lockfile-schemas.md
-  - effect-best-practices.md
+  - effect-patterns-core.md
 ---
 
 ## LockfileReader Service Interface Design
@@ -56,7 +56,7 @@ The overall Phase 4 architecture and parsing strategy are defined in
 `phase4-configuration-lockfiles.md`. Existing services (WorkspaceRoot,
 DependencyGraph, etc.) use the `Context.Tag` + `Layer.effect` pattern.
 The `Effect.Service` combined pattern has been researched and documented
-in `effect-best-practices.md` but has not yet been used in production code.
+in `effect-patterns-core.md` but has not yet been used in production code.
 
 This document bridges the gap between the schema definitions and the
 service implementation by specifying the exact interface, error types,
@@ -93,6 +93,8 @@ override the detection strategy (e.g., monorepos with custom `publishConfig`
 conventions or release tooling that marks packages differently).
 
 ## Error Types
+
+**Implementation note (2026-03-14):** The actual implementation simplified the error hierarchy. `LockfileReadError` covers both missing and unreadable lockfiles. `LockfileParseError` covers parse and version errors. `PackageNotInLockfileError` was not needed because `resolvedVersion` returns `Option.Option<ResolvedPackage>` (Option.none for missing packages) instead of failing.
 
 New errors for lockfile operations. All follow the existing `Data.TaggedError`
 with `Base` export pattern established in `src/errors/index.ts`.
@@ -210,7 +212,7 @@ import type { PackageNotInLockfileError } from "../errors/index.js"
  * operate on the precomputed data (no additional I/O).
  */
 export class LockfileReader extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/LockfileReader",
+  "workspaces-effect/LockfileReader",
 )<
   LockfileReader,
   {
@@ -227,18 +229,17 @@ export class LockfileReader extends Context.Tag(
      * Resolve a version specifier to its locked version for a package.
      *
      * @param packageName - The package name (e.g., "react", "@scope/ui")
-     * @param specifier - The version specifier from package.json (e.g., "^19.0.0")
-     * @returns The ResolvedPackage if found, or fails with PackageNotInLockfileError
+     * @returns Option.some(ResolvedPackage) if found, Option.none if not in lockfile
      *
-     * When multiple versions of a package exist (e.g., different specifiers
-     * resolving to different versions), the specifier parameter disambiguates.
-     * If specifier is omitted or does not narrow to a single resolution,
-     * returns the first match.
+     * **Implementation note (2026-03-14):** The actual signature uses
+     * `Option.Option<ResolvedPackage>` with error channel `never` instead of
+     * failing with `PackageNotInLockfileError`. Returns `Option.none` for
+     * unknown packages. Uses `Effect.request` with `Request.makeCache`
+     * internally for deduplication of repeated lookups.
      */
     readonly resolvedVersion: (
       packageName: string,
-      specifier?: string,
-    ) => Effect.Effect<ResolvedPackage, PackageNotInLockfileError>
+    ) => Effect.Effect<Option.Option<ResolvedPackage>>
 
     /**
      * Verify integrity hash for a package.
@@ -304,7 +305,7 @@ export class LockfileReader extends Context.Tag(
 | Method | Returns | Error channel | Notes |
 | --- | --- | --- | --- |
 | `lockfileData()` | `LockfileData` | never | Already parsed; infallible query |
-| `resolvedVersion(name, specifier?)` | `ResolvedPackage` | `PackageNotInLockfileError` | Specifier optional for disambiguation |
+| `resolvedVersion(name)` | `Option<ResolvedPackage>` | never | Returns Option.none for unknown packages; uses Request/RequestResolver internally |
 | `checkIntegrity(name)` | `Option<string>` | `PackageNotInLockfileError` | Option because workspace pkgs lack hashes |
 | `importersFor(path)` | `ReadonlyArray<WorkspaceDependency>` | never | Returns empty array if path not found |
 | `catalogEntries()` | `Record<string, Record<string, string>>` | never | Empty record for non-catalog PMs |
@@ -322,7 +323,7 @@ an empty result is a valid answer ("no catalogs configured" is not an error).
 ```typescript
 // Service definition
 export class LockfileReader extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/LockfileReader",
+  "workspaces-effect/LockfileReader",
 )<LockfileReader, { /* ... */ }>() {}
 
 // Layer definition (separate file)
@@ -356,7 +357,7 @@ export const LockfileReaderLive = Layer.effect(
 
 ```typescript
 class LockfileReader extends Effect.Service<LockfileReader>()(
-  "@spencerbeggs/workspaces-effect/LockfileReader",
+  "workspaces-effect/LockfileReader",
   {
     effect: Effect.gen(function* () {
       const root = yield* WorkspaceRoot
@@ -715,7 +716,7 @@ interface PublishabilityResult {
  * for monorepos with custom publishing conventions.
  */
 export class PublishabilityDetector extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/PublishabilityDetector",
+  "workspaces-effect/PublishabilityDetector",
 )<
   PublishabilityDetector,
   {
@@ -831,7 +832,7 @@ PublishabilityDetector is intentionally separate because:
 
 ```typescript
 import { Effect } from "effect"
-import { LockfileReader } from "@spencerbeggs/workspaces-effect"
+import { LockfileReader } from "workspaces-effect"
 
 const program = Effect.gen(function* () {
   const lockfile = yield* LockfileReader
@@ -1070,7 +1071,6 @@ describe("LockfileReaderLive (pnpm)", () => {
    or `PublishabilityDetector` may need to read raw `package.json` files
    directly via FileSystem.
 
-5. **Effect.Service migration timing**: This document recommends sticking
-   with `Context.Tag` for now. Revisit when api-extractor compatibility
-   with `Effect.Service` has been verified and when there is a clean
-   pattern for platform layer injection.
+5. **Effect.Service migration timing**: RESOLVED (2026-03-14). Not migrating.
+   `Context.Tag` + `Layer.effect` is the established pattern. `Effect.Service`
+   doesn't exist as documented.

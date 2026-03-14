@@ -5,11 +5,11 @@ category: reference
 status: draft
 completeness: 60
 created: 2026-03-12
-updated: 2026-03-12
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 related:
   - architecture.md
-  - effect-best-practices.md
+  - effect-patterns-core.md
 authors:
   - C. Spencer Beggs
 tags:
@@ -38,7 +38,7 @@ tags:
 
 This document captures patterns, best practices, and design decisions from
 analyzing 7 sibling repositories and the Effect documentation. These findings
-directly inform the architecture of `@spencerbeggs/workspaces-effect`.
+directly inform the architecture of `workspaces-effect`.
 
 ## Current State
 
@@ -73,9 +73,10 @@ class-based `Context.Tag` patterns through DTS bundling. `GenericTag` produces
 resolvable type signatures in `.d.ts` rollup output.
 
 **Decision for workspaces-effect (resolved 2026-03-12)**: `GenericTag` is
-deprecated. Use class-based `Context.Tag` pattern. Verified it works with
-Rslib + api-extractor DTS bundling. The `_base` symbols are correctly
-inlined in bundled `.d.ts`. Sibling repos should migrate to class Tag.
+deprecated. Use class-based `Context.Tag` pattern — this is what
+workspaces-effect uses. Verified it works with Rslib + api-extractor DTS
+bundling. The `_base` symbols are correctly inlined in bundled `.d.ts`.
+Sibling repos haven't migrated yet.
 
 ### P2: Data.TaggedError with Base Export
 
@@ -431,7 +432,7 @@ The root is the highest ancestor directory containing a workspace marker.
 Research from runtime-resolver, semver-effect, type-registry-effect, and
 github-action-effects.
 
-### Key Finding: GenericTag Still Used Everywhere
+### Key Finding: GenericTag Still Used in Sibling Repos
 
 All four sibling repos use `Context.GenericTag` for service definitions:
 
@@ -442,8 +443,9 @@ export interface NodeResolver {
 export const NodeResolver = Context.GenericTag<NodeResolver>("NodeResolver");
 ```
 
-workspaces-effect already uses the newer class-based `Context.Tag` pattern.
-The sibling repos haven't migrated yet. Neither repo uses `Effect.Service`.
+workspaces-effect uses class-based `Context.Tag`, which is the current
+recommended pattern (`GenericTag` is deprecated). The sibling repos haven't
+migrated yet. Neither repo uses `Effect.Service`.
 
 ### Layer Construction Consistency
 

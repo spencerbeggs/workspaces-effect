@@ -1,21 +1,24 @@
 # workspaces-effect
 
-`@spencerbeggs/workspaces-effect` — an Effect-TS library for monorepo workspace
+`workspaces-effect` — an Effect-TS library for monorepo workspace
 tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-Phases 1-4 complete. 154 tests passing. Full observability (spans + structured
-logging) across all services. Planning next: PublishabilityDetector service,
-composite WorkspacesLive layer, Effect.Service migration, Request/RequestResolver
-batch optimization.
+All phases complete. 174 tests passing. Full observability (spans + structured
+logging) across all services. Request/RequestResolver with per-layer caching
+for DependencyGraph and LockfileReader lookups. Composite layers:
+WorkspacesLive (no git), WorkspacesFullLive (with git).
 
 ## Design Documents
 
 Load these when working on the corresponding area:
 
-- `.claude/design/architecture.md` — service groups, layers, schemas, errors
-- `.claude/design/effect-best-practices.md` — Effect patterns and conventions
+- `.claude/design/architecture.md` — service groups, layers, composites, errors
+- `.claude/design/effect-patterns-core.md` — service, error, layer, Request/RequestResolver patterns
+- `.claude/design/effect-patterns-parsing.md` — Schema and parsing pipeline patterns
+- `.claude/design/effect-patterns-testing.md` — testing, mocking, command patterns
+- `.claude/design/phase2-dependency-graph.md` — dependency graph design
 - `.claude/design/phase3-change-detection.md` — git change detection design
 - `.claude/design/phase4-configuration-lockfiles.md` — lockfile parsing design
 - `.claude/design/lockfile-reader-service.md` — LockfileReader service interface
@@ -31,6 +34,7 @@ Load these when working on the corresponding area:
 - `Data.TaggedError` with exported Base constants
 - CommandExecutor resolved at layer construction for R=never methods
 - Eager data construction in `Layer.effect`
+- Request/RequestResolver with per-layer `Request.makeCache` for deduplication
 - `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
 - Test fixtures in `src/test-fixtures/` (lockfiles for all 4 PMs)
 

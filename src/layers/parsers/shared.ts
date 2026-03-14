@@ -1,11 +1,28 @@
 /**
- * Shared parser utilities used by all 4 lockfile parsers.
+ * Shared parser utilities used by all four lockfile parsers.
+ *
+ * Provides common interfaces, specifier detection, and workspace
+ * dependency extraction logic.
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { WorkspaceDependency } from "../../schemas/lockfile.js";
 
+/**
+ * Dependency type keys to inspect when extracting workspace dependencies.
+ *
+ * @internal
+ */
 const DEP_TYPES = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
 
+/**
+ * Common dependency map shape shared across all lockfile formats.
+ * Represents the dependency fields of a single workspace entry.
+ *
+ * @internal
+ */
 export interface WorkspaceEntry {
 	readonly dependencies?: Record<string, string>;
 	readonly devDependencies?: Record<string, string>;
@@ -13,11 +30,24 @@ export interface WorkspaceEntry {
 	readonly optionalDependencies?: Record<string, string>;
 }
 
-/** True if the specifier is a workspace/link/file reference. */
+/**
+ * Returns `true` if the specifier is a workspace, link, or file reference
+ * (e.g., `"workspace:*"`, `"link:../foo"`, `"file:../bar"`).
+ *
+ * @internal
+ */
 export const isWorkspaceSpecifier = (specifier: string): boolean =>
 	specifier.startsWith("workspace:") || specifier.startsWith("link:") || specifier.startsWith("file:");
 
-/** Extract inter-workspace dependencies from workspace entries. */
+/**
+ * Extract inter-workspace dependencies from workspace entries.
+ *
+ * Iterates all dependency types for each workspace and emits a
+ * {@link WorkspaceDependency} for every dependency whose name is
+ * present in `workspaceNames`.
+ *
+ * @internal
+ */
 export const extractWorkspaceDeps = (
 	workspaces: ReadonlyMap<string, WorkspaceEntry>,
 	workspaceNames: ReadonlySet<string>,

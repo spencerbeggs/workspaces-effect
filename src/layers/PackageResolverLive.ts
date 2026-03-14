@@ -1,9 +1,12 @@
 /**
- * Live implementation of PackageResolver service.
+ * Live implementation of the {@link PackageResolver} service.
  *
  * Builds a sorted path index at layer construction time from
- * WorkspaceDiscovery output. Resolves file paths to owning packages
+ * {@link WorkspaceDiscovery} output. Resolves file paths to owning packages
  * using longest-prefix matching on absolute paths.
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { Path } from "@effect/platform";
@@ -12,7 +15,11 @@ import type { WorkspacePackage } from "../schemas/core.js";
 import { PackageResolver } from "../services/PackageResolver.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 
-/** A path entry with its absolute path and associated package. */
+/**
+ * A path entry with its absolute path and associated package.
+ *
+ * @internal
+ */
 interface PathEntry {
 	readonly path: string;
 	readonly package: WorkspacePackage;
@@ -21,6 +28,8 @@ interface PathEntry {
 /**
  * Build a sorted path index from workspace packages.
  * Sorted by path length descending so longest prefix matches first.
+ *
+ * @internal
  */
 const buildPathIndex = (packages: ReadonlyArray<WorkspacePackage>, sep: string): ReadonlyArray<PathEntry> => {
 	const entries: PathEntry[] = packages.map((pkg) => ({
@@ -35,6 +44,8 @@ const buildPathIndex = (packages: ReadonlyArray<WorkspacePackage>, sep: string):
 
 /**
  * Find the owning package for a file path using longest-prefix matching.
+ *
+ * @internal
  */
 const findOwner = (filePath: string, index: ReadonlyArray<PathEntry>): Option.Option<WorkspacePackage> => {
 	for (const entry of index) {
@@ -46,8 +57,42 @@ const findOwner = (filePath: string, index: ReadonlyArray<PathEntry>): Option.Op
 };
 
 /**
- * Live layer for PackageResolver.
- * Depends on WorkspaceDiscovery and Path.
+ * Live layer for the {@link PackageResolver} service.
+ *
+ * Resolves file paths to their owning workspace packages using
+ * longest-prefix matching on a pre-built path index.
+ *
+ * @remarks
+ * Requires {@link WorkspaceDiscovery} and `Path` from `@effect/platform`.
+ * The path index is built eagerly at layer construction time and sorted by
+ * path length descending so that the most specific match wins.
+ *
+ * @privateRemarks
+ * Uses {@link buildPathIndex} to create a sorted array of path entries,
+ * then performs linear scans in {@link findOwner} for each resolution.
+ * This is efficient for typical monorepo sizes (tens of packages).
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { PackageResolver, WorkspacesFullLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const resolver = yield* PackageResolver;
+ *   const owner = yield* resolver.resolveFile("/path/to/packages/foo/src/index.ts");
+ *   return owner;
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspacesFullLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
  */
 export const PackageResolverLive = Layer.effect(
 	PackageResolver,

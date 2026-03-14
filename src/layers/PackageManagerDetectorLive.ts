@@ -1,11 +1,14 @@
 /**
- * Live implementation of PackageManagerDetector service.
+ * Live implementation of the {@link PackageManagerDetector} service.
  *
  * Detection priority (first match wins):
- * 1. pnpm - pnpm-workspace.yaml exists
- * 2. bun - bun.lock exists AND packageManager starts with "bun\@"
- * 3. yarn - yarn.lock exists AND packageManager starts with "yarn\@"
- * 4. npm - fallback if package.json has workspaces field
+ * 1. pnpm -- `pnpm-workspace.yaml` exists
+ * 2. bun -- `bun.lock` exists AND `packageManager` starts with `"bun@"`
+ * 3. yarn -- `yarn.lock` exists AND `packageManager` starts with `"yarn@"`
+ * 4. npm -- fallback if `package.json` has `"workspaces"` field
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { FileSystem, Path } from "@effect/platform";
@@ -16,8 +19,10 @@ import type { DetectedPackageManager } from "../services/PackageManagerDetector.
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 
 /**
- * Parse the packageManager field from package.json (e.g., "pnpm\@10.32.1").
- * Returns the PM name and version, or undefined if not present/parseable.
+ * Parse the `packageManager` field from `package.json` (e.g., `"pnpm@10.32.1"`).
+ * Returns the PM name and version, or `undefined` if not present or parseable.
+ *
+ * @internal
  */
 const parsePackageManagerField = (raw: string | undefined): { name: string; version: string } | undefined => {
 	if (!raw) return undefined;
@@ -32,7 +37,9 @@ const parsePackageManagerField = (raw: string | undefined): { name: string; vers
 };
 
 /**
- * Read the packageManager field from the root package.json.
+ * Read the `packageManager` field from the root `package.json`.
+ *
+ * @internal
  */
 const readPackageManagerField = (
 	fs: FileSystem.FileSystem,
@@ -52,6 +59,8 @@ const readPackageManagerField = (
 
 /**
  * Check if a file exists at the given path.
+ *
+ * @internal
  */
 const fileExists = (
 	fs: FileSystem.FileSystem,
@@ -62,6 +71,12 @@ const fileExists = (
 
 /**
  * Detect the package manager for the given workspace root.
+ *
+ * @privateRemarks
+ * Follows a strict priority chain: pnpm \> bun \> yarn \> npm.
+ * Each check combines lockfile presence with `packageManager` field validation.
+ *
+ * @internal
  */
 const detectPackageManager = (
 	fs: FileSystem.FileSystem,
@@ -134,7 +149,42 @@ const detectPackageManager = (
 		}),
 	);
 
-/** Live layer for PackageManagerDetector using Effect platform FileSystem and Path. */
+/**
+ * Live layer for the {@link PackageManagerDetector} service.
+ *
+ * Detects which package manager (pnpm, npm, yarn, or bun) manages
+ * a given workspace root by inspecting lockfiles and the `packageManager`
+ * field in `package.json`.
+ *
+ * @remarks
+ * Requires `FileSystem` and `Path` from `@effect/platform`. Provide these
+ * via `NodeContext.layer` (Node.js) or `BunContext.layer` (Bun).
+ *
+ * @privateRemarks
+ * Resolves `FileSystem` and `Path` at construction time, then delegates
+ * to {@link detectPackageManager} for each `detect()` call.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { PackageManagerDetector, PackageManagerDetectorLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const detector = yield* PackageManagerDetector;
+ *   return yield* detector.detect("/path/to/monorepo");
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(PackageManagerDetectorLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
+ */
 export const PackageManagerDetectorLive: Layer.Layer<PackageManagerDetector, never, FileSystem.FileSystem | Path.Path> =
 	Layer.effect(
 		PackageManagerDetector,

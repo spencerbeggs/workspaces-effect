@@ -1,9 +1,12 @@
 /**
- * Live implementation of WorkspaceRoot service.
+ * Live implementation of the {@link WorkspaceRoot} service.
  *
  * Walks up from a given directory looking for workspace markers:
- * 1. pnpm-workspace.yaml (pnpm workspaces)
- * 2. package.json with "workspaces" field (npm/yarn/bun)
+ * 1. `pnpm-workspace.yaml` (pnpm workspaces)
+ * 2. `package.json` with `"workspaces"` field (npm/yarn/bun)
+ *
+ * @packageDocumentation
+ * @internal
  */
 
 import { FileSystem, Path } from "@effect/platform";
@@ -11,12 +14,18 @@ import { Effect, Layer } from "effect";
 import { WorkspaceRootNotFoundError } from "../errors/index.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 
-/** Workspace marker files to look for, in priority order. */
+/**
+ * Workspace marker files to look for, in priority order.
+ *
+ * @internal
+ */
 const WORKSPACE_MARKERS = ["pnpm-workspace.yaml"] as const;
 
 /**
  * Check if a directory contains a workspace root marker.
- * Returns the directory path if found, or fails.
+ * Returns the directory path if found, or fails with {@link WorkspaceRootNotFoundError}.
+ *
+ * @internal
  */
 const checkForWorkspaceRoot = (
 	fs: FileSystem.FileSystem,
@@ -54,6 +63,12 @@ const checkForWorkspaceRoot = (
 
 /**
  * Walk up the directory tree from `startDir` looking for workspace markers.
+ *
+ * @privateRemarks
+ * Resolves `startDir` to an absolute path, then iterates parent directories
+ * until a marker is found or the filesystem root is reached.
+ *
+ * @internal
  */
 const findWorkspaceRoot = (
 	fs: FileSystem.FileSystem,
@@ -90,7 +105,41 @@ const findWorkspaceRoot = (
 		}),
 	);
 
-/** Live layer for WorkspaceRoot using Effect platform FileSystem and Path. */
+/**
+ * Live layer for the {@link WorkspaceRoot} service.
+ *
+ * Provides workspace root discovery by walking up the directory tree
+ * looking for workspace markers.
+ *
+ * @remarks
+ * Requires `FileSystem` and `Path` from `@effect/platform`. Provide these
+ * via `NodeContext.layer` (Node.js) or `BunContext.layer` (Bun).
+ *
+ * @privateRemarks
+ * Resolves `FileSystem` and `Path` at construction time, then delegates
+ * to {@link findWorkspaceRoot} for each `find()` call.
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { NodeContext } from "@effect/platform-node";
+ * import { WorkspaceRoot, WorkspaceRootLive } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const root = yield* WorkspaceRoot;
+ *   return yield* root.find(process.cwd());
+ * });
+ *
+ * Effect.runPromise(
+ *   program.pipe(
+ *     Effect.provide(WorkspaceRootLive),
+ *     Effect.provide(NodeContext.layer),
+ *   )
+ * );
+ * ```
+ *
+ * @public
+ */
 export const WorkspaceRootLive: Layer.Layer<WorkspaceRoot, never, FileSystem.FileSystem | Path.Path> = Layer.effect(
 	WorkspaceRoot,
 	Effect.gen(function* () {

@@ -1,12 +1,14 @@
 /**
  * Top-level composite layers that wire all services together.
  *
- * - WorkspacesLive: all services except git-dependent ones (ChangeDetector,
- *   PackageResolver). Requires FileSystem + Path.
- * - WorkspacesFullLive: all services including git-dependent ones.
- *   Additionally requires CommandExecutor.
+ * - {@link WorkspacesLive}: all services except git-dependent ones
+ *   (`ChangeDetector`, `PackageResolver`). Requires `FileSystem` + `Path`.
+ * - {@link WorkspacesFullLive}: all services including git-dependent ones.
+ *   Additionally requires `CommandExecutor`.
  *
- * Individual *Live layers remain available for fine-grained composition.
+ * Individual `*Live` layers remain available for fine-grained composition.
+ *
+ * @packageDocumentation
  */
 
 import { Layer } from "effect";
@@ -23,15 +25,23 @@ import { WorkspaceRootLive } from "./WorkspaceRootLive.js";
 /**
  * Composite layer providing all services except git-dependent ones.
  *
- * Provides: WorkspaceRoot, PackageManagerDetector, WorkspaceDiscovery,
- * DependencyGraph, TopologicalSorter, LockfileReader, PublishabilityDetector.
+ * Provides: `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`,
+ * `DependencyGraph`, `TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`.
  *
- * Requires: FileSystem + Path (provide via NodeContext.layer or BunContext.layer).
+ * @remarks
+ * Requires `FileSystem` and `Path` from `@effect/platform`. Provide these
+ * via `NodeContext.layer` (Node.js) or `BunContext.layer` (Bun).
+ *
+ * @privateRemarks
+ * Wires individual `*Live` layers together using `Layer.mergeAll` with
+ * `Layer.provide` to thread dependencies. `PublishabilityDetectorLive` is
+ * a pure layer with no dependencies.
  *
  * @example
  * ```typescript
+ * import { Effect } from "effect";
  * import { NodeContext } from "@effect/platform-node";
- * import { WorkspacesLive } from "@spencerbeggs/workspaces-effect";
+ * import { WorkspacesLive } from "workspaces-effect";
  *
  * Effect.runPromise(
  *   program.pipe(
@@ -40,6 +50,8 @@ import { WorkspaceRootLive } from "./WorkspaceRootLive.js";
  *   )
  * );
  * ```
+ *
+ * @public
  */
 export const WorkspacesLive = Layer.mergeAll(
 	WorkspaceRootLive,
@@ -58,15 +70,21 @@ export const WorkspacesLive = Layer.mergeAll(
 /**
  * Composite layer providing all services including git-dependent ones.
  *
- * Extends WorkspacesLive with PackageResolver and ChangeDetector.
+ * Extends {@link WorkspacesLive} with `PackageResolver` and `ChangeDetector`.
  *
- * Requires: FileSystem + Path + CommandExecutor (provide via NodeContext.layer
- * or BunContext.layer).
+ * @remarks
+ * Requires `FileSystem`, `Path`, and `CommandExecutor` from `@effect/platform`.
+ * Provide these via `NodeContext.layer` (Node.js) or `BunContext.layer` (Bun).
+ *
+ * @privateRemarks
+ * Composes `WorkspacesLive` with `PackageResolverLive` and `ChangeDetectorLive`,
+ * wiring the graph and resolver dependencies via `Layer.provide`.
  *
  * @example
  * ```typescript
+ * import { Effect } from "effect";
  * import { NodeContext } from "@effect/platform-node";
- * import { WorkspacesFullLive } from "@spencerbeggs/workspaces-effect";
+ * import { WorkspacesFullLive } from "workspaces-effect";
  *
  * Effect.runPromise(
  *   program.pipe(
@@ -75,6 +93,8 @@ export const WorkspacesLive = Layer.mergeAll(
  *   )
  * );
  * ```
+ *
+ * @public
  */
 export const WorkspacesFullLive = Layer.mergeAll(
 	WorkspacesLive,

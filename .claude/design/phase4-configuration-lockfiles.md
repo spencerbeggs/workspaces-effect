@@ -5,8 +5,8 @@ category: architecture
 status: complete
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-13
-last-synced: 2026-03-12
+updated: 2026-03-14
+last-synced: 2026-03-14
 authors:
   - C. Spencer Beggs
 tags:
@@ -17,7 +17,7 @@ related:
   - architecture.md
   - bun-lockfile.md
   - lockfile-schemas.md
-  - effect-best-practices.md
+  - effect-patterns-parsing.md
   - research-notes.md
 ---
 
@@ -101,7 +101,7 @@ config (catalogs, overrides, trusted deps) is accessible via an optional
 
 ```typescript
 class LockfileReader extends Context.Tag(
-  "@spencerbeggs/workspaces-effect/LockfileReader"
+  "workspaces-effect/LockfileReader"
 )<
   LockfileReader,
   {
@@ -479,15 +479,15 @@ concern, not a per-query concern.
 
 ```typescript
 // All Phase 4 services (includes Discovery for WorkspaceRoot)
-const ConfigurationLive: Layer.Layer<
+const WorkspacesLive: Layer.Layer<
   LockfileReader,
   LockfileReadError | LockfileParseError,
   WorkspaceRoot | PackageManagerDetector | FileSystem | Path
 > = LockfileReaderLive
 
 // Full stack: Discovery + Configuration
-const FullConfigLive = ConfigurationLive.pipe(
-  Layer.provide(DiscoveryLive),
+const WorkspacesFullLive = WorkspacesLive.pipe(
+  Layer.provide(WorkspacesLive),
 )
 // Type: Layer.Layer<LockfileReader, LockfileReadError | LockfileParseError, FileSystem | Path>
 ```
@@ -631,15 +631,15 @@ validation. The pnpm lockfile structure is well-documented and stable.
 
 - [x] pnpm-lock.yaml v9 full schema → see `lockfile-schemas.md`
 - [x] package-lock.json v3 schema → see `lockfile-schemas.md`
-- [ ] yarn.lock Berry format → research agent dispatched
+- [x] yarn.lock Berry format → implemented
 - [x] YAML parser options → decided: `yaml` package (already transitive dep)
 - [x] JSONC parsing approach → decided: `jsonc-effect` (v0.1.0, published)
 - [x] How sibling repos handle lockfile reading (pnpm-config-dependency-action)
 - [x] Effect Stream patterns for lazy lockfile parsing → deferred (eager first)
 - [x] pnpm catalogs format and use cases
-- [ ] Effect Schema.transformOrFail patterns → research agent dispatched
-- [ ] Validate schemas against real lockfile data
-- [ ] Prototype YAML parsing pipeline (pnpm, yarn Berry)
-- [ ] Prototype JSONC parsing pipeline (bun.lock via jsonc-effect)
-- [ ] Add `yaml` as direct production dependency (currently transitive only)
-- [ ] Add `jsonc-effect` as direct production dependency
+- [x] Effect Schema.transformOrFail patterns → implemented
+- [x] Validate schemas against real lockfile data → test fixtures cover all 4 formats
+- [x] Prototype YAML parsing pipeline (pnpm, yarn Berry) → implemented
+- [x] Prototype JSONC parsing pipeline (bun.lock via jsonc-effect) → implemented via jsonc-effect
+- [x] Add `yaml` as direct production dependency → added
+- [x] Add `jsonc-effect` as direct production dependency → added

@@ -1,3 +1,21 @@
+/**
+ * Parser for Yarn Berry `yarn.lock` lockfiles.
+ *
+ * Parses YAML content, validates individual entries against
+ * {@link YarnEntrySchema}, and transforms into the unified
+ * {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Yarn Berry lockfiles are YAML with a flat key structure where each
+ * key encodes package name + resolution descriptor (e.g.,
+ * `"@scope/name@npm:^1.0.0"`). Workspace entries are identified by
+ * `linkType: "soft"`. Uses a two-pass approach: first pass identifies
+ * workspace names, second pass builds `ResolvedPackage` entries.
+ *
+ * @packageDocumentation
+ * @internal
+ */
+
 import { Effect, Schema } from "effect";
 import YAML from "yaml";
 import { LockfileParseError } from "../../errors/index.js";
@@ -5,7 +23,11 @@ import { LockfileData, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
 import { extractWorkspaceDeps } from "./shared.js";
 
-// -- Raw schema (internal, permissive) --
+/**
+ * Raw schema for individual yarn lockfile entries (permissive).
+ *
+ * @internal
+ */
 
 const YarnEntrySchema = Schema.Struct({
 	version: Schema.optional(Schema.String),
@@ -40,8 +62,16 @@ const YarnEntrySchema = Schema.Struct({
 	bin: Schema.optional(Schema.Unknown),
 });
 
-// -- Parser --
-
+/**
+ * Parse a Yarn Berry `yarn.lock` lockfile into the unified {@link LockfileData} model.
+ *
+ * @privateRemarks
+ * Pipeline: YAML parse -\> per-entry Schema validation -\> transform to `LockfileData`.
+ * The `__metadata` key is extracted for `lockfileVersion` and skipped during
+ * package iteration.
+ *
+ * @internal
+ */
 export const parseYarnLockfile = (
 	content: string,
 	lockfilePath: string,
@@ -148,9 +178,15 @@ export const parseYarnLockfile = (
 		}),
 	);
 
-/** Extract package name from yarn key like
- * "\@scope/name\@npm:^1.0.0" or
- * "\@scope/name\@workspace:packages/foo" */
+/**
+ * Extract package name from a yarn lockfile key.
+ *
+ * Handles keys like `"@scope/name@npm:^1.0.0"` or
+ * `"@scope/name@workspace:packages/foo"` by finding the last
+ * `@npm:` or `@workspace:` segment.
+ *
+ * @internal
+ */
 const extractYarnPackageName = (key: string): string | undefined => {
 	// Find the last @npm: or @workspace: segment
 	const npmIdx = key.lastIndexOf("@npm:");
@@ -160,7 +196,11 @@ const extractYarnPackageName = (key: string): string | undefined => {
 	return key.slice(0, idx);
 };
 
-/** Strip "npm:" prefix from yarn dependency values. */
+/**
+ * Strip `"npm:"` prefix from yarn dependency values.
+ *
+ * @internal
+ */
 const cleanYarnDeps = (deps: Record<string, string> | undefined): Record<string, string> | undefined => {
 	if (!deps) return undefined;
 	const result: Record<string, string> = {};
