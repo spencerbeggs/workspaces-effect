@@ -237,4 +237,27 @@ describe("LockfileReaderLive", () => {
 
 		expect(Exit.isFailure(exit)).toBe(true);
 	});
+
+	describe("request caching", () => {
+		it("caches resolvedVersion requests within the same scope", async () => {
+			const layer = testLayer("pnpm", PNPM_FIXTURE);
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const reader = yield* LockfileReader;
+					const first = yield* reader.resolvedVersion("lodash");
+					const second = yield* reader.resolvedVersion("lodash");
+					return { first, second };
+				}).pipe(Effect.provide(layer)),
+			);
+
+			// Reference equality proves caching — without caching,
+			// each call creates a new Option.fromNullable(...)
+			expect(result.first).toBe(result.second);
+			expect(Option.isSome(result.first)).toBe(true);
+			if (Option.isSome(result.first)) {
+				expect(result.first.value.version).toBe("4.17.21");
+			}
+		});
+	});
 });
