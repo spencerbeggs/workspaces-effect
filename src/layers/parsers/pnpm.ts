@@ -5,7 +5,7 @@
  * transforms into the unified {@link LockfileData} model.
  *
  * @privateRemarks
- * Uses the `yaml` library for YAML parsing and `Schema.decodeUnknown`
+ * Uses `yaml-effect` for YAML parsing and `Schema.decodeUnknown`
  * for structural validation. Importers are treated as workspace entries;
  * `link:` version prefixes identify inter-workspace dependencies.
  *
@@ -14,7 +14,7 @@
  */
 
 import { Effect, Schema } from "effect";
-import YAML from "yaml";
+import { parse as parseYaml } from "yaml-effect";
 import { LockfileParseError } from "../../errors/index.js";
 import { LockfileData, PnpmExtension, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
@@ -101,15 +101,16 @@ export const parsePnpmLockfile = (
 ): Effect.Effect<LockfileData, LockfileParseError> =>
 	Effect.gen(function* () {
 		// Step 1: YAML parse
-		const raw = yield* Effect.try({
-			try: () => YAML.parse(content) as unknown,
-			catch: (e) =>
-				new LockfileParseError({
-					lockfilePath,
-					format: "pnpm",
-					cause: e,
-				}),
-		});
+		const raw = yield* parseYaml(content).pipe(
+			Effect.mapError(
+				(e) =>
+					new LockfileParseError({
+						lockfilePath,
+						format: "pnpm",
+						cause: e,
+					}),
+			),
+		);
 
 		// Step 2: Schema validation
 		const validated = yield* Schema.decodeUnknown(PnpmLockfileRaw)(raw).pipe(

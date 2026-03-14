@@ -17,7 +17,7 @@
  */
 
 import { Effect, Schema } from "effect";
-import YAML from "yaml";
+import { parse as parseYaml } from "yaml-effect";
 import { LockfileParseError } from "../../errors/index.js";
 import { LockfileData, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
@@ -77,15 +77,16 @@ export const parseYarnLockfile = (
 	lockfilePath: string,
 ): Effect.Effect<LockfileData, LockfileParseError> =>
 	Effect.gen(function* () {
-		const raw = yield* Effect.try({
-			try: () => YAML.parse(content) as Record<string, unknown>,
-			catch: (e) =>
-				new LockfileParseError({
-					lockfilePath,
-					format: "yarn",
-					cause: e,
-				}),
-		});
+		const raw = (yield* parseYaml(content).pipe(
+			Effect.mapError(
+				(e) =>
+					new LockfileParseError({
+						lockfilePath,
+						format: "yarn",
+						cause: e,
+					}),
+			),
+		)) as Record<string, unknown>;
 
 		// Extract metadata
 		const metadata = raw.__metadata as { version?: number | string } | undefined;
