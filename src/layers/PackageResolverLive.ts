@@ -111,7 +111,7 @@ export const PackageResolverLive = Layer.effect(
 					filePaths.reduce((map, fp) => {
 						const owner = findOwner(fp, pathIndex);
 						if (Option.isSome(owner)) {
-							map.set(fp, owner.value);
+							map.set(owner.value.name, owner.value);
 						}
 						return map;
 					}, new Map<string, WorkspacePackage>()),

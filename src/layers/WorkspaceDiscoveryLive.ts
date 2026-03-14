@@ -47,7 +47,10 @@ const readWorkspacePatterns = (
 
 		if (hasPkgJson) {
 			const content = yield* fs.readFileString(pkgJsonPath).pipe(Effect.orElseSucceed(() => "{}"));
-			const parsed = JSON.parse(content) as Record<string, unknown>;
+			const parsed = yield* Effect.try({
+				try: () => JSON.parse(content) as Record<string, unknown>,
+				catch: () => new WorkspaceDiscoveryError({ root, reason: "invalid JSON in root package.json" }),
+			});
 			const workspaces = parsed.workspaces;
 
 			if (Array.isArray(workspaces)) {

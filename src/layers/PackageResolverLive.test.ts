@@ -129,9 +129,9 @@ describe("PackageResolverLive", () => {
 			);
 
 			expect(result.size).toBe(3); // tsconfig is root-level, not in any package
-			expect(result.get("/projects/monorepo/packages/pkg-a/src/index.ts")?.name).toBe("@scope/pkg-a");
-			expect(result.get("/projects/monorepo/packages/pkg-b/README.md")?.name).toBe("@scope/pkg-b");
-			expect(result.get("/projects/monorepo/apps/web/src/App.tsx")?.name).toBe("web");
+			expect(result.get("@scope/pkg-a")?.name).toBe("@scope/pkg-a");
+			expect(result.get("@scope/pkg-b")?.name).toBe("@scope/pkg-b");
+			expect(result.get("web")?.name).toBe("web");
 			expect(result.has("/projects/monorepo/tsconfig.json")).toBe(false);
 		});
 

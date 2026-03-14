@@ -43,7 +43,7 @@ const mockResolver = (packages: ReadonlyArray<WorkspacePackage>) =>
 				filePaths.reduce((map, fp) => {
 					for (const pkg of packages) {
 						if (fp.startsWith(`${pkg.path}/`)) {
-							map.set(fp, pkg);
+							map.set(pkg.name, pkg);
 							break;
 						}
 					}

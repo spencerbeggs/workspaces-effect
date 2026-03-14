@@ -38,35 +38,11 @@ const kahnLevels = (
 		const levels: string[][] = [];
 		let remaining = adjacency.size;
 
-		// Find initial level: nodes with in-degree 0 (no dependents... wait, no)
-		// In our graph, edges go from package -> its dependencies.
-		// In-degree counts how many packages depend on this node.
-		// Wait — we need to reverse our thinking:
-		//
-		// Our adjacency map: pkg -> set of packages it depends on
-		// For Kahn's: we need in-degree = number of deps a package has
-		// (not the number of packages depending on it)
-		//
-		// Actually for topological sort where dependencies come first:
-		// - "edges" in Kahn's = dependency edges (A depends on B means edge A->B)
-		// - in-degree of B = number of packages depending on B
-		// - Packages with in-degree 0 = nothing depends on them? No...
-		//
-		// Let me reconsider. In our adjacency map:
-		// A -> {B, C} means A depends on B and C
-		// For build order: B and C must be built before A
-		//
-		// Kahn's algorithm processes nodes with no incoming edges first.
-		// "Incoming edge to A" = "something depends on A" = A is in someone's dep set
-		// Wait no — in a dependency DAG:
-		// - Edge A -> B means "A depends on B" (A needs B built first)
-		// - For Kahn's, we want to process B before A
-		// - In Kahn's terms: B has no prerequisites, A has B as prerequisite
-		// - In-degree of a node = number of its dependencies (things IT needs)
-		//
-		// So: in-degree(A) = |adjacency.get(A)| = number of deps of A
-
-		// Recompute: in-degree = number of dependencies each package has
+		// In our graph: adjacency[A] = {B, C} means "A depends on B and C".
+		// Kahn's algorithm for this convention:
+		//   - depCount[A] = number of workspace deps A still needs built (initially deps.size)
+		//   - Level 0: packages with depCount == 0 (leaf nodes, no workspace deps)
+		//   - After processing a level, decrement depCount for any node whose dep was just completed
 		const depCount = new Map<string, number>();
 		for (const [node, deps] of adjacency) {
 			depCount.set(node, deps.size);

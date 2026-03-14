@@ -285,12 +285,12 @@ export const CyclicDependencyErrorBase = Data.TaggedError("CyclicDependencyError
  *
  * @remarks
  * Raised by {@link DependencyGraph} during topological sorting or cycle
- * detection. The `cycle` array traces the dependency path that forms the
- * cycle, with the first and last elements being the same package.
+ * detection. The `cycle` array contains all package names that could not
+ * be topologically sorted — i.e., packages that are part of or blocked
+ * by a cyclic dependency.
  *
  * Fields:
- * - `cycle` — ordered list of package names forming the cycle
- *   (e.g., `["a", "b", "c", "a"]`).
+ * - `cycle` — set of package names involved in or blocked by the cycle.
  *
  * @example Catching the error
  * ```typescript
