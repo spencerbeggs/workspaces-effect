@@ -118,9 +118,9 @@ export const DependencyGraphLive = Layer.effect(
 			}),
 		);
 
-		// Create a per-layer cache so that repeated calls within the same layer
-		// instance are deduplicated, while test isolation is preserved (each test
-		// builds a fresh layer → fresh cache, no cross-test contamination).
+		// Create a per-layer cache so that repeated calls within the same fiber
+		// are deduplicated, while test isolation is preserved (each test builds
+		// a fresh layer → fresh cache, no cross-test contamination).
 		const cache = yield* Request.makeCache({ capacity: 1024, timeToLive: "1 minute" });
 
 		const DependenciesOfResolver = RequestResolver.fromEffect((req: DependenciesOfRequest) => {
@@ -153,6 +153,7 @@ export const DependencyGraphLive = Layer.effect(
 			dependenciesOf: (name: string) =>
 				Effect.request(new DependenciesOfRequest({ name }), DependenciesOfResolver).pipe(
 					Effect.withRequestCache(cache),
+					Effect.withRequestCaching(true),
 					Effect.tap(() =>
 						Effect.logDebug("Resolved dependencies").pipe(
 							Effect.annotateLogs({
@@ -169,6 +170,7 @@ export const DependencyGraphLive = Layer.effect(
 			dependentsOf: (name: string) =>
 				Effect.request(new DependentsOfRequest({ name }), DependentsOfResolver).pipe(
 					Effect.withRequestCache(cache),
+					Effect.withRequestCaching(true),
 					Effect.tap(() =>
 						Effect.logDebug("Resolved dependents").pipe(
 							Effect.annotateLogs({

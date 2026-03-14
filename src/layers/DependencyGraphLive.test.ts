@@ -215,4 +215,40 @@ describe("DependencyGraphLive", () => {
 			expect(result.get("pkg-b")).toEqual(new Set());
 		});
 	});
+
+	describe("request caching", () => {
+		it("caches dependenciesOf requests within the same scope", async () => {
+			const layer = testLayer([pkg("pkg-a", { "pkg-b": "workspace:*" }), pkg("pkg-b")]);
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const graph = yield* DependencyGraph;
+					const first = yield* graph.dependenciesOf("pkg-a");
+					const second = yield* graph.dependenciesOf("pkg-a");
+					return { first, second };
+				}).pipe(Effect.provide(layer)),
+			);
+
+			// Reference equality proves caching — without caching,
+			// each call creates a new Array.from(deps).sort()
+			expect(result.first).toBe(result.second);
+			expect(result.first).toEqual(["pkg-b"]);
+		});
+
+		it("caches dependentsOf requests within the same scope", async () => {
+			const layer = testLayer([pkg("pkg-a", { "pkg-b": "workspace:*" }), pkg("pkg-b")]);
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const graph = yield* DependencyGraph;
+					const first = yield* graph.dependentsOf("pkg-b");
+					const second = yield* graph.dependentsOf("pkg-b");
+					return { first, second };
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(result.first).toBe(result.second);
+			expect(result.first).toEqual(["pkg-a"]);
+		});
+	});
 });
