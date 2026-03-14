@@ -64,19 +64,23 @@
 		"types:check": "tsgo --noEmit"
 	},
 	"dependencies": {
-		"@effect/platform": "^0.94.5",
-		"@effect/platform-node": "^0.104.1",
-		"effect": "^3.19.19",
 		"jsonc-effect": "^0.2.0",
 		"semver-effect": "^0.1.0",
 		"yaml-effect": "^0.1.0"
 	},
 	"devDependencies": {
+		"@effect/platform": "^0.94.5",
+		"@effect/platform-node": "^0.104.1",
 		"@savvy-web/changesets": "^0.5.1",
 		"@savvy-web/commitlint": "^0.4.1",
 		"@savvy-web/lint-staged": "^0.5.2",
 		"@savvy-web/rslib-builder": "^0.18.1",
-		"@savvy-web/vitest": "^0.2.1"
+		"@savvy-web/vitest": "^0.2.1",
+		"effect": "^3.19.19"
+	},
+	"peerDependencies": {
+		"@effect/platform": "^0.94.0",
+		"effect": "^3.19.0"
 	},
 	"packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
 	"devEngines": {
@@ -101,7 +105,7 @@
 			{
 				"protocol": "npm",
 				"registry": "https://npm.pkg.github.com/",
-				"directory": "dist/npm",
+				"directory": "dist/github",
 				"access": "public",
 				"provenance": true
 			},

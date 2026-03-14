@@ -16,8 +16,15 @@ An Effect-TS library for monorepo workspace tooling. Discover workspaces, analyz
 
 ## Installation
 
+`effect` and `@effect/platform` are peer dependencies -- install them alongside
+the platform adapter for your runtime:
+
 ```bash
-npm install workspaces-effect
+# For Node.js
+npm install workspaces-effect effect @effect/platform @effect/platform-node
+
+# For Bun
+bun add workspaces-effect effect @effect/platform @effect/platform-bun
 ```
 
 ## Quick Start

@@ -14,19 +14,19 @@ program, and understanding the core concepts.
 
 ## Installation
 
-```bash
-npm install workspaces-effect
-```
-
-You also need Effect and the platform package for your runtime:
+`effect` and `@effect/platform` are peer dependencies. Install them alongside
+the platform adapter for your runtime:
 
 ```bash
 # For Node.js
-npm install effect @effect/platform @effect/platform-node
+npm install workspaces-effect effect @effect/platform @effect/platform-node
 
 # For Bun
-npm install effect @effect/platform @effect/platform-bun
+bun add workspaces-effect effect @effect/platform @effect/platform-bun
 ```
+
+You choose the Effect and platform versions. workspaces-effect requires
+`effect` >= 3.19 and `@effect/platform` >= 0.94.
 
 ## Prerequisites
 
