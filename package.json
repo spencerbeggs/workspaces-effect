@@ -1,12 +1,35 @@
 {
-	"name": "@spencerbeggs/pnpm-module-template",
+	"name": "workspaces-effect",
 	"version": "0.0.0",
 	"private": true,
-	"description": "A template repository for developing and deploying Node.js modules from a pnpm monorepo structure.",
-	"homepage": "https://github.com/spencerbeggs/pnpm-module-template#readme",
+	"description": "Effect-TS library for monorepo workspace tooling — discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry, and Bun.",
+	"keywords": [
+		"effect",
+		"effect-ts",
+		"monorepo",
+		"workspaces",
+		"workspace",
+		"npm-workspaces",
+		"pnpm-workspaces",
+		"yarn-workspaces",
+		"bun-workspaces",
+		"dependency-graph",
+		"topological-sort",
+		"lockfile",
+		"lockfile-parser",
+		"change-detection",
+		"affected-packages",
+		"publishability",
+		"package-manager",
+		"typescript"
+	],
+	"homepage": "https://github.com/spencerbeggs/workspaces-effect#readme",
+	"bugs": {
+		"url": "https://github.com/spencerbeggs/workspaces-effect/issues"
+	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/spencerbeggs/pnpm-module-template.git"
+		"url": "https://github.com/spencerbeggs/workspaces-effect.git"
 	},
 	"license": "MIT",
 	"author": {
@@ -40,11 +63,19 @@
 		"typecheck": "turbo run types:check --log-prefix=none --log-order=grouped",
 		"types:check": "tsgo --noEmit"
 	},
+	"dependencies": {
+		"@effect/platform": "^0.94.5",
+		"@effect/platform-node": "^0.104.1",
+		"effect": "^3.19.19",
+		"jsonc-effect": "^0.2.0",
+		"semver-effect": "^0.1.0",
+		"yaml-effect": "^0.1.0"
+	},
 	"devDependencies": {
-		"@savvy-web/changesets": "^0.4.2",
-		"@savvy-web/commitlint": "^0.4.0",
-		"@savvy-web/lint-staged": "^0.5.1",
-		"@savvy-web/rslib-builder": "^0.17.0",
+		"@savvy-web/changesets": "^0.5.1",
+		"@savvy-web/commitlint": "^0.4.1",
+		"@savvy-web/lint-staged": "^0.5.2",
+		"@savvy-web/rslib-builder": "^0.18.1",
 		"@savvy-web/vitest": "^0.2.1"
 	},
 	"packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",

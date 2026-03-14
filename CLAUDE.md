@@ -1,14 +1,42 @@
-# CLAUDE.md
+# workspaces-effect
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+`workspaces-effect` — an Effect-TS library for monorepo workspace
+tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
-## Project Status
+## Status
 
-This is a **base template repository** in initial state. The design
-documentation system (`.claude/` skills and agents) is included but no design
-docs exist yet. To begin planning and documenting architecture decisions, run
-`/design-init` to create your first design document.
+All phases complete. 174 tests passing. Full observability (spans + structured
+logging) across all services. Request/RequestResolver with per-layer caching
+for DependencyGraph and LockfileReader lookups. Composite layers:
+WorkspacesLive (no git), WorkspacesFullLive (with git).
+
+## Design Documents
+
+Load these when working on the corresponding area:
+
+- `.claude/design/architecture.md` — service groups, layers, composites, errors
+- `.claude/design/effect-patterns-core.md` — service, error, layer, Request/RequestResolver patterns
+- `.claude/design/effect-patterns-parsing.md` — Schema and parsing pipeline patterns
+- `.claude/design/effect-patterns-testing.md` — testing, mocking, command patterns
+- `.claude/design/phase2-dependency-graph.md` — dependency graph design
+- `.claude/design/phase3-change-detection.md` — git change detection design
+- `.claude/design/phase4-configuration-lockfiles.md` — lockfile parsing design
+- `.claude/design/lockfile-reader-service.md` — LockfileReader service interface
+- `.claude/design/lockfile-schemas.md` — all 4 lockfile format schemas
+- `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference
+- `.claude/design/code-review-findings.md` — known issues (5/10 fixed)
+- `.claude/design/research-notes.md` — patterns from sibling repos
+
+## Key Conventions
+
+- Class-based `Context.Tag` (GenericTag deprecated)
+- `@effect/platform` for FileSystem, Path, Command (no `node:` imports)
+- `Data.TaggedError` with exported Base constants
+- CommandExecutor resolved at layer construction for R=never methods
+- Eager data construction in `Layer.effect`
+- Request/RequestResolver with per-layer `Request.makeCache` for deduplication
+- `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
+- Test fixtures in `src/test-fixtures/` (lockfiles for all 4 PMs)
 
 ## Commands
 
@@ -34,11 +62,11 @@ pnpm run build:prod        # Build production/npm output only
 ### Running a Single Test
 
 ```bash
-# Run tests for a specific package
-pnpm run test -- --filter=@spencerbeggs/ecma-module
+# Run tests for a specific package (replace with actual package name)
+pnpm run test -- --filter=@spencerbeggs/<package-name>
 
 # Run a specific test file
-pnpm vitest run pkgs/ecma-module/src/index.test.ts
+pnpm vitest run pkgs/<package-name>/src/index.test.ts
 ```
 
 ## Architecture
@@ -52,7 +80,7 @@ pnpm vitest run pkgs/ecma-module/src/index.test.ts
 
 ### Package Build Pipeline
 
-Each package uses Rslib with dual output:
+Packages use Rslib with dual output:
 
 1. `dist/dev/` - Development build with source maps
 2. `dist/npm/` - Production build for npm publishing

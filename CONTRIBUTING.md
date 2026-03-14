@@ -1,19 +1,19 @@
-# Contributing to Claude Design Coordinator
+# Contributing to workspaces-effect
 
-Thank you for your interest in contributing to Claude Design Coordinator! This
-document provides guidelines and instructions for development.
+Thank you for your interest in contributing to workspaces-effect! This document
+provides guidelines and instructions for development.
 
 ## Prerequisites
 
-- Node.js 20+
-- pnpm 10+
+- Node.js 24+
+- pnpm 10.32+
 
 ## Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/spencerbeggs/claude-design-coordinator.git
-cd claude-design-coordinator
+git clone https://github.com/spencerbeggs/workspaces-effect.git
+cd workspaces-effect
 
 # Install dependencies
 pnpm install
@@ -25,38 +25,19 @@ pnpm run build
 pnpm run test
 ```
 
-## Running Locally
-
-```bash
-# Start the server (from built output)
-node pkgs/claude-coordinator-server/dist/dev/bin/cli.js
-
-# In another terminal, test the MCP bridge
-node pkgs/claude-coordinator-mcp/dist/dev/bin/cli.js
-```
-
-## Project Structure
-
-```text
-claude-design-coordinator/
-├── pkgs/
-│   ├── claude-coordinator-core/    # Zod schemas and TypeScript types
-│   ├── claude-coordinator-server/  # tRPC WebSocket server
-│   └── claude-coordinator-mcp/     # MCP stdio bridge
-├── lib/
-│   └── configs/                    # Shared configuration files
-└── ...
-```
-
 ## Available Scripts
 
 | Script | Description |
-| ------ | ----------- |
+| --- | --- |
 | `pnpm run build` | Build all packages (dev + prod) |
+| `pnpm run build:dev` | Build development output only |
+| `pnpm run build:prod` | Build production/npm output only |
 | `pnpm run test` | Run all tests |
+| `pnpm run test:watch` | Run tests in watch mode |
+| `pnpm run test:coverage` | Run tests with coverage report |
 | `pnpm run lint` | Check code with Biome |
 | `pnpm run lint:fix` | Auto-fix lint issues |
-| `pnpm run typecheck` | Type-check all workspaces |
+| `pnpm run typecheck` | Type-check all workspaces via Turbo |
 
 ## Code Quality
 
@@ -72,7 +53,7 @@ All commits must follow the [Conventional Commits](https://conventionalcommits.o
 specification and include a DCO signoff:
 
 ```text
-feat: add new coordinator tool
+feat: add new workspace service
 
 Signed-off-by: Your Name <your.email@example.com>
 ```
@@ -87,7 +68,8 @@ The following checks run automatically:
 
 ## Testing
 
-Tests use [Vitest](https://vitest.dev) with v8 coverage.
+Tests use [Vitest](https://vitest.dev) with v8 coverage. The test pool uses
+forks (not threads) for Effect-TS compatibility.
 
 ```bash
 # Run all tests
@@ -99,13 +81,12 @@ pnpm run test:watch
 # Run tests with coverage
 pnpm run test:coverage
 
-# Run tests for a specific package
-pnpm run test -- --filter=@spencerbeggs/claude-coordinator-core
+# Run a specific test file
+pnpm vitest run src/layers/DependencyGraphLive.test.ts
 ```
 
 ## TypeScript
 
-- Composite builds with project references
 - Strict mode enabled
 - ES2022/ES2023 targets
 - Import extensions required (`.js` for ESM)
@@ -114,13 +95,13 @@ pnpm run test -- --filter=@spencerbeggs/claude-coordinator-core
 
 ```typescript
 // Use .js extensions for relative imports (ESM requirement)
-import { AgentSchema } from "./schemas/agent.js";
+import { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 
-// Use node: protocol for Node.js built-ins
-import { EventEmitter } from "node:events";
+// Use @effect/platform abstractions, not node: imports
+import { FileSystem } from "@effect/platform";
 
 // Separate type imports
-import type { Agent } from "./schemas/agent.js";
+import type { WorkspacePackage } from "./schemas/core.js";
 ```
 
 ## Submitting Changes
