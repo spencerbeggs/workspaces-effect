@@ -31,6 +31,8 @@ const mockDiscovery = (packages: ReadonlyArray<WorkspacePackage>) =>
 			const found = packages.find((p) => p.name === name);
 			return found ? Effect.succeed(found) : Effect.die(`Package not found: ${name}`);
 		},
+		importerMap: () =>
+			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
 	});
 
 /** Build test layer with mock discovery. */

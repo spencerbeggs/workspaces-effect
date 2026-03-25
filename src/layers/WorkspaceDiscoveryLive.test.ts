@@ -3,7 +3,7 @@
  */
 
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { describe, expect, it } from "vitest";
 import { WorkspaceDiscoveryError } from "../errors/WorkspaceDiscoveryError.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
@@ -43,7 +43,16 @@ const mockRoot = (rootPath: string) =>
 
 /** Build the discovery layer with mocked dependencies. */
 const testLayer = (rootPath: string, files: Record<string, string | true>, dirs: Record<string, string[]> = {}) =>
-	WorkspaceDiscoveryLive.pipe(Layer.provide(Layer.mergeAll(mockRoot(rootPath), mockFs(files, dirs), Path.layer)));
+	WorkspaceDiscoveryLive.pipe(
+		Layer.provide(
+			Layer.mergeAll(
+				mockRoot(rootPath),
+				mockFs(files, dirs),
+				Path.layer,
+				Logger.replace(Logger.defaultLogger, Logger.none),
+			),
+		),
+	);
 
 describe("WorkspaceDiscoveryLive", () => {
 	describe("listPackages", () => {
@@ -53,6 +62,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
 						name: "@scope/pkg-a",
 						version: "1.0.0",
@@ -75,12 +89,14 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(2);
-			expect(result[0].name).toBe("@scope/pkg-a");
-			expect(result[0].version).toBe("1.0.0");
-			expect(result[0].relativePath).toBe("packages/pkg-a");
-			expect(result[1].name).toBe("@scope/pkg-b");
-			expect(result[1].private).toBe(true);
+			expect(result).toHaveLength(3);
+			expect(result[0].name).toBe("my-monorepo");
+			expect(result[0].relativePath).toBe(".");
+			expect(result[1].name).toBe("@scope/pkg-a");
+			expect(result[1].version).toBe("1.0.0");
+			expect(result[1].relativePath).toBe("packages/pkg-a");
+			expect(result[2].name).toBe("@scope/pkg-b");
+			expect(result[2].private).toBe(true);
 		});
 
 		it("discovers packages from package.json workspaces array", async () => {
@@ -109,8 +125,9 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(1);
-			expect(result[0].name).toBe("pkg-a");
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe("my-monorepo");
+			expect(result[1].name).toBe("pkg-a");
 		});
 
 		it("discovers packages from package.json workspaces object", async () => {
@@ -139,8 +156,9 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(1);
-			expect(result[0].name).toBe("web-app");
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe("my-monorepo");
+			expect(result[1].name).toBe("web-app");
 		});
 
 		it("handles multiple workspace patterns", async () => {
@@ -149,6 +167,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'\n  - 'apps/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/lib/package.json`]: JSON.stringify({
 						name: "lib",
 						version: "1.0.0",
@@ -171,8 +194,9 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(2);
+			expect(result).toHaveLength(3);
 			const names = result.map((p) => p.name);
+			expect(names).toContain("my-monorepo");
 			expect(names).toContain("lib");
 			expect(names).toContain("web");
 		});
@@ -183,6 +207,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/real-pkg/package.json`]: JSON.stringify({
 						name: "real-pkg",
 						version: "1.0.0",
@@ -201,8 +230,9 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(1);
-			expect(result[0].name).toBe("real-pkg");
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe("my-monorepo");
+			expect(result[1].name).toBe("real-pkg");
 		});
 
 		it("includes dependencies in discovered packages", async () => {
@@ -211,6 +241,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
 						name: "pkg-a",
 						version: "1.0.0",
@@ -230,8 +265,8 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result[0].dependencies).toEqual({ "pkg-b": "workspace:*" });
-			expect(result[0].devDependencies).toEqual({ vitest: "^3.0.0" });
+			expect(result[1].dependencies).toEqual({ "pkg-b": "workspace:*" });
+			expect(result[1].devDependencies).toEqual({ vitest: "^3.0.0" });
 		});
 
 		it("fails when no workspace patterns found", async () => {
@@ -251,6 +286,84 @@ describe("WorkspaceDiscoveryLive", () => {
 			expect(result._tag).toBe("WorkspaceDiscoveryError");
 			expect(result.message).toContain("Workspace discovery failed");
 		});
+
+		it("includes root workspace package as first entry", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+						dependencies: { typescript: "^5.0.0" },
+					}),
+					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
+						name: "@scope/pkg-a",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["pkg-a"],
+				},
+			);
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe("my-monorepo");
+			expect(result[0].relativePath).toBe(".");
+			expect(result[0].path).toBe(root);
+			expect(result[0].isRootWorkspace).toBe(true);
+			expect(result[0].dependencies).toEqual({ typescript: "^5.0.0" });
+			expect(result[1].name).toBe("@scope/pkg-a");
+			expect(result[1].isRootWorkspace).toBe(false);
+		});
+	});
+
+	describe("importerMap", () => {
+		it("returns map keyed by relativePath", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+					}),
+					[`${root}/packages/core/package.json`]: JSON.stringify({
+						name: "@scope/core",
+						version: "1.0.0",
+					}),
+					[`${root}/packages/utils/package.json`]: JSON.stringify({
+						name: "@scope/utils",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["core", "utils"],
+				},
+			);
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.importerMap();
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(result.size).toBe(3);
+			expect(result.get(".")?.name).toBe("my-monorepo");
+			expect(result.get("packages/core")?.name).toBe("@scope/core");
+			expect(result.get("packages/utils")?.name).toBe("@scope/utils");
+		});
 	});
 
 	describe("getPackage", () => {
@@ -260,6 +373,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
 						name: "pkg-a",
 						version: "1.0.0",
@@ -291,6 +409,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
 						name: "pkg-a",
 						version: "1.0.0",
@@ -319,7 +442,7 @@ describe("WorkspaceDiscoveryLive", () => {
 			expect(result).toEqual({
 				caught: true,
 				name: "nonexistent",
-				available: ["pkg-a"],
+				available: ["my-monorepo", "pkg-a"],
 			});
 		});
 	});
@@ -331,6 +454,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - packages/*",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg/package.json`]: JSON.stringify({
 						name: "pkg",
 						version: "1.0.0",
@@ -348,7 +476,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(1);
+			expect(result).toHaveLength(2);
 		});
 
 		it("handles double-quoted patterns", async () => {
@@ -357,6 +485,11 @@ describe("WorkspaceDiscoveryLive", () => {
 				root,
 				{
 					[`${root}/pnpm-workspace.yaml`]: 'packages:\n  - "packages/*"',
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
 					[`${root}/packages/pkg/package.json`]: JSON.stringify({
 						name: "pkg",
 						version: "1.0.0",
@@ -374,7 +507,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toHaveLength(1);
+			expect(result).toHaveLength(2);
 		});
 	});
 });

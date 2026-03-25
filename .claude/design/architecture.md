@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-03-25
+last-synced: 2026-03-25
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -42,7 +42,7 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 174 tests passing, all typechecking. Full observability
+All phases complete. 206 tests passing, all typechecking. Full observability
 (spans + structured logging) across all services.
 
 - **Phase 1 (Discovery)**: WorkspaceRootLive, PackageManagerDetectorLive,
@@ -51,6 +51,15 @@ All phases complete. 174 tests passing, all typechecking. Full observability
 - **Phase 3 (Change Detection)**: PackageResolverLive, ChangeDetectorLive
 - **Phase 4 (Configuration & Lockfiles)**: LockfileReaderLive,
   PublishabilityDetectorLive, integrity checker, parsers for pnpm/npm/yarn/bun
+- **WorkspacePackage Enrichment** (Issue #12): `peerDependencies` and
+  `optionalDependencies` fields, computed getters (`isRootWorkspace`,
+  `packageJsonPath`, `isPublic`, `scope`, `unscopedName`, `allDependencies`),
+  instance methods (`hasDependency`, `hasDevDependency`, `hasPeerDependency`,
+  `hasOptionalDependency`, `hasAnyDependencyOn`, `dependencyVersion`,
+  `matchesDependency`, `dependencyDiff`), `DependencyDiff` interface, static
+  dual-API functions in `src/utils/workspace-package.ts`, `readPackageJson`
+  utility, `WorkspaceDiscovery.importerMap()`, root package inclusion in
+  `listPackages()` (breaking change)
 - **Composite layers**: WorkspacesLive (no git), WorkspacesFullLive (with git)
 - **Internal patterns**: Request/RequestResolver with per-layer caching for
   DependencyGraph and LockfileReader lookups
@@ -81,7 +90,18 @@ The library provides 9 services organized into four groups:
 | --- | --- | --- |
 | `WorkspaceRoot` | Find monorepo root from cwd | FileSystem, Path |
 | `PackageManagerDetector` | Detect PM type and version | FileSystem, Path |
-| `WorkspaceDiscovery` | List workspace packages | FileSystem, Path, WorkspaceRoot |
+| `WorkspaceDiscovery` | List workspace packages, importer map | FileSystem, Path, WorkspaceRoot |
+
+WorkspaceDiscovery methods:
+
+- `listPackages()` -- returns all workspace packages **including the root
+  workspace package** as the first entry (breaking change from Issue #12).
+  The root package has `relativePath: "."`. Consumers can filter using
+  `isRootWorkspace` getter if they need only non-root packages.
+- `getPackage(name)` -- resolves any package by name (including root).
+- `importerMap()` -- returns `ReadonlyMap<string, WorkspacePackage>` keyed by
+  `relativePath`. Built from `listPackages()` and inherits its caching.
+  Supports lockfile importer-to-package mapping use cases.
 
 ### Group 2: Package Analysis
 
@@ -139,6 +159,81 @@ Key principles:
 - Service methods have `R = never` (dependencies resolved at layer construction)
 - Tag identifiers use `workspaces-effect/ServiceName` namespace
 - `_base` symbols from Context.Tag are correctly inlined by api-extractor DTS bundling
+
+## WorkspacePackage Data Model
+
+`WorkspacePackage` is a `Schema.Class` in `src/schemas/core.ts` representing a
+workspace package with its metadata and dependencies.
+
+### Schema Fields
+
+| Field | Type | Default |
+| --- | --- | --- |
+| `name` | `string` | (required) |
+| `version` | `string` | (required) |
+| `path` | `string` | (required) |
+| `relativePath` | `string` | (required) |
+| `private` | `boolean` | `true` |
+| `dependencies` | `Record<string, string>` | `{}` |
+| `devDependencies` | `Record<string, string>` | `{}` |
+| `peerDependencies` | `Record<string, string>` | `{}` |
+| `optionalDependencies` | `Record<string, string>` | `{}` |
+
+### Computed Getters
+
+| Getter | Returns | Derivation |
+| --- | --- | --- |
+| `isRootWorkspace` | `boolean` | `this.relativePath === "."` |
+| `packageJsonPath` | `string` | `` `${this.path}/package.json` `` |
+| `isPublic` | `boolean` | `!this.private` |
+| `scope` | `Option<string>` | Extract `@scope` from name, or `Option.none()` |
+| `unscopedName` | `string` | Strip `@scope/` prefix if present |
+| `allDependencies` | `Record<string, string>` | Merged map of all 4 dep types |
+
+### Instance Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `hasDependency` | `(name: string) => boolean` | Checks `dependencies` |
+| `hasDevDependency` | `(name: string) => boolean` | Checks `devDependencies` |
+| `hasPeerDependency` | `(name: string) => boolean` | Checks `peerDependencies` |
+| `hasOptionalDependency` | `(name: string) => boolean` | Checks `optionalDependencies` |
+| `hasAnyDependencyOn` | `(name: string) => boolean` | Checks all 4 dep types |
+| `dependencyVersion` | `(name: string) => Option<string>` | Version across all dep types |
+| `matchesDependency` | `(pattern: string) => boolean` | Glob match on dep names |
+| `dependencyDiff` | `(other: WorkspacePackage) => DependencyDiff` | Compare dep snapshots |
+
+### Static Dual-API Functions
+
+Each instance method also exists as a standalone `Function.dual()` function in
+`src/utils/workspace-package.ts` for pipeable/curried use. These are wired as
+static methods on the `WorkspacePackage` class in `src/index.ts`, following
+the pattern from `semver-effect`:
+
+```typescript
+// Instance
+pkg.hasDependency("effect")
+// Static data-first
+WorkspacePackage.hasDependency(pkg, "effect")
+// Static data-last (pipeable)
+pipe(pkg, WorkspacePackage.hasDependency("effect"))
+```
+
+Additionally, `readPackageJson` is a standalone effectful utility (not dual)
+that reads and decodes a package's `package.json` via `@effect/platform`
+FileSystem. Also wired as a static method.
+
+### DependencyDiff Interface
+
+```typescript
+interface DependencyDiff {
+  readonly added: Record<string, string>
+  readonly removed: Record<string, string>
+  readonly changed: Record<string, { readonly from: string; readonly to: string }>
+}
+```
+
+Compares all 4 dep types combined. Located in `src/schemas/core.ts`.
 
 ## Error Hierarchy
 
@@ -248,3 +343,10 @@ details. Key decisions:
 - **PublishabilityDetector** as separate composable service (not embedded in LockfileReader)
 - **Unified LockfileReader** (merged WorkspaceConfigReader)
 - **GlobResolver** deferred (WorkspaceDiscoveryLive handles workspace patterns)
+- **Static method wiring** in `src/index.ts` following `semver-effect` pattern
+  (avoids circular imports between schema classes and utility functions)
+- **`src/utils/` directory** for standalone dual-API functions that wrap
+  instance methods; keeps `Schema.Class` definitions clean
+- **Root package in listPackages()** (Issue #12 breaking change) -- root
+  workspace always included as first entry; `isRootWorkspace` getter for
+  filtering

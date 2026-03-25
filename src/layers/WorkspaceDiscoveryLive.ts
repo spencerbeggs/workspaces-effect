@@ -262,6 +262,8 @@ const readWorkspacePackage = (
 			private: decoded.private ?? false,
 			dependencies: (decoded.dependencies as Record<string, string>) ?? {},
 			devDependencies: (decoded.devDependencies as Record<string, string>) ?? {},
+			peerDependencies: (decoded.peerDependencies as Record<string, string>) ?? {},
+			optionalDependencies: (decoded.optionalDependencies as Record<string, string>) ?? {},
 			publishConfig: decoded.publishConfig,
 		});
 	});
@@ -340,9 +342,57 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				const patterns = yield* readWorkspacePatterns(fs, path, resolvedRoot);
 				const dirs = yield* resolvePatterns(fs, path, resolvedRoot, patterns);
 
-				const packages = yield* Effect.forEach(dirs, (dir) => readWorkspacePackage(fs, path, resolvedRoot, dir), {
-					concurrency: 10,
+				const workspacePackages = yield* Effect.forEach(
+					dirs,
+					(dir) => readWorkspacePackage(fs, path, resolvedRoot, dir),
+					{
+						concurrency: 10,
+					},
+				);
+
+				// Read root package.json and prepend as first entry
+				const rootPkgJsonPath = path.join(resolvedRoot, "package.json");
+				const rootContent = yield* fs.readFileString(rootPkgJsonPath).pipe(
+					Effect.mapError(
+						() =>
+							new WorkspaceDiscoveryError({
+								root: resolvedRoot,
+								reason: `failed to read root ${rootPkgJsonPath}`,
+							}),
+					),
+				);
+				const rootRaw = yield* Effect.try({
+					try: () => JSON.parse(rootContent) as Record<string, unknown>,
+					catch: () =>
+						new WorkspaceDiscoveryError({
+							root: resolvedRoot,
+							reason: `invalid JSON in root ${rootPkgJsonPath}`,
+						}),
 				});
+				const rootDecoded = yield* Schema.decodeUnknown(PackageJsonSchema)(rootRaw).pipe(
+					Effect.mapError(
+						() =>
+							new WorkspaceDiscoveryError({
+								root: resolvedRoot,
+								reason: `failed to parse root ${rootPkgJsonPath}`,
+							}),
+					),
+				);
+
+				const rootPkg = new WorkspacePackage({
+					name: rootDecoded.name ?? path.basename(resolvedRoot),
+					version: rootDecoded.version ?? "0.0.0",
+					path: resolvedRoot,
+					relativePath: ".",
+					private: rootDecoded.private ?? false,
+					dependencies: (rootDecoded.dependencies as Record<string, string>) ?? {},
+					devDependencies: (rootDecoded.devDependencies as Record<string, string>) ?? {},
+					peerDependencies: (rootDecoded.peerDependencies as Record<string, string>) ?? {},
+					optionalDependencies: (rootDecoded.optionalDependencies as Record<string, string>) ?? {},
+					publishConfig: rootDecoded.publishConfig,
+				});
+
+				const packages = [rootPkg, ...workspacePackages];
 
 				cachedPackages = packages;
 				yield* Effect.logInfo("Workspace packages discovered").pipe(
@@ -353,6 +403,12 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 
 		return {
 			listPackages: discoverPackages,
+
+			importerMap: () =>
+				Effect.gen(function* () {
+					const packages = yield* discoverPackages();
+					return new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>;
+				}).pipe(Effect.withSpan("WorkspaceDiscovery.importerMap")),
 
 			getPackage: (name: string) =>
 				Effect.gen(function* () {

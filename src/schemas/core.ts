@@ -4,7 +4,11 @@
  * @packageDocumentation
  */
 
-import { Schema } from "effect";
+import type { FileSystem } from "@effect/platform";
+import type { Effect } from "effect";
+import { Option, Schema } from "effect";
+import { minimatch } from "minimatch";
+import type { PackageJsonParseError } from "../errors/PackageJsonParseError.js";
 
 // ── Branded Primitives ───────────────────────────────────────────────
 
@@ -200,6 +204,7 @@ export const PackageJsonSchema = Schema.Struct({
 	dependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	devDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	peerDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+	optionalDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	packageManager: Schema.optional(Schema.String),
 	publishConfig: Schema.optional(PublishConfigSchema),
 });
@@ -212,6 +217,16 @@ export const PackageJsonSchema = Schema.Struct({
 export type PackageJsonType = Schema.Schema.Type<typeof PackageJsonSchema>;
 
 // ── Workspace Data Types ─────────────────────────────────────────────
+
+/**
+ * Result of comparing two WorkspacePackage dependency snapshots.
+ * @public
+ */
+export interface DependencyDiff {
+	readonly added: Record<string, string>;
+	readonly removed: Record<string, string>;
+	readonly changed: Record<string, { readonly from: string; readonly to: string }>;
+}
 
 /**
  * A single workspace package within a monorepo.
@@ -229,6 +244,8 @@ export type PackageJsonType = Schema.Schema.Type<typeof PackageJsonSchema>;
  * - `private` — whether the package is marked private (defaults to `false`).
  * - `dependencies` — production dependency map (defaults to `{}`).
  * - `devDependencies` — development dependency map (defaults to `{}`).
+ * - `peerDependencies` — peer dependency map (defaults to `{}`).
+ * - `optionalDependencies` — optional dependency map (defaults to `{}`).
  * - `publishConfig` — optional publishing configuration overrides.
  *
  * @example Creating a WorkspacePackage
@@ -257,8 +274,150 @@ export class WorkspacePackage extends Schema.Class<WorkspacePackage>("WorkspaceP
 	devDependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
 		default: () => ({}),
 	}),
+	peerDependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
+		default: () => ({}),
+	}),
+	optionalDependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
+		default: () => ({}),
+	}),
 	publishConfig: Schema.optional(PublishConfigSchema),
-}) {}
+}) {
+	get isRootWorkspace(): boolean {
+		return this.relativePath === ".";
+	}
+
+	get packageJsonPath(): string {
+		return `${this.path}/package.json`;
+	}
+
+	get isPublic(): boolean {
+		return !this.private;
+	}
+
+	get scope(): Option.Option<string> {
+		const match = this.name.match(/^(@[^/]+)\//);
+		return match ? Option.some(match[1]) : Option.none();
+	}
+
+	get unscopedName(): string {
+		const slashIndex = this.name.indexOf("/");
+		return this.name.startsWith("@") && slashIndex !== -1 ? this.name.slice(slashIndex + 1) : this.name;
+	}
+
+	get allDependencies(): Record<string, string> {
+		return {
+			...this.optionalDependencies,
+			...this.peerDependencies,
+			...this.devDependencies,
+			...this.dependencies,
+		};
+	}
+
+	hasDependency(name: string): boolean {
+		return name in this.dependencies;
+	}
+
+	hasDevDependency(name: string): boolean {
+		return name in this.devDependencies;
+	}
+
+	hasPeerDependency(name: string): boolean {
+		return name in this.peerDependencies;
+	}
+
+	hasOptionalDependency(name: string): boolean {
+		return name in this.optionalDependencies;
+	}
+
+	hasAnyDependencyOn(name: string): boolean {
+		return (
+			this.hasDependency(name) ||
+			this.hasDevDependency(name) ||
+			this.hasPeerDependency(name) ||
+			this.hasOptionalDependency(name)
+		);
+	}
+
+	dependencyVersion(name: string): Option.Option<string> {
+		const version =
+			this.dependencies[name] ??
+			this.devDependencies[name] ??
+			this.peerDependencies[name] ??
+			this.optionalDependencies[name];
+		return version !== undefined ? Option.some(version) : Option.none();
+	}
+
+	matchesDependency(pattern: string): boolean {
+		return Object.keys(this.allDependencies).some((dep) => minimatch(dep, pattern));
+	}
+
+	/**
+	 * Compare two WorkspacePackage dependency snapshots.
+	 *
+	 * Compares across all dependency types combined. A dependency that moves
+	 * between categories (e.g. from `dependencies` to `peerDependencies`) at
+	 * the same version will not appear in the diff.
+	 */
+	dependencyDiff(other: WorkspacePackage): DependencyDiff {
+		const selfDeps = this.allDependencies;
+		const otherDeps = other.allDependencies;
+		const added: Record<string, string> = {};
+		const removed: Record<string, string> = {};
+		const changed: Record<string, { from: string; to: string }> = {};
+
+		for (const [name, version] of Object.entries(selfDeps)) {
+			if (!(name in otherDeps)) {
+				added[name] = version;
+			} else if (otherDeps[name] !== version) {
+				changed[name] = { from: otherDeps[name], to: version };
+			}
+		}
+		for (const [name, version] of Object.entries(otherDeps)) {
+			if (!(name in selfDeps)) {
+				removed[name] = version;
+			}
+		}
+
+		return { added, removed, changed };
+	}
+
+	// ── Cross-cutting statics (wired in index.ts) ───────────────────────
+	declare static hasDependency: {
+		(name: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, name: string): boolean;
+	};
+	declare static hasDevDependency: {
+		(name: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, name: string): boolean;
+	};
+	declare static hasPeerDependency: {
+		(name: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, name: string): boolean;
+	};
+	declare static hasOptionalDependency: {
+		(name: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, name: string): boolean;
+	};
+	declare static hasAnyDependencyOn: {
+		(name: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, name: string): boolean;
+	};
+	declare static dependencyVersion: {
+		(name: string): (self: WorkspacePackage) => Option.Option<string>;
+		(self: WorkspacePackage, name: string): Option.Option<string>;
+	};
+	declare static matchesDependency: {
+		(pattern: string): (self: WorkspacePackage) => boolean;
+		(self: WorkspacePackage, pattern: string): boolean;
+	};
+	declare static dependencyDiff: {
+		(other: WorkspacePackage): (self: WorkspacePackage) => DependencyDiff;
+		(self: WorkspacePackage, other: WorkspacePackage): DependencyDiff;
+	};
+	declare static readPackageJson: (
+		self: WorkspacePackage,
+	) => Effect.Effect<PackageJsonType, PackageJsonParseError, FileSystem.FileSystem>;
+}
 
 /**
  * Top-level workspace info for a monorepo.

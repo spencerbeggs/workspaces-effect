@@ -82,5 +82,15 @@ export class WorkspaceDiscovery extends Context.Tag("@spencerbeggs/workspaces-ef
 		readonly getPackage: (
 			name: string,
 		) => Effect.Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>;
+
+		/**
+		 * Get a map of workspace-relative directory paths to packages.
+		 *
+		 * Useful for mapping lockfile importer keys to their workspace packages.
+		 * Built from `listPackages()` output and inherits its caching.
+		 *
+		 * @returns An Effect that succeeds with a ReadonlyMap keyed by relativePath.
+		 */
+		readonly importerMap: () => Effect.Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>;
 	}
 >() {}

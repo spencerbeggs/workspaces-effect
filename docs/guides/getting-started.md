@@ -48,6 +48,7 @@ const program = Effect.gen(function* () {
   const packages = yield* discovery.listPackages();
 
   for (const pkg of packages) {
+    if (pkg.isRootWorkspace) continue; // skip root workspace
     console.log(`${pkg.name} @ ${pkg.path}`);
   }
 });
@@ -62,6 +63,10 @@ Effect.runPromise(
 
 Run this from anywhere inside your monorepo. The library automatically finds
 the workspace root by walking up the directory tree.
+
+Note that `listPackages()` includes the root workspace package (with
+`relativePath: "."`) as the first entry. Use the `isRootWorkspace` getter to
+filter it out when you only want child packages.
 
 ## Understanding Layers
 
@@ -127,6 +132,8 @@ Effect.runPromise(
 
 ## Next Steps
 
+- [WorkspacePackage API](./workspace-package.md) -- Getters, dependency queries,
+  dual-API pattern, diffs, and readPackageJson
 - [Dependency Analysis](./dependency-analysis.md) -- Build dependency graphs
   and sort packages
 - [Change Detection](./change-detection.md) -- Find affected packages from git

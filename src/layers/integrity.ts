@@ -149,8 +149,8 @@ const checkConstraints = (
 					const resolved = resolvedIndex.get(depName);
 					if (!resolved) continue;
 
-					const rangeExit = yield* Effect.exit(Range.fromString(constraint));
-					const versionExit = yield* Effect.exit(SemVer.fromString(resolved));
+					const rangeExit = yield* Effect.exit(Range.parse(constraint));
+					const versionExit = yield* Effect.exit(SemVer.parse(resolved));
 
 					if (Exit.isFailure(rangeExit) || Exit.isFailure(versionExit)) {
 						yield* Effect.logTrace("Skipping unparseable constraint").pipe(
@@ -163,7 +163,7 @@ const checkConstraints = (
 						continue;
 					}
 
-					if (!Range.satisfies(versionExit.value, rangeExit.value)) {
+					if (!rangeExit.value.test(versionExit.value)) {
 						unsatisfied.push({
 							workspace: wsName,
 							dependency: depName,

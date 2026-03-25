@@ -1,5 +1,5 @@
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { describe, expect, it } from "vitest";
 import { PackageManagerDetectionError } from "../errors/PackageManagerDetectionError.js";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
@@ -21,7 +21,9 @@ const mockFs = (files: Record<string, string | true>) =>
 	});
 
 const testLayer = (files: Record<string, string | true>) =>
-	PackageManagerDetectorLive.pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)));
+	PackageManagerDetectorLive.pipe(
+		Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
+	);
 
 describe("PackageManagerDetectorLive", () => {
 	it("detects pnpm from pnpm-workspace.yaml", async () => {

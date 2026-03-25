@@ -1,5 +1,5 @@
 import { FileSystem, Path, Error as PlatformError } from "@effect/platform";
-import { Effect, Exit, Layer, Option } from "effect";
+import { Effect, Exit, Layer, Logger, Option } from "effect";
 import { describe, expect, it } from "vitest";
 import { LockfileReader } from "../services/LockfileReader.js";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
@@ -115,6 +115,7 @@ const testLayer = (pm: "pnpm" | "npm" | "yarn" | "bun", lockfileContent: string)
 					},
 				}),
 				Path.layer,
+				Logger.replace(Logger.defaultLogger, Logger.none),
 			),
 		),
 	);

@@ -2,7 +2,7 @@
  * Tests for DependencyGraphLive layer.
  */
 
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { describe, expect, it } from "vitest";
 import { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
 import { WorkspacePackage } from "../schemas/core.js";
@@ -20,6 +20,8 @@ const mockDiscovery = (packages: WorkspacePackage[]) =>
 				? Effect.succeed(found)
 				: Effect.fail(new PackageNotFoundError({ name, available: packages.map((p) => p.name) }));
 		},
+		importerMap: () =>
+			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
 	});
 
 /** Helper to create a WorkspacePackage. */
@@ -33,7 +35,10 @@ const pkg = (name: string, deps: Record<string, string> = {}, devDeps: Record<st
 		devDependencies: devDeps,
 	});
 
-const testLayer = (packages: WorkspacePackage[]) => DependencyGraphLive.pipe(Layer.provide(mockDiscovery(packages)));
+const testLayer = (packages: WorkspacePackage[]) =>
+	DependencyGraphLive.pipe(
+		Layer.provide(Layer.merge(mockDiscovery(packages), Logger.replace(Logger.defaultLogger, Logger.none))),
+	);
 
 describe("DependencyGraphLive", () => {
 	describe("dependenciesOf", () => {

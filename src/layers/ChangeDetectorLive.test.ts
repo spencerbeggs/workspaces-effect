@@ -4,7 +4,7 @@
 
 import { Command, CommandExecutor } from "@effect/platform";
 import { SystemError } from "@effect/platform/Error";
-import { Effect, Layer, Option, Sink, Stream } from "effect";
+import { Effect, Layer, Logger, Option, Sink, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 import { WorkspacePackage } from "../schemas/core.js";
 import { ChangeDetectionOptions, ChangeDetector } from "../services/ChangeDetector.js";
@@ -121,7 +121,12 @@ const buildLayer = (
 ) =>
 	ChangeDetectorLive.pipe(
 		Layer.provide(
-			Layer.mergeAll(mockResolver(packages), mockGraph(deps, reverseDeps), mockExecutor(gitResponses, executorOptions)),
+			Layer.mergeAll(
+				mockResolver(packages),
+				mockGraph(deps, reverseDeps),
+				mockExecutor(gitResponses, executorOptions),
+				Logger.replace(Logger.defaultLogger, Logger.none),
+			),
 		),
 	);
 

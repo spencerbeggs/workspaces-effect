@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
   const publishability = yield* PublishabilityDetector;
   const packages = yield* discovery.listPackages();
 
-  for (const pkg of packages) {
+  for (const pkg of packages.filter((p) => !p.isRootWorkspace)) {
     const targets = yield* publishability.detect(pkg, "/path/to/monorepo");
     if (targets.length > 0) {
       console.log(`${pkg.name} publishes to:`);
