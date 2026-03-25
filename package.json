@@ -64,8 +64,9 @@
 		"types:check": "tsgo --noEmit"
 	},
 	"dependencies": {
-		"jsonc-effect": "^0.2.0",
-		"semver-effect": "^0.2.0",
+		"jsonc-effect": "^0.2.1",
+		"minimatch": ">=10.2.3",
+		"semver-effect": "^0.2.1",
 		"yaml-effect": "^0.2.2"
 	},
 	"devDependencies": {

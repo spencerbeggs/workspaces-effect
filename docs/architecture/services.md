@@ -82,10 +82,18 @@ Get a specific workspace package by name.
 
 - Returns: `Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>`
 
+#### `importerMap()`
+
+Get a map of workspace-relative directory paths to packages. Useful for mapping
+lockfile importer keys to their workspace packages.
+
+- Returns: `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
+
 ```typescript
 const discovery = yield* WorkspaceDiscovery;
 const packages = yield* discovery.listPackages();
 const core = yield* discovery.getPackage("@myorg/core");
+const importers = yield* discovery.importerMap();
 ```
 
 ## DependencyGraph

@@ -31,6 +31,8 @@ const testLayer = (packages: WorkspacePackage[]) => {
 				? Effect.succeed(found)
 				: Effect.fail(new PackageNotFoundError({ name, available: packages.map((p) => p.name) }));
 		},
+		importerMap: () =>
+			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
 	});
 
 	return TopologicalSorterLive.pipe(Layer.provide(DependencyGraphLive), Layer.provide(mockDiscovery));

@@ -13,7 +13,7 @@
  */
 
 import { CommandExecutor, FileSystem, Path } from "@effect/platform";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Logger, Option } from "effect";
 import { describe, expect, it } from "vitest";
 import { ChangeDetector } from "../services/ChangeDetector.js";
 import { DependencyGraph } from "../services/DependencyGraph.js";
@@ -108,7 +108,7 @@ const mockExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
 } as unknown as CommandExecutor.CommandExecutor);
 
 /** Platform dependencies. */
-const platformDeps = Layer.mergeAll(mockFs(), Path.layer);
+const platformDeps = Layer.mergeAll(mockFs(), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none));
 
 // ── WorkspacesLive — mirrored test layer ──────────────────────────────
 //
@@ -186,8 +186,10 @@ describe("WorkspacesLive", () => {
 			}).pipe(Effect.provide(workspacesTestLayer)),
 		);
 
-		expect(result).toHaveLength(1);
-		expect(result[0].name).toBe("pkg-a");
+		expect(result).toHaveLength(2);
+		expect(result[0].name).toBe("my-monorepo");
+		expect(result[0].relativePath).toBe(".");
+		expect(result[1].name).toBe("pkg-a");
 	});
 
 	it("provides DependencyGraph", async () => {
@@ -212,8 +214,9 @@ describe("WorkspacesLive", () => {
 
 		// sort() returns package names (strings), not WorkspacePackage objects
 		expect(Array.isArray(result)).toBe(true);
-		expect(result).toHaveLength(1);
-		expect(result[0]).toBe("pkg-a");
+		expect(result).toHaveLength(2);
+		expect(result).toContain("my-monorepo");
+		expect(result).toContain("pkg-a");
 	});
 
 	it("provides PublishabilityDetector", async () => {

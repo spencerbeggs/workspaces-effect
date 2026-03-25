@@ -5,10 +5,16 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-All phases complete. 174 tests passing. Full observability (spans + structured
-logging) across all services. Request/RequestResolver with per-layer caching
-for DependencyGraph and LockfileReader lookups. Composite layers:
-WorkspacesLive (no git), WorkspacesFullLive (with git).
+All phases complete plus WorkspacePackage enrichment (Issue #12). 206 tests
+passing. Full observability (spans + structured logging) across all services.
+Request/RequestResolver with per-layer caching for DependencyGraph and
+LockfileReader lookups. Composite layers: WorkspacesLive (no git),
+WorkspacesFullLive (with git). WorkspacePackage has peerDependencies,
+optionalDependencies, computed getters (isRootWorkspace, packageJsonPath,
+isPublic, scope, unscopedName, allDependencies), instance methods + static
+dual-API functions, DependencyDiff, readPackageJson utility.
+WorkspaceDiscovery.importerMap() added. listPackages() now includes root
+workspace (breaking change).
 
 ## Design Documents
 
@@ -37,6 +43,8 @@ Load these when working on the corresponding area:
 - Request/RequestResolver with per-layer `Request.makeCache` for deduplication
 - `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
 - Test fixtures in `src/test-fixtures/` (lockfiles for all 4 PMs)
+- Static dual-API wiring in `src/index.ts` (semver-effect pattern)
+- Standalone utility functions in `src/utils/` directory
 
 ## Commands
 

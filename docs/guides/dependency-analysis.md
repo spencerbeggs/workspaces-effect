@@ -17,8 +17,7 @@ The `DependencyGraph` service constructs a directed graph at layer creation
 time from all workspace package.json files. Only edges between workspace
 packages are included -- external npm dependencies are excluded.
 
-Edges are derived from `dependencies`, `devDependencies`, and
-`peerDependencies`.
+Edges are derived from `dependencies` and `devDependencies`.
 
 ```typescript
 import { Effect } from "effect";

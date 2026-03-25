@@ -30,11 +30,14 @@ importers:
   .:
     dependencies:
       jsonc-effect:
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.2.1
+        version: 0.2.1(effect@3.21.0)
+      minimatch:
+        specifier: '>=10.2.3'
+        version: 10.2.4
       semver-effect:
-        specifier: ^0.2.0
-        version: 0.2.0(effect@3.21.0)
+        specifier: ^0.2.1
+        version: 0.2.1(effect@3.21.0)
       yaml-effect:
         specifier: ^0.2.2
         version: 0.2.2(effect@3.21.0)
@@ -2346,8 +2349,10 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  jsonc-effect@0.2.0:
-    resolution: {integrity: sha512-tMDWhm8efXWz4k0zvgLu4dXLrlyjHrErJ4S2l28lyW5RFl3+Pg8XMRyl+PlMK4x9eIbOGs/TyKrW67eU7hqgZw==}
+  jsonc-effect@0.2.1:
+    resolution: {integrity: sha512-gqxLlEStGJwmrRJZ3VyJbeb3m3yL+zptGGJrL30x0pxu2XgaWHbwM+YyruJtx4e3qXctWG79Fqyx8+VE/zNOUg==}
+    peerDependencies:
+      effect: '>=3.21.0'
 
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
@@ -3126,10 +3131,10 @@ packages:
   secure-keys@1.0.0:
     resolution: {integrity: sha512-nZi59hW3Sl5P3+wOO89eHBAAGwmCPd2aE1+dLZV5MO+ItQctIvAqihzaAXIQhvtH4KJPxM080HsnqltR2y8cWg==}
 
-  semver-effect@0.2.0:
-    resolution: {integrity: sha512-N2ieg9JiBQ3DZDzklqyUHF/1Lx4nOxHeKkAb0YYOkwj8sz4PyqPFEXzPHotLKdgCchIVUpvJpO/+ekPgH2T+6w==}
+  semver-effect@0.2.1:
+    resolution: {integrity: sha512-W4JwQ4Ot6Yl/Fr8OT5OJnxc9SSuLKqslCb9fbbIFwm0198usbn2KoDKhWrCntDUT935UM85ljflwJIFe2YQ6LA==}
     peerDependencies:
-      effect: ^3.19.0
+      effect: '>=3.21.0'
 
   semver@7.5.4:
     resolution: {integrity: sha512-1bCSESV6Pv+i21Hvpxp3Dx+pSD8lIPt8uVjRrxAUt/nbswYc+tK6Y2btiULjd4+fnq15PX+nqQDC7Oft7WkwcA==}
@@ -4782,7 +4787,7 @@ snapshots:
       eslint: 10.1.0(jiti@2.6.1)
       eslint-plugin-tsdoc: 0.5.2(eslint@10.1.0(jiti@2.6.1))(typescript@5.9.3)
       husky: 9.1.7
-      jsonc-effect: 0.2.0
+      jsonc-effect: 0.2.1(effect@3.21.0)
       lint-staged: 16.4.0
       markdownlint-cli2: 0.22.0
       markdownlint-cli2-formatter-codequality: 0.0.7(markdownlint-cli2@0.22.0)
@@ -6121,7 +6126,7 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonc-effect@0.2.0:
+  jsonc-effect@0.2.1(effect@3.21.0):
     dependencies:
       effect: 3.21.0
 
@@ -7096,7 +7101,7 @@ snapshots:
 
   secure-keys@1.0.0: {}
 
-  semver-effect@0.2.0(effect@3.21.0):
+  semver-effect@0.2.1(effect@3.21.0):
     dependencies:
       effect: 3.21.0
 

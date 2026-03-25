@@ -6,7 +6,7 @@
  */
 
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { describe, expect, it } from "vitest";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
@@ -46,7 +46,7 @@ describe("Discovery layers integration", () => {
 		};
 
 		const layer = Layer.mergeAll(WorkspaceRootLive, PackageManagerDetectorLive).pipe(
-			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)),
+			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
 		);
 
 		const result = await Effect.runPromise(
@@ -77,7 +77,7 @@ describe("Discovery layers integration", () => {
 		};
 
 		const layer = Layer.mergeAll(WorkspaceRootLive, PackageManagerDetectorLive).pipe(
-			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)),
+			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
 		);
 
 		const result = await Effect.runPromise(
@@ -108,7 +108,7 @@ describe("Discovery layers integration", () => {
 		};
 
 		const layer = Layer.mergeAll(WorkspaceRootLive, PackageManagerDetectorLive).pipe(
-			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)),
+			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
 		);
 
 		const result = await Effect.runPromise(
@@ -137,7 +137,7 @@ describe("Discovery layers integration", () => {
 		};
 
 		const layer = Layer.mergeAll(WorkspaceRootLive, PackageManagerDetectorLive).pipe(
-			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)),
+			Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
 		);
 
 		const result = await Effect.runPromise(
@@ -158,7 +158,7 @@ describe("Discovery layers integration", () => {
 
 	it("handles error when root not found", async () => {
 		const layer = Layer.mergeAll(WorkspaceRootLive, PackageManagerDetectorLive).pipe(
-			Layer.provide(Layer.mergeAll(mockFs({}), Path.layer)),
+			Layer.provide(Layer.mergeAll(mockFs({}), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
 		);
 
 		const result = await Effect.runPromise(
@@ -194,7 +194,7 @@ describe("Workspace layers composition", () => {
 			mockRoot,
 			PackageManagerDetectorLive,
 			WorkspaceDiscoveryLive.pipe(Layer.provide(mockRoot)),
-		).pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)));
+		).pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))));
 
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {
@@ -239,7 +239,9 @@ describe("Workspace layers composition", () => {
 			mockRoot,
 			PackageManagerDetectorLive,
 			WorkspaceDiscoveryLive.pipe(Layer.provide(mockRoot)),
-		).pipe(Layer.provide(Layer.mergeAll(mockFs(files, dirs), Path.layer)));
+		).pipe(
+			Layer.provide(Layer.mergeAll(mockFs(files, dirs), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
+		);
 
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {
@@ -249,7 +251,9 @@ describe("Workspace layers composition", () => {
 			}).pipe(Effect.provide(layer)),
 		);
 
-		expect(result).toHaveLength(1);
-		expect(result[0].name).toBe("pkg-a");
+		expect(result).toHaveLength(2);
+		expect(result[0].name).toBe("my-monorepo");
+		expect(result[0].relativePath).toBe(".");
+		expect(result[1].name).toBe("pkg-a");
 	});
 });

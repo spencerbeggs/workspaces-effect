@@ -1,5 +1,5 @@
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import { describe, expect, it } from "vitest";
 import { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFoundError.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
@@ -22,7 +22,9 @@ const mockFs = (files: Record<string, string | true>) =>
 	});
 
 const testLayer = (files: Record<string, string | true>) =>
-	WorkspaceRootLive.pipe(Layer.provide(Layer.mergeAll(mockFs(files), Path.layer)));
+	WorkspaceRootLive.pipe(
+		Layer.provide(Layer.mergeAll(mockFs(files), Path.layer, Logger.replace(Logger.defaultLogger, Logger.none))),
+	);
 
 describe("WorkspaceRootLive", () => {
 	it("finds root with pnpm-workspace.yaml", async () => {

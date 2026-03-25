@@ -98,6 +98,7 @@ export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 export { WorkspacesFullLive, WorkspacesLive } from "./layers/WorkspacesLive.js";
 export type {
+	DependencyDiff,
 	PackageJsonType,
 	PackageManagerType,
 	PackageNameType,
@@ -134,3 +135,41 @@ export { TopologicalSorter } from "./services/TopologicalSorter.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
 // ── Services ─────────────────────────────────────────────────────────
 export { WorkspaceRoot } from "./services/WorkspaceRoot.js";
+// ── Utils ────────────────────────────────────────────────────────────
+export {
+	dependencyDiff,
+	dependencyVersion,
+	hasAnyDependencyOn,
+	hasDependency,
+	hasDevDependency,
+	hasOptionalDependency,
+	hasPeerDependency,
+	matchesDependency,
+	readPackageJson,
+} from "./utils/workspace-package.js";
+
+// ── Wire cross-cutting static methods (avoids circular imports) ─────────
+
+import { WorkspacePackage as _WP } from "./schemas/core.js";
+import {
+	dependencyDiff as _dependencyDiff,
+	dependencyVersion as _dependencyVersion,
+	hasAnyDependencyOn as _hasAnyDependencyOn,
+	hasDependency as _hasDependency,
+	hasDevDependency as _hasDevDependency,
+	hasOptionalDependency as _hasOptionalDependency,
+	hasPeerDependency as _hasPeerDependency,
+	matchesDependency as _matchesDependency,
+	readPackageJson as _readPackageJson,
+} from "./utils/workspace-package.js";
+
+// WorkspacePackage statics
+_WP.hasDependency = _hasDependency;
+_WP.hasDevDependency = _hasDevDependency;
+_WP.hasPeerDependency = _hasPeerDependency;
+_WP.hasOptionalDependency = _hasOptionalDependency;
+_WP.hasAnyDependencyOn = _hasAnyDependencyOn;
+_WP.dependencyVersion = _dependencyVersion;
+_WP.matchesDependency = _matchesDependency;
+_WP.dependencyDiff = _dependencyDiff;
+_WP.readPackageJson = _readPackageJson;

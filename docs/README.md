@@ -18,6 +18,8 @@ Comprehensive documentation for `workspaces-effect`.
 
 ### Guides
 
+- [WorkspacePackage API](./guides/workspace-package.md) -- Getters, dependency
+  queries, dual-API pattern, diffs, and readPackageJson
 - [Dependency Analysis](./guides/dependency-analysis.md) -- Building dependency
   graphs and topological sorting
 - [Change Detection](./guides/change-detection.md) -- Git-based change detection
