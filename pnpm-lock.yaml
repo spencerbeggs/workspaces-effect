@@ -39,8 +39,8 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1(effect@3.21.0)
       yaml-effect:
-        specifier: ^0.2.2
-        version: 0.2.2(effect@3.21.0)
+        specifier: ^0.2.3
+        version: 0.2.3(effect@3.21.0)
     devDependencies:
       '@effect/platform':
         specifier: catalog:silk
@@ -3641,10 +3641,10 @@ packages:
   yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
 
-  yaml-effect@0.2.2:
-    resolution: {integrity: sha512-Jnk+guKw4aSyn2PI8JubJ2zGVTtmpdFwFkgCfnTCOKBHb/iwf+VeKxmtevwtgw97CsZuKo4Wt6NzCXwvUdzXcA==}
+  yaml-effect@0.2.3:
+    resolution: {integrity: sha512-378iw8DWn+6cLzHfOZFLEPu/UXcymHtixKe+CM9OFk9G/uFeQfRU/WNnKRVjIkTCj9M8EwJdiOgH3rOrUwyFyQ==}
     peerDependencies:
-      effect: ^3.19.0
+      effect: '>=3.21.0'
 
   yaml-lint@1.7.0:
     resolution: {integrity: sha512-zeBC/kskKQo4zuoGQ+IYjw6C9a/YILr2SXoEZA9jM0COrSwvwVbfTiFegT8qYBSBgOwLMWGL8sY137tOmFXGnQ==}
@@ -7613,7 +7613,7 @@ snapshots:
 
   yallist@4.0.0: {}
 
-  yaml-effect@0.2.2(effect@3.21.0):
+  yaml-effect@0.2.3(effect@3.21.0):
     dependencies:
       effect: 3.21.0
 
