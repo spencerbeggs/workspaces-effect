@@ -4,27 +4,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 
-An Effect-TS library for monorepo workspace tooling. Discover workspaces,
-analyze dependency graphs, detect changes, parse lockfiles, and check
-publishability across npm, pnpm, yarn Berry, and Bun through composable
-Effect services with typed errors and platform independence.
+An [Effect](https://effect.website) library for monorepo workspace tooling. Discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry and Bun through composable Effect services with typed errors and platform independence.
 
 ## Features
 
-- Workspace discovery across all four major package managers with automatic
-  detection
-- Rich package metadata with computed getters, dependency queries, and a
-  dual-API pattern (instance, static data-first, and pipeable)
+- Workspace discovery across all four major package managers with automatic detection
+- Rich package metadata with computed getters, dependency queries, and a dual-API pattern (instance, static data-first, and pipeable)
 - Dependency graph analysis with topological sorting for correct build ordering
 - Git-based change detection to find affected packages from file changes
 - Lockfile parsing for pnpm, npm, yarn, and bun with integrity verification
-- Platform independent -- runs on Node.js or Bun via `@effect/platform`
-  abstractions
+- Platform independent -- runs on Node.js or Bun via `@effect/platform` abstractions
 
 ## Installation
 
-`effect` and `@effect/platform` are peer dependencies -- install them alongside
-the platform adapter for your runtime:
+`effect` and `@effect/platform` are peer dependencies -- install them alongside the platform adapter for your runtime:
 
 ```bash
 # For Node.js
@@ -85,8 +78,8 @@ Two composite layers cover most use cases:
 ## Documentation
 
 For architecture details, API reference, and advanced usage, see
-[docs/](./docs/).
+[docs/](./docs).
 
 ## License
 
-MIT
+[MIT](./LICENSE)

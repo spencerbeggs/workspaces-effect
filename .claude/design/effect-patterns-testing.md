@@ -5,8 +5,8 @@ category: patterns
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-03-29
+last-synced: 2026-03-29
 authors:
   - C. Spencer Beggs
 tags:
@@ -272,3 +272,72 @@ dependencies via BFS from the requested packages, then build a
 sub-adjacency map containing only those nodes, and finally run Kahn's
 algorithm on the subset. This avoids sorting the entire graph when only
 a portion is needed.
+
+## Test File Organization
+
+### Directory structure convention
+
+Tests live in a top-level `__test__/` directory (following the
+`@savvy-web/vitest` discovery convention), not co-located with source
+files in `src/`:
+
+```text
+__test__/
+  index.test.ts              # Public API / re-export tests
+  core-schemas.test.ts       # Schema unit tests
+  workspace-package.test.ts  # WorkspacePackage class tests
+  layers/                    # Layer construction tests (one per service)
+    WorkspaceRootLive.test.ts
+    LockfileReaderLive.test.ts
+    integrity.test.ts
+    ...
+  parsers/                   # Lockfile parser unit tests
+    pnpm.test.ts
+    npm.test.ts
+    yarn.test.ts
+    bun.test.ts
+  integration/               # Integration tests against real fixtures
+    lockfile-reader.int.test.ts
+    lockfile-integrity.int.test.ts
+    workspace-discovery.int.test.ts
+    dependency-graph.int.test.ts
+    dependency-diff.int.test.ts
+    fixtures/                # Real lockfiles + package.json for each PM
+      pnpm/v1/               # Fixture version sets for drift testing
+      npm/v1/
+      yarn/v1/
+      bun/v1/
+  utils/                     # Shared test utilities
+    fixtures.ts              # Fixture path helpers and loaders
+    layers.ts                # Common mock layer builders
+    mock-fs.ts               # FileSystem mock helpers
+```
+
+### Shared test utilities
+
+Common test helpers are extracted into `__test__/utils/`:
+
+- **`fixtures.ts`** -- Fixture path resolution and file loading helpers.
+  Provides `fixtureRoot()` for absolute paths to fixture directories
+  and helper functions to load lockfile content for each package manager.
+- **`layers.ts`** -- Reusable mock layer builders for `WorkspaceRoot`,
+  `PackageManagerDetector`, `WorkspaceDiscovery`, and composite test layers.
+  Reduces boilerplate across layer tests.
+- **`mock-fs.ts`** -- FileSystem mock construction helpers that wrap
+  `FileSystem.layerNoop` with common patterns (directory listing, file
+  existence checks, content serving from fixture data).
+
+### Integration test fixtures
+
+Integration tests use real lockfile fixtures at
+`__test__/integration/fixtures/{pm}/v{N}/`. Each version set contains:
+
+- `package.json` (root)
+- `packages/*/package.json` (workspace packages)
+- The PM-specific lockfile (`pnpm-lock.yaml`, `package-lock.json`,
+  `yarn.lock`, or `bun.lock`)
+- PM-specific config (`pnpm-workspace.yaml`, `.yarnrc.yml`) where needed
+
+Multiple version sets (`v1`, `v2`, `v3`) test scenarios like added
+packages, version changes, and integrity drift between lockfile and
+package.json.

@@ -1,0 +1,10 @@
+{
+	"name": "test-pnpm-monorepo",
+	"version": "1.0.0",
+	"private": true,
+	"pnpm": {
+		"overrides": {
+			"lodash": "4.17.23"
+		}
+	}
+}

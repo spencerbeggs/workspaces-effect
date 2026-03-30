@@ -2,8 +2,9 @@
 
 workspaces-effect provides 9 composable Effect services organized into four
 groups. Each service is an Effect `Context.Tag` with a live layer
-implementation. Services have `R = never` on their methods -- all dependencies
-are resolved at layer construction time.
+implementation. All service methods have `R = never` -- dependencies are
+resolved at layer construction time, so consuming code never needs to provide
+transitive services manually.
 
 ## Table of Contents
 
@@ -16,17 +17,17 @@ are resolved at layer construction time.
 
 ### Group 1: Discovery
 
-These services find and identify your monorepo workspace.
+Find and identify the monorepo workspace.
 
 | Service | Purpose |
 | --- | --- |
 | `WorkspaceRoot` | Find the monorepo root by walking up from `cwd` |
-| `PackageManagerDetector` | Detect which package manager is in use (npm, pnpm, yarn, bun) |
+| `PackageManagerDetector` | Detect the package manager in use (npm, pnpm, yarn, bun) |
 | `WorkspaceDiscovery` | List all workspace packages by resolving glob patterns |
 
 ### Group 2: Package Analysis
 
-These services analyze relationships between workspace packages.
+Analyze relationships between workspace packages.
 
 | Service | Purpose |
 | --- | --- |
@@ -35,7 +36,7 @@ These services analyze relationships between workspace packages.
 
 ### Group 3: Change Detection
 
-These services detect what changed and which packages are affected.
+Detect what changed and which packages are affected.
 
 | Service | Purpose |
 | --- | --- |
@@ -44,7 +45,7 @@ These services detect what changed and which packages are affected.
 
 ### Group 4: Configuration and Lockfiles
 
-These services read lockfile data and analyze publishability.
+Read lockfile data and analyze publishability.
 
 | Service | Purpose |
 | --- | --- |
@@ -53,13 +54,13 @@ These services read lockfile data and analyze publishability.
 
 ## Layer Composition
 
-Two composite layers cover most use cases, so you do not need to wire
-individual services manually.
+Two composite layers cover most use cases. You rarely need to wire individual
+service layers manually.
 
 ### WorkspacesLive
 
-Provides all services except git-dependent ones (ChangeDetector and
-PackageResolver). Requires `FileSystem` and `Path` from `@effect/platform`.
+Provides 7 services -- everything except `PackageResolver` and
+`ChangeDetector`. Requires `FileSystem` and `Path` from `@effect/platform`.
 
 ```typescript
 import { Effect } from "effect";
@@ -93,7 +94,7 @@ import { NodeContext } from "@effect/platform-node";
 import { WorkspacesFullLive } from "workspaces-effect";
 
 const program = Effect.gen(function* () {
-  // Use any service here, including ChangeDetector
+  // Use any service here, including ChangeDetector and PackageResolver
 });
 
 Effect.runPromise(
@@ -104,17 +105,33 @@ Effect.runPromise(
 );
 ```
 
-**Additional services:** PackageResolver, ChangeDetector.
+**Additional services over WorkspacesLive:** PackageResolver, ChangeDetector.
 
 ### Individual Layers
 
-Each service also exports its own live layer (e.g., `WorkspaceRootLive`,
+Each service exports its own live layer (e.g., `WorkspaceRootLive`,
 `DependencyGraphLive`) for fine-grained composition when you only need a
-subset of functionality.
+subset. Individual layers declare their dependencies explicitly -- for example,
+`DependencyGraphLive` depends on `WorkspaceDiscoveryLive`, which in turn
+depends on `WorkspaceRootLive`. You wire them with `Layer.provide`:
+
+```typescript
+import { Layer } from "effect";
+import {
+  WorkspaceRootLive,
+  WorkspaceDiscoveryLive,
+  DependencyGraphLive,
+} from "workspaces-effect";
+
+const customLayer = DependencyGraphLive.pipe(
+  Layer.provide(WorkspaceDiscoveryLive),
+  Layer.provide(WorkspaceRootLive),
+);
+```
 
 ## Platform Independence
 
-The library depends on `@effect/platform` abstractions, not Node.js APIs
+The library depends on `@effect/platform` abstractions instead of Node.js APIs
 directly:
 
 | Platform Service | Usage |
@@ -123,8 +140,8 @@ directly:
 | `Path` | Cross-platform path operations |
 | `Command` / `CommandExecutor` | Git operations for change detection |
 
-This means the same code works on both Node.js and Bun by providing the
-appropriate platform layer:
+This means the same code works on Node.js and Bun by swapping the platform
+layer:
 
 ```typescript
 // Node.js
@@ -136,26 +153,32 @@ import { BunContext } from "@effect/platform-bun";
 program.pipe(Effect.provide(BunContext.layer));
 ```
 
+`NodeContext.layer` and `BunContext.layer` both provide `FileSystem`, `Path`,
+and `CommandExecutor`, so either works with both `WorkspacesLive` and
+`WorkspacesFullLive`.
+
 ## Error Model
 
-All errors use `Data.TaggedError` for pattern matching with `Effect.catchTag`.
-Each error has a descriptive `message` getter and typed fields for programmatic
-access.
+All errors extend `Data.TaggedError`, enabling pattern matching with
+`Effect.catchTag`. Each error has a descriptive `message` getter and typed
+fields for programmatic access.
 
-| Error | When Raised |
-| --- | --- |
-| `WorkspaceRootNotFoundError` | No workspace root found from search path |
-| `PackageManagerDetectionError` | Cannot determine package manager type |
-| `WorkspaceDiscoveryError` | Package discovery fails |
-| `PackageJsonParseError` | Malformed package.json |
-| `PackageNotFoundError` | Named package not in workspace |
-| `CyclicDependencyError` | Cycle detected in dependency graph |
-| `DependencyResolutionError` | Dependency cannot be resolved |
-| `GitNotAvailableError` | Git not installed or not a git repo |
-| `ChangeDetectionError` | Git operation fails |
-| `LockfileReadError` | Lockfile cannot be read from disk |
-| `LockfileParseError` | Lockfile cannot be parsed |
-| `LockfileIntegrityError` | Integrity check fails |
+| Error | Service | When Raised |
+| --- | --- | --- |
+| `WorkspaceRootNotFoundError` | WorkspaceRoot | No workspace root found from search path |
+| `PackageManagerDetectionError` | PackageManagerDetector | Cannot determine package manager type |
+| `WorkspaceDiscoveryError` | WorkspaceDiscovery | Package discovery fails |
+| `PackageJsonParseError` | WorkspaceDiscovery | Malformed or unreadable package.json |
+| `PackageNotFoundError` | WorkspaceDiscovery, DependencyGraph | Named package not in workspace |
+| `CyclicDependencyError` | TopologicalSorter, ChangeDetector | Cycle detected in dependency graph |
+| `DependencyResolutionError` | DependencyGraph | Dependency cannot be resolved |
+| `GitNotAvailableError` | ChangeDetector | Git not installed or not a git repo |
+| `ChangeDetectionError` | ChangeDetector | Git operation fails |
+| `LockfileReadError` | LockfileReader | Lockfile cannot be read from disk |
+| `LockfileParseError` | LockfileReader | Lockfile content cannot be parsed |
+| `LockfileIntegrityError` | LockfileReader | Integrity check cannot complete |
+
+Errors are caught with `Effect.catchTag` using the error's `_tag` string:
 
 ```typescript
 import { Effect } from "effect";
@@ -170,3 +193,6 @@ const program = Effect.gen(function* () {
   ),
 );
 ```
+
+For a complete list of error fields and solutions, see
+[Troubleshooting](../troubleshooting.md).

@@ -1,0 +1,137 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`WorkspaceDiscovery integration: bun > v1 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: bun > v1 > listPackages() returns root + workspace packages (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/utils",
+  "test-bun-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: bun > v2 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/new-pkg",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: bun > v2 > listPackages() includes new-pkg (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+  "@test-monorepo/utils",
+  "test-bun-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: npm > v1 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: npm > v1 > listPackages() returns root + workspace packages (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/utils",
+  "test-npm-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: npm > v2 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/new-pkg",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: npm > v2 > listPackages() includes new-pkg (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+  "@test-monorepo/utils",
+  "test-npm-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: pnpm > v1 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: pnpm > v1 > listPackages() returns root + workspace packages (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/utils",
+  "test-pnpm-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: pnpm > v2 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/new-pkg",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: pnpm > v2 > listPackages() includes new-pkg (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+  "@test-monorepo/utils",
+  "test-pnpm-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: yarn > v1 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: yarn > v1 > listPackages() returns root + workspace packages (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/utils",
+  "test-yarn-monorepo",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: yarn > v2 > importerMap() keys snapshot (sorted) 1`] = `
+[
+  ".",
+  "packages/core",
+  "packages/new-pkg",
+  "packages/utils",
+]
+`;
+
+exports[`WorkspaceDiscovery integration: yarn > v2 > listPackages() includes new-pkg (sorted names snapshot) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+  "@test-monorepo/utils",
+  "test-yarn-monorepo",
+]
+`;

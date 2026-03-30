@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-25
-last-synced: 2026-03-25
+updated: 2026-03-29
+last-synced: 2026-03-29
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -65,6 +65,14 @@ All phases complete. 206 tests passing, all typechecking. Full observability
   DependencyGraph and LockfileReader lookups
 - **Observability**: Effect.withSpan on all service methods and layer
   construction; structured logging at Info/Debug/Trace levels
+- **Test organization**: Tests in top-level `__test__/` directory (not
+  co-located in `src/`), following the `@savvy-web/vitest` discovery
+  convention. Shared test utilities in `__test__/utils/`. Integration tests
+  with real lockfile fixtures in `__test__/integration/fixtures/`.
+- **Schema updates (2026-03-29)**: `ResolvedPackage` has optional
+  `relativePath` field for workspace packages (used by integrity checker
+  to locate package.json). `PnpmExtension.catalogs` accepts union type
+  `string | { specifier, version }` for pnpm v9/v10 compatibility.
 
 ## Design Goals
 

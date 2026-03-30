@@ -5,8 +5,8 @@ category: architecture
 status: complete
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-03-29
+last-synced: 2026-03-29
 authors:
   - C. Spencer Beggs
 tags:
@@ -208,6 +208,12 @@ class ResolvedPackage extends Schema.Class<ResolvedPackage>(
   integrity: Schema.optional(Schema.String),
   /** Whether this is a workspace package */
   isWorkspace: Schema.Boolean,
+  /**
+   * Relative path from workspace root (workspace packages only).
+   * Used by integrity checking to locate package.json on disk.
+   * Set by each parser from its native path representation.
+   */
+  relativePath: Schema.optional(Schema.String),
   /** Direct dependencies (name -> version constraint) */
   dependencies: Schema.optionalWith(
     Schema.Record({ key: Schema.String, value: Schema.String }),
@@ -256,10 +262,24 @@ class PnpmExtension extends Schema.Class<PnpmExtension>(
   "PnpmExtension"
 )({
   _tag: Schema.Literal("pnpm"),
-  /** pnpm catalog definitions for centralized version management. */
+  /**
+   * pnpm catalog definitions for centralized version management.
+   * Values are a union: either a plain version string (pnpm v9 format)
+   * or a `{ specifier, version }` object (pnpm v10 format where catalogs
+   * are defined in pnpm-workspace.yaml rather than package.json).
+   */
   catalogs: Schema.optional(Schema.Record({
     key: Schema.String,
-    value: Schema.Record({ key: Schema.String, value: Schema.String }),
+    value: Schema.Record({
+      key: Schema.String,
+      value: Schema.Union(
+        Schema.String,
+        Schema.Struct({
+          specifier: Schema.String,
+          version: Schema.String,
+        }),
+      ),
+    }),
   })),
   /** Dependency overrides from pnpm-lock.yaml. */
   overrides: Schema.optional(
@@ -544,8 +564,12 @@ files that exercise the parsing logic:
 - **yarn Berry**: Generate a minimal `yarn.lock` with `workspace:*` entries
 - **bun**: Generate a minimal `bun.lock` JSONC with workspace tuples
 
-Fixtures should be inline strings in test files (like existing tests),
-not separate files, to keep tests self-contained.
+Unit test fixtures use inline strings in test files for self-contained
+parser tests. Integration tests use real fixture directories at
+`__test__/integration/fixtures/{pm}/v{N}/` containing actual lockfiles
+and package.json files for each package manager. Shared test utilities
+(mock filesystem helpers, layer builders, fixture loaders) live in
+`__test__/utils/`.
 
 ### Test matrix
 
@@ -577,10 +601,20 @@ not separate files, to keep tests self-contained.
    - Does lockfile exist and parse? (basic)
    - Do workspace entries match package.json? (medium)
    - Deep constraint satisfaction checking deferred.
+   - **Implementation note (2026-03-29):** Integrity checking filters on
+     `p.isWorkspace && p.relativePath !== undefined` to skip workspace
+     packages without a known filesystem path. Uses `pkg.relativePath`
+     (not `pkg.name`) to construct the package.json path, since package
+     names do not reliably correspond to filesystem paths.
 
 6. **pnpm catalogs**: RESOLVED. Yes, parse catalogs from lockfile. Available
    via `PnpmExtension.catalogs` on `LockfileData.pmSpecific`. The lockfile
    already contains resolved catalog snapshots.
+   - **pnpm v10 note (2026-03-29):** In pnpm v10, catalogs are defined in
+     `pnpm-workspace.yaml` rather than `package.json`. The lockfile catalog
+     entries use a `{ specifier, version }` object format instead of plain
+     version strings. The `PnpmExtension.catalogs` value type is now a union
+     of `string | { specifier: string; version: string }` to handle both.
 
 ## Sibling Repo Findings
 

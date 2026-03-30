@@ -1,6 +1,11 @@
 # Services Reference
 
-Complete reference for all 9 services in workspaces-effect.
+Complete reference for all 9 services in workspaces-effect. Each entry includes
+the service tag, its live layer, all method signatures, and error types.
+
+All services are imported from `"workspaces-effect"`. Service methods have
+`R = never` -- platform and inter-service dependencies are resolved at layer
+construction time.
 
 ## Table of Contents
 
@@ -14,80 +19,110 @@ Complete reference for all 9 services in workspaces-effect.
 - [LockfileReader](#lockfilereader)
 - [PublishabilityDetector](#publishabilitydetector)
 
+---
+
 ## WorkspaceRoot
 
-Finds the monorepo root directory by walking up from a given path.
+Finds the monorepo root directory by walking up from a given path, looking for
+workspace markers (`pnpm-workspace.yaml`, `package.json` with `workspaces`
+field, lockfiles).
 
 **Layer:** `WorkspaceRootLive`
-**Platform deps:** FileSystem, Path
+**Platform deps:** `FileSystem`, `Path`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
 #### `find(cwd: string)`
 
-Walk up from `cwd` looking for workspace markers (pnpm-workspace.yaml,
-package.json with workspaces field).
+Walk up from `cwd` looking for workspace markers.
 
-- Returns: `Effect<string, WorkspaceRootNotFoundError>`
+- **Returns:** `Effect<string, WorkspaceRootNotFoundError>`
+- **Errors:** `WorkspaceRootNotFoundError` -- no workspace root found before
+  reaching filesystem root
 
 ```typescript
 const root = yield* WorkspaceRoot;
 const rootPath = yield* root.find(process.cwd());
 ```
 
+---
+
 ## PackageManagerDetector
 
 Detects which package manager a workspace uses.
 
-**Layer:** `PackageManagerDetectorLive`
-**Platform deps:** FileSystem, Path
+Detection priority:
 
-Detection priority: pnpm (pnpm-workspace.yaml) > bun (bun.lock + packageManager)
-\> yarn (yarn.lock + packageManager) > npm (fallback).
+1. pnpm -- `pnpm-workspace.yaml` exists
+2. bun -- `bun.lock`/`bun.lockb` exists AND `packageManager` starts with
+   `bun@`
+3. yarn -- `yarn.lock` exists AND `packageManager` starts with `yarn@`
+4. npm -- fallback if `package.json` has a `workspaces` field
+
+**Layer:** `PackageManagerDetectorLive`
+**Platform deps:** `FileSystem`, `Path`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
 #### `detect(root: string)`
 
-Inspect lockfiles and package.json at the workspace root.
+Inspect lockfiles and `package.json` at the workspace root.
 
-- Returns: `Effect<DetectedPackageManager, PackageManagerDetectionError>`
-- `DetectedPackageManager` has `type` ("npm" | "pnpm" | "yarn" | "bun") and
-  optional `version`
+- **Returns:** `Effect<DetectedPackageManager, PackageManagerDetectionError>`
+- **Errors:** `PackageManagerDetectionError` -- no supported PM can be
+  identified
+
+`DetectedPackageManager` is an interface with:
+
+- `type`: `"npm" | "pnpm" | "yarn" | "bun"`
+- `version`: `string | undefined` -- extracted from the `packageManager` field
+  in root `package.json`
 
 ```typescript
 const detector = yield* PackageManagerDetector;
 const pm = yield* detector.detect("/path/to/monorepo");
-console.log(pm.type, pm.version);
+console.log(pm.type, pm.version); // "pnpm", "9.15.4"
 ```
+
+---
 
 ## WorkspaceDiscovery
 
 Lists all workspace packages by resolving glob patterns from workspace config.
+The root workspace package (with `relativePath: "."`) is included as the first
+entry.
 
 **Layer:** `WorkspaceDiscoveryLive`
-**Service deps:** WorkspaceRoot, PackageManagerDetector
+**Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
 #### `listPackages()`
 
-Resolve workspace patterns and read each matched package.json.
+Resolve workspace patterns and read each matched `package.json`. Returns all
+packages including the root workspace.
 
-- Returns: `Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError>`
+- **Returns:**
+  `Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError>`
 
 #### `getPackage(name: string)`
 
 Get a specific workspace package by name.
 
-- Returns: `Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>`
+- **Returns:**
+  `Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>`
 
 #### `importerMap()`
 
 Get a map of workspace-relative directory paths to packages. Useful for mapping
-lockfile importer keys to their workspace packages.
+lockfile importer keys to their workspace packages. Built from `listPackages()`
+output and inherits its caching.
 
-- Returns: `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
+- **Returns:**
+  `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
 
 ```typescript
 const discovery = yield* WorkspaceDiscovery;
@@ -96,59 +131,71 @@ const core = yield* discovery.getPackage("@myorg/core");
 const importers = yield* discovery.importerMap();
 ```
 
+---
+
 ## DependencyGraph
 
-Builds a directed graph of inter-workspace dependencies. External npm
-dependencies are excluded. The graph is built eagerly at layer construction
-time, so all queries are fast in-memory lookups.
+Builds a directed graph of inter-workspace dependencies. Only edges between
+workspace packages are included -- external npm dependencies are excluded.
+Edges are derived from `dependencies`, `devDependencies`, and
+`peerDependencies`.
+
+The graph is built eagerly at layer construction time from the workspace
+package list, so all queries are fast in-memory lookups.
 
 **Layer:** `DependencyGraphLive`
-**Service deps:** WorkspaceDiscovery
+**Service deps:** `WorkspaceDiscovery`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
 #### `dependenciesOf(name: string)`
 
-Get direct workspace dependencies of a package.
+Get direct workspace dependencies of a package (packages it depends on).
 
-- Returns: `Effect<ReadonlyArray<string>, PackageNotFoundError>`
+- **Returns:** `Effect<ReadonlyArray<string>, PackageNotFoundError>`
 
 #### `dependentsOf(name: string)`
 
 Get packages that directly depend on the named package.
 
-- Returns: `Effect<ReadonlyArray<string>, PackageNotFoundError>`
+- **Returns:** `Effect<ReadonlyArray<string>, PackageNotFoundError>`
 
 #### `packages()`
 
 Get all package names in the graph.
 
-- Returns: `Effect<ReadonlyArray<string>>`
+- **Returns:** `Effect<ReadonlyArray<string>>`
 
 #### `hasCycle()`
 
 Check if the graph contains any cycles.
 
-- Returns: `Effect<boolean>`
+- **Returns:** `Effect<boolean>`
 
 #### `adjacencyMap()`
 
-Get the full adjacency map.
+Get the full adjacency map (package name to its dependency set).
 
-- Returns: `Effect<ReadonlyMap<string, ReadonlySet<string>>>`
+- **Returns:** `Effect<ReadonlyMap<string, ReadonlySet<string>>>`
 
 ```typescript
 const graph = yield* DependencyGraph;
 const deps = yield* graph.dependenciesOf("@myorg/ui");
 const dependents = yield* graph.dependentsOf("@myorg/core");
+const all = yield* graph.packages();
 ```
+
+---
 
 ## TopologicalSorter
 
 Sorts workspace packages in dependency order using Kahn's algorithm.
+Packages with no dependencies appear first.
 
 **Layer:** `TopologicalSorterLive`
-**Service deps:** DependencyGraph
+**Service deps:** `DependencyGraph`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
@@ -156,37 +203,45 @@ Sorts workspace packages in dependency order using Kahn's algorithm.
 
 Sort all packages in topological order (dependencies first).
 
-- Returns: `Effect<ReadonlyArray<string>, CyclicDependencyError>`
+- **Returns:** `Effect<ReadonlyArray<string>, CyclicDependencyError>`
 
 #### `sortSubset(names: ReadonlyArray<string>)`
 
-Sort a subset of packages plus their transitive dependencies.
+Sort a subset of packages plus their transitive dependencies. Given target
+package names, computes the transitive closure of their dependencies and
+returns all of them in topological order.
 
-- Returns: `Effect<ReadonlyArray<string>, CyclicDependencyError | PackageNotFoundError>`
+- **Returns:**
+  `Effect<ReadonlyArray<string>, CyclicDependencyError | PackageNotFoundError>`
 
 #### `levels()`
 
-Group packages by parallel execution level. Packages in the same level can be
-built concurrently.
+Group packages by parallel execution level. Level 0 contains packages with no
+workspace dependencies, level 1 contains packages whose dependencies are all in
+level 0, and so on. Packages within the same level can be built concurrently.
 
-- Returns: `Effect<ReadonlyArray<ReadonlyArray<string>>, CyclicDependencyError>`
+- **Returns:**
+  `Effect<ReadonlyArray<ReadonlyArray<string>>, CyclicDependencyError>`
 
 ```typescript
 const sorter = yield* TopologicalSorter;
 const order = yield* sorter.sort();
-
 const levels = yield* sorter.levels();
-for (const [i, level] of levels.entries()) {
-  console.log(`Level ${i}:`, level); // Packages in same level can run in parallel
-}
+const subset = yield* sorter.sortSubset(["@myorg/ui"]);
 ```
+
+---
 
 ## PackageResolver
 
-Maps file paths to their owning workspace packages using longest-prefix matching.
+Maps file paths to their owning workspace packages using longest-prefix
+matching. The path index is built from `WorkspaceDiscovery` output at layer
+construction time.
 
 **Layer:** `PackageResolverLive`
-**Service deps:** WorkspaceDiscovery
+**Service deps:** `WorkspaceDiscovery`
+**Platform deps:** `FileSystem`, `Path`, `CommandExecutor`
+**Composite layers:** `WorkspacesFullLive` only
 
 ### Methods
 
@@ -194,80 +249,91 @@ Maps file paths to their owning workspace packages using longest-prefix matching
 
 Find which package owns a file.
 
-- Returns: `Effect<Option<WorkspacePackage>>`
+- **Returns:** `Effect<Option<WorkspacePackage>>`
+- Returns `Option.none()` if the file is outside all workspace packages
 
 #### `resolveFiles(filePaths: ReadonlyArray<string>)`
 
-Batch resolve multiple file paths to packages (deduped).
+Batch resolve multiple file paths to packages (deduped by package name).
 
-- Returns: `Effect<ReadonlyMap<string, WorkspacePackage>>`
+- **Returns:** `Effect<ReadonlyMap<string, WorkspacePackage>>`
 
 #### `packagePaths()`
 
-Get all indexed package paths for debugging.
+Get all indexed package paths (sorted longest-first). Useful for debugging.
 
-- Returns: `Effect<ReadonlyArray<{ path: string; package: WorkspacePackage }>>`
+- **Returns:**
+  `Effect<ReadonlyArray<{ path: string; package: WorkspacePackage }>>`
 
 ```typescript
 const resolver = yield* PackageResolver;
 const owner = yield* resolver.resolveFile("/workspace/packages/ui/src/Button.tsx");
+const packageMap = yield* resolver.resolveFiles([
+  "/workspace/packages/ui/src/Button.tsx",
+  "/workspace/packages/core/src/index.ts",
+]);
 ```
+
+---
 
 ## ChangeDetector
 
 Git-based change detection with three levels of analysis: raw files, changed
-packages, and affected packages (including transitive dependents).
+packages, and affected packages (including transitive dependents). All git
+operations use the `Command` service from `@effect/platform`.
 
 **Layer:** `ChangeDetectorLive`
-**Service deps:** PackageResolver, DependencyGraph, TopologicalSorter, WorkspaceRoot
-**Platform deps:** FileSystem, Path, CommandExecutor
+**Service deps:** `PackageResolver`, `DependencyGraph`, `TopologicalSorter`,
+`WorkspaceRoot`
+**Platform deps:** `FileSystem`, `Path`, `CommandExecutor`
+**Composite layers:** `WorkspacesFullLive` only
 
 ### ChangeDetectionOptions
 
-Configure the git ref range:
+An Effect `Schema.Class` configuring the git ref range:
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `base` | `string` | `"HEAD~1"` | Base git ref (commit, branch, tag) |
+| `head` | `string` | `"HEAD"` | Head git ref |
+| `includeUncommitted` | `boolean` | `false` | Include working tree changes |
 
 ```typescript
-import { ChangeDetectionOptions } from "@spencerbeggs/workspaces-effect";
+import { ChangeDetectionOptions } from "workspaces-effect";
 
-// Defaults: base="HEAD~1", head="HEAD", includeUncommitted=false
-const defaults = new ChangeDetectionOptions({});
-
-// Compare against a branch
-const vsBranch = new ChangeDetectionOptions({ base: "origin/main" });
-
-// Include working tree changes
-const withWip = new ChangeDetectionOptions({
-  base: "HEAD~3",
-  includeUncommitted: true,
-});
+const options = new ChangeDetectionOptions({ base: "origin/main" });
 ```
 
 ### Methods
 
 #### `changedFiles(options: ChangeDetectionOptions)`
 
-Get raw file paths changed between refs.
+Get raw file paths changed between refs (relative to workspace root).
 
-- Returns: `Effect<ReadonlyArray<string>, GitNotAvailableError | ChangeDetectionError>`
+- **Returns:**
+  `Effect<ReadonlyArray<string>, GitNotAvailableError | ChangeDetectionError>`
 
 #### `changedPackages(options: ChangeDetectionOptions)`
 
 Get workspace packages that contain changed files.
 
-- Returns: `Effect<ReadonlyArray<WorkspacePackage>, GitNotAvailableError | ChangeDetectionError>`
+- **Returns:**
+  `Effect<ReadonlyArray<WorkspacePackage>, GitNotAvailableError | ChangeDetectionError>`
 
 #### `affectedPackages(options: ChangeDetectionOptions)`
 
-Get changed packages plus all transitive dependents.
+Get changed packages plus all packages that transitively depend on them.
 
-- Returns: `Effect<ReadonlyArray<WorkspacePackage>, GitNotAvailableError | ChangeDetectionError | CyclicDependencyError>`
+- **Returns:**
+  `Effect<ReadonlyArray<WorkspacePackage>, GitNotAvailableError | ChangeDetectionError | CyclicDependencyError>`
 
 ```typescript
 const detector = yield* ChangeDetector;
 const options = new ChangeDetectionOptions({ base: "origin/main" });
 const affected = yield* detector.affectedPackages(options);
-console.log("Rebuild:", affected.map((p) => p.name));
 ```
+
+---
 
 ## LockfileReader
 
@@ -275,52 +341,60 @@ Parses lockfiles from all four package managers into a unified schema. The
 correct parser is selected automatically based on the detected package manager.
 
 **Layer:** `LockfileReaderLive`
-**Service deps:** WorkspaceRoot, PackageManagerDetector
+**Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
+**Platform deps:** `FileSystem`, `Path`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
 #### `readLockfile()`
 
-Read and parse the workspace lockfile.
+Read and parse the workspace lockfile into a normalized `LockfileData`
+structure.
 
-- Returns: `Effect<LockfileData>`
+- **Returns:** `Effect<LockfileData>`
 
 #### `resolvedVersion(packageName: string)`
 
-Look up a resolved package version in the lockfile.
+Look up the resolved version of a package in the lockfile.
 
-- Returns: `Effect<Option<ResolvedPackage>>`
+- **Returns:** `Effect<Option<ResolvedPackage>>`
 
 #### `workspaceDependencies()`
 
 Get all workspace-to-workspace dependency links from the lockfile.
 
-- Returns: `Effect<ReadonlyArray<WorkspaceDependency>>`
+- **Returns:** `Effect<ReadonlyArray<WorkspaceDependency>>`
 
 #### `checkIntegrity()`
 
-Verify lockfile integrity against current package.json files.
+Verify lockfile integrity against current `package.json` files. Returns a
+`LockfileIntegrity` report on success. Fails with `LockfileIntegrityError` if
+the check itself cannot complete (integrity mismatches are reported in the
+returned data, not as errors).
 
-- Returns: `Effect<LockfileIntegrity, LockfileIntegrityError>`
+- **Returns:** `Effect<LockfileIntegrity, LockfileIntegrityError>`
 
 ```typescript
 const reader = yield* LockfileReader;
 const lockfile = yield* reader.readLockfile();
-console.log(`PM: ${lockfile.packageManager}, packages: ${lockfile.packages.length}`);
-
 const react = yield* reader.resolvedVersion("react");
+const integrity = yield* reader.checkIntegrity();
 ```
+
+---
 
 ## PublishabilityDetector
 
-Detects whether workspace packages are publishable based on package.json fields.
-This is a pure service with no external dependencies.
-
-**Layer:** `PublishabilityDetectorLive`
-**Service deps:** none
+Detects whether workspace packages are publishable and identifies target
+registries. This is a pure service with no external dependencies.
 
 A package is publishable when `private` is not `true` and it has a `name` and
 `version`. The returned `PublishTarget` array describes target registries.
+
+**Layer:** `PublishabilityDetectorLive`
+**Service deps:** none
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
 
@@ -328,8 +402,9 @@ A package is publishable when `private` is not `true` and it has a `name` and
 
 Detect publish targets for a workspace package.
 
-- Returns: `Effect<ReadonlyArray<PublishTarget>>`
+- **Returns:** `Effect<ReadonlyArray<PublishTarget>>`
 - Empty array means the package is not publishable
+- Never fails
 
 ```typescript
 const publishability = yield* PublishabilityDetector;

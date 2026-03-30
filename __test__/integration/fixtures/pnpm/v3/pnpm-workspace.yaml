@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+
+catalogs:
+  default:
+    lodash: "^4.17.23"

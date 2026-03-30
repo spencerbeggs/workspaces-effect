@@ -1,4 +1,4 @@
 {
-	"exclude": ["node_modules", "dist", "**/*.test.ts", "src/test-fixtures/**"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "src/test-fixtures/**", "__test__/**"],
 	"extends": ["@savvy-web/rslib-builder/tsconfig/ecma/lib.json"]
 }

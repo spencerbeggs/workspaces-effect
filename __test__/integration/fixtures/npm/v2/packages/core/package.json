@@ -1,0 +1,15 @@
+{
+	"name": "@test-monorepo/core",
+	"version": "1.0.0",
+	"dependencies": {
+		"@test-monorepo/utils": "*",
+		"lodash": "^4.17.23",
+		"zod": "^3.23.0"
+	},
+	"peerDependencies": {
+		"react": "^19.0.0"
+	},
+	"optionalDependencies": {
+		"fsevents": "^2.3.0"
+	}
+}

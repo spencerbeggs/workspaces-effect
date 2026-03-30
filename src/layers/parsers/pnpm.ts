@@ -62,7 +62,13 @@ const PnpmLockfileRaw = Schema.Struct({
 			key: Schema.String,
 			value: Schema.Record({
 				key: Schema.String,
-				value: Schema.String,
+				value: Schema.Union(
+					Schema.String,
+					Schema.Struct({
+						specifier: Schema.String,
+						version: Schema.String,
+					}),
+				),
 			}),
 		}),
 	),
@@ -202,6 +208,7 @@ const toLockfileData = (raw: PnpmLockfileRawType): LockfileData => {
 				name: importerPath,
 				version: "0.0.0",
 				isWorkspace: true,
+				relativePath: importerPath,
 			}),
 		);
 	}

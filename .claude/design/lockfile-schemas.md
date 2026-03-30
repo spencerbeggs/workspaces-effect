@@ -5,8 +5,8 @@ category: reference
 status: complete
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-03-29
+last-synced: 2026-03-29
 related:
   - architecture.md
   - phase4-configuration-lockfiles.md
@@ -209,10 +209,31 @@ type PnpmPackageEntry = Schema.Schema.Type<typeof PnpmPackageEntry>
  * - `pnpmfileChecksum` is a SHA-256 hash of .pnpmfile.cjs if present
  */
 const PnpmLockfileRaw = Schema.Struct({
- lockfileVersion: Schema.String,
+ lockfileVersion: Schema.Union(Schema.String, Schema.Number),
  settings: Schema.optional(PnpmLockfileSettings),
  overrides: Schema.optional(
   Schema.Record({ key: Schema.String, value: Schema.String }),
+ ),
+ /**
+  * Catalog definitions for centralized version management.
+  * In pnpm v9, values are plain strings. In pnpm v10 (where catalogs
+  * are defined in pnpm-workspace.yaml), values are { specifier, version }
+  * objects. The schema accepts both via Schema.Union.
+  */
+ catalogs: Schema.optional(
+  Schema.Record({
+   key: Schema.String,
+   value: Schema.Record({
+    key: Schema.String,
+    value: Schema.Union(
+     Schema.String,
+     Schema.Struct({
+      specifier: Schema.String,
+      version: Schema.String,
+     }),
+    ),
+   }),
+  }),
  ),
  pnpmfileChecksum: Schema.optional(Schema.String),
  importers: Schema.Record({
@@ -248,6 +269,10 @@ type PnpmLockfileRaw = Schema.Schema.Type<typeof PnpmLockfileRaw>
   as `Schema.Unknown` for completeness.
 - pnpm catalogs are encoded in the `specifier` field as `catalog:` or
   `catalog:<name>`. The resolved version is in the `version` field.
+- The top-level `catalogs` map in the lockfile contains catalog snapshots.
+  In pnpm v9, values are plain version strings. In pnpm v10 (catalogs
+  defined in `pnpm-workspace.yaml` instead of `package.json`), values
+  are `{ specifier, version }` objects.
 
 ## package-lock.json v3 Schema
 
@@ -972,6 +997,17 @@ class ResolvedPackage extends Schema.Class<ResolvedPackage>(
  integrity: Schema.optional(Schema.String),
  /** Whether this is a workspace package (local, not from registry). */
  isWorkspace: Schema.Boolean,
+ /**
+  * Relative path from workspace root for workspace packages.
+  * Only present when `isWorkspace` is true. Used by integrity checking
+  * to locate package.json on the filesystem. Each parser sets this from
+  * its native workspace path representation:
+  * - pnpm: importer key (e.g., "packages/ui")
+  * - npm: resolved link target path
+  * - yarn: extracted from `@workspace:path` descriptor
+  * - bun: workspace map key
+  */
+ relativePath: Schema.optional(Schema.String),
  /** Direct dependencies: name -> version constraint. */
  dependencies: Schema.optionalWith(
   Schema.Record({ key: Schema.String, value: Schema.String }),
@@ -1030,6 +1066,17 @@ const pnpmToLockfileData = (raw: PnpmLockfileRaw): LockfileData => {
  //    We need the package.json name for each, which requires
  //    cross-referencing with WorkspaceDiscovery output.
  //    For lockfile-only parsing, use the importer key as identifier.
+ //    Set relativePath from the importer key for integrity checking.
+ for (const [importerPath, _importer] of Object.entries(raw.importers)) {
+  packages.push(
+   new ResolvedPackage({
+    name: importerPath,
+    version: "0.0.0",
+    isWorkspace: true,
+    relativePath: importerPath,
+   }),
+  )
+ }
 
  // 2. Extract resolved packages from packages map
  for (const [key, entry] of Object.entries(raw.packages ?? {})) {
@@ -1125,6 +1172,8 @@ const npmToLockfileData = (raw: NpmLockfileRaw): LockfileData => {
     version: entry.version ?? "0.0.0",
     integrity: entry.integrity,
     isWorkspace,
+    // For workspace packages, relativePath is the resolved link target
+    ...(isWorkspace ? { relativePath: key } : {}),
     dependencies: entry.dependencies ?? {},
    }),
   )
@@ -1173,6 +1222,12 @@ const npmToLockfileData = (raw: NpmLockfileRaw): LockfileData => {
 
 ### Transformation: yarn Berry -> LockfileData
 
+**Implementation note (2026-03-29):** The actual implementation decodes
+each YAML entry once into a `Map<string, DecodedEntry>` (single decode
+pass), then iterates over the map twice: first to collect workspace names,
+second to build packages. This avoids double-decoding entries via
+`Schema.decodeUnknown` which was the original two-pass approach.
+
 ```typescript
 const yarnBerryToLockfileData = (
  metadata: YarnBerryMetadata,
@@ -1214,6 +1269,10 @@ const yarnBerryToLockfileData = (
     version: entry.version,
     integrity: undefined, // yarn uses checksum, not SRI
     isWorkspace,
+    // relativePath extracted from @workspace: descriptor key
+    ...(isWorkspace
+     ? { relativePath: extractYarnWorkspacePath(_key) }
+     : {}),
     dependencies: stripProtocols(entry.dependencies ?? {}),
    }),
   )

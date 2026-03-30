@@ -1,0 +1,245 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v1 > dependenciesOf(@test-monorepo/core) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/utils",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v1 > dependentsOf(@test-monorepo/utils) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v1 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-bun-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v1 > topological sort → snapshot package names in order 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-bun-monorepo",
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v2 > dependentsOf(@test-monorepo/utils) → snapshot (core + new-pkg depend on utils) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v2 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-bun-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+    "@test-monorepo/new-pkg",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: bun > v2 > topological sort → snapshot (should include new-pkg) 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-bun-monorepo",
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v1 > dependenciesOf(@test-monorepo/core) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/utils",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v1 > dependentsOf(@test-monorepo/utils) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v1 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-npm-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v1 > topological sort → snapshot package names in order 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-npm-monorepo",
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v2 > dependentsOf(@test-monorepo/utils) → snapshot (core + new-pkg depend on utils) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v2 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-npm-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+    "@test-monorepo/new-pkg",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: npm > v2 > topological sort → snapshot (should include new-pkg) 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-npm-monorepo",
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v1 > dependenciesOf(@test-monorepo/core) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/utils",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v1 > dependentsOf(@test-monorepo/utils) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v1 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-pnpm-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v1 > topological sort → snapshot package names in order 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-pnpm-monorepo",
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v2 > dependentsOf(@test-monorepo/utils) → snapshot (core + new-pkg depend on utils) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v2 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-pnpm-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+    "@test-monorepo/new-pkg",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: pnpm > v2 > topological sort → snapshot (should include new-pkg) 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-pnpm-monorepo",
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v1 > dependenciesOf(@test-monorepo/core) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/utils",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v1 > dependentsOf(@test-monorepo/utils) → snapshot (core depends on utils) 1`] = `
+[
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v1 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-yarn-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v1 > topological sort → snapshot package names in order 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-yarn-monorepo",
+  "@test-monorepo/core",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v2 > dependentsOf(@test-monorepo/utils) → snapshot (core + new-pkg depend on utils) 1`] = `
+[
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v2 > topological levels → snapshot array of level arrays 1`] = `
+[
+  [
+    "@test-monorepo/utils",
+    "test-yarn-monorepo",
+  ],
+  [
+    "@test-monorepo/core",
+    "@test-monorepo/new-pkg",
+  ],
+]
+`;
+
+exports[`DependencyGraph + TopologicalSorter integration: yarn > v2 > topological sort → snapshot (should include new-pkg) 1`] = `
+[
+  "@test-monorepo/utils",
+  "test-yarn-monorepo",
+  "@test-monorepo/core",
+  "@test-monorepo/new-pkg",
+]
+`;

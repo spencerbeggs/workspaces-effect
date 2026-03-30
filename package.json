@@ -29,7 +29,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/spencerbeggs/workspaces-effect.git"
+		"url": "git+https://github.com/spencerbeggs/workspaces-effect.git"
 	},
 	"license": "MIT",
 	"author": {
@@ -65,7 +65,7 @@
 	},
 	"dependencies": {
 		"jsonc-effect": "^0.2.1",
-		"minimatch": ">=10.2.3",
+		"minimatch": "^10.2.4",
 		"semver-effect": "^0.2.1",
 		"yaml-effect": "^0.2.2"
 	},

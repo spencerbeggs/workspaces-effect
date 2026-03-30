@@ -37,6 +37,7 @@ type DepType = (typeof DEP_TYPES)[number];
  * @internal
  */
 interface PackageJsonDeps {
+	name?: string;
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	peerDependencies?: Record<string, string>;
@@ -65,17 +66,18 @@ export const checkLockfileIntegrity = (
 	path: Path.Path,
 ): Effect.Effect<LockfileIntegrity, LockfileIntegrityError> =>
 	Effect.gen(function* () {
-		const workspacePackages = lockfileData.packages.filter((p) => p.isWorkspace);
+		const workspacePackages = lockfileData.packages.filter((p) => p.isWorkspace && p.relativePath !== undefined);
 
 		// Read package.json for each workspace package
 		const packageJsons = yield* Effect.forEach(
 			workspacePackages,
 			(pkg) =>
 				Effect.gen(function* () {
-					const pkgJsonPath = path.join(root, pkg.name, "package.json");
+					// biome-ignore lint/style/noNonNullAssertion: filtered above
+					const pkgJsonPath = path.join(root, pkg.relativePath!, "package.json");
 					const content = yield* fs.readFileString(pkgJsonPath);
-					const parsed = JSON.parse(content) as PackageJsonDeps;
-					return [pkg.name, parsed] as const;
+					const parsed = yield* Effect.try(() => JSON.parse(content) as PackageJsonDeps);
+					return [parsed.name ?? pkg.name, parsed] as const;
 				}),
 			{ concurrency: "unbounded" },
 		).pipe(

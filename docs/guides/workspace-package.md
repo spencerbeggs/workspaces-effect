@@ -1,11 +1,14 @@
 # WorkspacePackage API
 
-`WorkspacePackage` is the core data model representing a workspace package. It
-provides computed getters for common metadata, dependency query methods, diff
-comparison, and a dual-API pattern for both OOP and functional usage.
+`WorkspacePackage` is the core data model representing a workspace package.
+It is an Effect `Schema.Class` produced by `WorkspaceDiscovery` for each
+package found in the monorepo. It provides computed getters, dependency query
+methods, diff comparison, and a dual-API pattern for both OOP and functional
+usage.
 
 ## Table of Contents
 
+- [Fields](#fields)
 - [Computed Getters](#computed-getters)
 - [Dependency Query Methods](#dependency-query-methods)
 - [Dual-API Pattern](#dual-api-pattern)
@@ -14,6 +17,21 @@ comparison, and a dual-API pattern for both OOP and functional usage.
 - [Importer Map](#importer-map)
 - [Root Package in listPackages](#root-package-in-listpackages)
 
+## Fields
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | required | Package name from `package.json` |
+| `version` | `string` | required | Package version |
+| `path` | `string` | required | Absolute filesystem path to the package directory |
+| `relativePath` | `string` | required | Path relative to the workspace root |
+| `private` | `boolean` | `false` | Whether the package is private |
+| `dependencies` | `Record<string, string>` | `{}` | Production dependencies |
+| `devDependencies` | `Record<string, string>` | `{}` | Development dependencies |
+| `peerDependencies` | `Record<string, string>` | `{}` | Peer dependencies |
+| `optionalDependencies` | `Record<string, string>` | `{}` | Optional dependencies |
+| `publishConfig` | `PublishConfigType \| undefined` | `undefined` | Publishing configuration |
+
 ## Computed Getters
 
 Every `WorkspacePackage` instance exposes these computed properties:
@@ -21,14 +39,15 @@ Every `WorkspacePackage` instance exposes these computed properties:
 | Getter | Returns | Description |
 | --- | --- | --- |
 | `isRootWorkspace` | `boolean` | `true` when `relativePath === "."` |
-| `packageJsonPath` | `string` | Absolute path to `package.json` |
+| `packageJsonPath` | `string` | Absolute path to `package.json` (e.g., `"/ws/pkgs/utils/package.json"`) |
 | `isPublic` | `boolean` | `true` when `private` is `false` |
-| `scope` | `Option<string>` | The `@scope` portion, or `Option.none()` |
+| `scope` | `Option<string>` | The `@scope` portion (e.g., `Option.some("@myorg")`), or `Option.none()` |
 | `unscopedName` | `string` | Package name without the `@scope/` prefix |
 | `allDependencies` | `Record<string, string>` | Merged map of all 4 dependency types |
 
 ```typescript
-import { Option } from "effect";
+import { Effect, Option } from "effect";
+import { NodeContext } from "@effect/platform-node";
 import { WorkspaceDiscovery, WorkspacesLive } from "workspaces-effect";
 
 const program = Effect.gen(function* () {
@@ -50,9 +69,14 @@ const program = Effect.gen(function* () {
 });
 ```
 
+The `allDependencies` merge order is: `optionalDependencies`,
+`peerDependencies`, `devDependencies`, `dependencies`. Later entries overwrite
+earlier ones, so if the same package appears in multiple maps, `dependencies`
+wins.
+
 ## Dependency Query Methods
 
-Query whether a package depends on something, across all four dependency types:
+Query whether a package depends on something across any dependency type:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -60,29 +84,32 @@ const program = Effect.gen(function* () {
   const pkg = yield* discovery.getPackage("@myorg/app");
 
   // Check specific dependency types
-  pkg.hasDependency("react");          // checks dependencies only
-  pkg.hasDevDependency("vitest");      // checks devDependencies only
-  pkg.hasPeerDependency("effect");     // checks peerDependencies only
-  pkg.hasOptionalDependency("fsevents"); // checks optionalDependencies only
+  pkg.hasDependency("react");              // checks dependencies only
+  pkg.hasDevDependency("vitest");          // checks devDependencies only
+  pkg.hasPeerDependency("effect");         // checks peerDependencies only
+  pkg.hasOptionalDependency("fsevents");   // checks optionalDependencies only
 
   // Check across ALL dependency types at once
-  pkg.hasAnyDependencyOn("effect");    // true if in any of the 4 maps
+  pkg.hasAnyDependencyOn("effect");        // true if in any of the 4 maps
 
-  // Get the version string (searches all 4 types)
+  // Get the version string (searches all 4 types in order)
   const version = pkg.dependencyVersion("effect");
   // Option.some("^3.19.0") or Option.none()
 
   // Glob pattern matching on dependency names
-  pkg.matchesDependency("@myorg/*");   // true if any dep matches the glob
-  pkg.matchesDependency("react*");     // matches react, react-dom, etc.
+  pkg.matchesDependency("@myorg/*");       // true if any dep matches the glob
+  pkg.matchesDependency("react*");         // matches react, react-dom, etc.
 });
 ```
 
+`dependencyVersion` searches `dependencies`, then `devDependencies`, then
+`peerDependencies`, then `optionalDependencies`, returning the first match.
+
 ## Dual-API Pattern
 
-Every instance method is also available as a static dual function on
-`WorkspacePackage`. This supports three calling styles -- instance, static
-data-first, and static data-last (pipeable):
+Every instance method is also available as a standalone dual function. This
+supports three calling styles -- instance, static data-first, and static
+data-last (pipeable):
 
 ```typescript
 import { pipe } from "effect";
@@ -98,7 +125,17 @@ WorkspacePackage.hasDependency(pkg, "effect");
 pipe(pkg, WorkspacePackage.hasDependency("effect"));
 ```
 
-The pipeable form is useful for filtering and transforming arrays of packages:
+The standalone functions are also exported directly for use without the class:
+
+```typescript
+import { hasDependency, hasAnyDependencyOn, matchesDependency } from "workspaces-effect";
+
+// Same three calling styles
+hasDependency(pkg, "effect");
+pipe(pkg, hasDependency("effect"));
+```
+
+The pipeable form is especially useful for filtering arrays of packages:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -124,48 +161,43 @@ const program = Effect.gen(function* () {
 
 All dual-API functions:
 
-| Function | Signature |
-| --- | --- |
-| `hasDependency` | `(name) => (pkg) => boolean` or `(pkg, name) => boolean` |
-| `hasDevDependency` | `(name) => (pkg) => boolean` or `(pkg, name) => boolean` |
-| `hasPeerDependency` | `(name) => (pkg) => boolean` or `(pkg, name) => boolean` |
-| `hasOptionalDependency` | `(name) => (pkg) => boolean` or `(pkg, name) => boolean` |
-| `hasAnyDependencyOn` | `(name) => (pkg) => boolean` or `(pkg, name) => boolean` |
-| `dependencyVersion` | `(name) => (pkg) => Option<string>` or `(pkg, name) => Option<string>` |
-| `matchesDependency` | `(pattern) => (pkg) => boolean` or `(pkg, pattern) => boolean` |
-| `dependencyDiff` | `(other) => (pkg) => DependencyDiff` or `(pkg, other) => DependencyDiff` |
+| Function | Data-last signature | Data-first signature |
+| --- | --- | --- |
+| `hasDependency` | `(name) => (pkg) => boolean` | `(pkg, name) => boolean` |
+| `hasDevDependency` | `(name) => (pkg) => boolean` | `(pkg, name) => boolean` |
+| `hasPeerDependency` | `(name) => (pkg) => boolean` | `(pkg, name) => boolean` |
+| `hasOptionalDependency` | `(name) => (pkg) => boolean` | `(pkg, name) => boolean` |
+| `hasAnyDependencyOn` | `(name) => (pkg) => boolean` | `(pkg, name) => boolean` |
+| `dependencyVersion` | `(name) => (pkg) => Option<string>` | `(pkg, name) => Option<string>` |
+| `matchesDependency` | `(pattern) => (pkg) => boolean` | `(pkg, pattern) => boolean` |
+| `dependencyDiff` | `(other) => (pkg) => DependencyDiff` | `(pkg, other) => DependencyDiff` |
 
 ## Dependency Diff
 
 Compare the dependency snapshots of two `WorkspacePackage` instances to find
-what was added, removed, or changed. This compares across all four dependency
-types combined:
+what was added, removed, or changed. The comparison uses `allDependencies`
+(the merged map of all 4 types), so a dependency that moves between types at
+the same version does not appear in the diff.
 
 ```typescript
 import { WorkspacePackage } from "workspaces-effect";
 
 const program = Effect.gen(function* () {
   const discovery = yield* WorkspaceDiscovery;
-
-  // Compare two different packages
   const app = yield* discovery.getPackage("@myorg/app");
   const api = yield* discovery.getPackage("@myorg/api");
 
   const diff = app.dependencyDiff(api);
 
-  // { added: { "react": "^19.0.0" },
-  //   removed: { "express": "^4.18.0" },
-  //   changed: { "effect": { from: "^3.18.0", to: "^3.19.0" } } }
-
-  console.log("Added:", Object.keys(diff.added));
-  console.log("Removed:", Object.keys(diff.removed));
+  console.log("Added:", Object.keys(diff.added));     // in app but not api
+  console.log("Removed:", Object.keys(diff.removed)); // in api but not app
   for (const [name, { from, to }] of Object.entries(diff.changed)) {
     console.log(`${name}: ${from} -> ${to}`);
   }
 });
 ```
 
-The `DependencyDiff` interface:
+The `DependencyDiff` type:
 
 ```typescript
 interface DependencyDiff {
@@ -188,11 +220,11 @@ pipe(app, WorkspacePackage.dependencyDiff(api));
 ## Reading package.json
 
 The `readPackageJson` utility reads and parses a package's `package.json` from
-disk using `@effect/platform` FileSystem. It returns the minimal
-`PackageJsonType` schema fields:
+disk using `@effect/platform` `FileSystem`. It returns the `PackageJsonType`
+schema fields (name, version, dependencies, workspaces, etc.).
 
 ```typescript
-import { WorkspacePackage, readPackageJson } from "workspaces-effect";
+import { readPackageJson, WorkspacePackage } from "workspaces-effect";
 
 const program = Effect.gen(function* () {
   const discovery = yield* WorkspaceDiscovery;
@@ -210,11 +242,15 @@ const program = Effect.gen(function* () {
 This requires `FileSystem` in the Effect context, which is already provided by
 `NodeContext.layer` or `BunContext.layer`.
 
+Errors: `PackageJsonParseError` if the file cannot be read or contains invalid
+JSON.
+
 ## Importer Map
 
-`WorkspaceDiscovery.importerMap()` returns a `ReadonlyMap<string, WorkspacePackage>`
-keyed by `relativePath`. This is useful for mapping lockfile importer keys (which
-use relative paths like `packages/utils`) back to their workspace packages:
+`WorkspaceDiscovery.importerMap()` returns a
+`ReadonlyMap<string, WorkspacePackage>` keyed by `relativePath`. This is useful
+for mapping lockfile importer keys (which use relative paths like
+`packages/utils`) back to their workspace packages:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -229,9 +265,6 @@ const program = Effect.gen(function* () {
 
   // The root package is keyed by "."
   const root = importers.get(".");
-  if (root) {
-    console.log("Root:", root.name);
-  }
 });
 ```
 

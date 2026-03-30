@@ -1,0 +1,15 @@
+{
+	"name": "@test-monorepo/core",
+	"version": "1.0.0",
+	"dependencies": {
+		"@test-monorepo/utils": "workspace:*",
+		"lodash": "catalog:",
+		"zod": "catalog:"
+	},
+	"peerDependencies": {
+		"effect": "catalog:silk"
+	},
+	"optionalDependencies": {
+		"fsevents": "^2.3.0"
+	}
+}

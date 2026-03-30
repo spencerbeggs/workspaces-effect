@@ -1,7 +1,7 @@
 # Getting Started
 
-This guide walks through installing workspaces-effect, setting up your first
-program, and understanding the core concepts.
+This guide walks through installing workspaces-effect, writing your first
+program, and understanding how layers work.
 
 ## Table of Contents
 
@@ -9,6 +9,7 @@ program, and understanding the core concepts.
 - [Prerequisites](#prerequisites)
 - [Your First Program](#your-first-program)
 - [Understanding Layers](#understanding-layers)
+- [Using Composite Layers](#using-composite-layers)
 - [Using with Bun](#using-with-bun)
 - [Next Steps](#next-steps)
 
@@ -34,6 +35,11 @@ You choose the Effect and platform versions. workspaces-effect requires
 - Node.js 22+ or Bun 1.0+
 - Effect 3.x
 
+Your monorepo must have workspace configuration:
+
+- **pnpm:** `pnpm-workspace.yaml` at the root
+- **npm / yarn / bun:** `workspaces` field in root `package.json`
+
 ## Your First Program
 
 This example discovers all workspace packages and prints their names:
@@ -48,7 +54,7 @@ const program = Effect.gen(function* () {
   const packages = yield* discovery.listPackages();
 
   for (const pkg of packages) {
-    if (pkg.isRootWorkspace) continue; // skip root workspace
+    if (pkg.isRootWorkspace) continue; // skip the root workspace
     console.log(`${pkg.name} @ ${pkg.path}`);
   }
 });
@@ -64,33 +70,63 @@ Effect.runPromise(
 Run this from anywhere inside your monorepo. The library automatically finds
 the workspace root by walking up the directory tree.
 
-Note that `listPackages()` includes the root workspace package (with
+`listPackages()` includes the root workspace package (with
 `relativePath: "."`) as the first entry. Use the `isRootWorkspace` getter to
 filter it out when you only want child packages.
 
 ## Understanding Layers
 
 workspaces-effect uses Effect's layer system for dependency injection. You
-write programs against service interfaces, then provide implementations at
-the edge.
+write programs against **service interfaces** (`Context.Tag` classes like
+`WorkspaceDiscovery`), then provide **layer implementations** at the edge of
+your program.
 
-**Two composite layers** cover most use cases:
+This separation means:
+
+- Your business logic is decoupled from implementation details
+- Services can be swapped (e.g., for testing)
+- Dependencies are wired once, not threaded through every function call
+
+The basic pattern is:
+
+```typescript
+// 1. Write your program using service interfaces
+const program = Effect.gen(function* () {
+  const discovery = yield* WorkspaceDiscovery;
+  return yield* discovery.listPackages();
+});
+
+// 2. Provide layer implementations at the edge
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(WorkspacesLive),       // provides workspaces-effect services
+    Effect.provide(NodeContext.layer),     // provides platform services (FileSystem, Path, etc.)
+  ),
+);
+```
+
+## Using Composite Layers
+
+Two composite layers cover most use cases:
 
 | Layer | Services Included | Platform Requirements |
 | --- | --- | --- |
-| `WorkspacesLive` | Discovery, graph, lockfile, publishability (7 services) | FileSystem + Path |
-| `WorkspacesFullLive` | Everything including git change detection (all 9 services) | FileSystem + Path + CommandExecutor |
+| `WorkspacesLive` | Discovery, graph, lockfile, publishability (7 services) | `FileSystem` + `Path` |
+| `WorkspacesFullLive` | Everything including git change detection (all 9) | `FileSystem` + `Path` + `CommandExecutor` |
 
-The platform requirements are satisfied by `NodeContext.layer` or
-`BunContext.layer`.
+Both `NodeContext.layer` and `BunContext.layer` provide all three platform
+services, so they work with either composite layer.
 
 ### Choosing a Layer
 
-Use `WorkspacesLive` when you do not need git-based change detection. It is
-lighter and does not require git to be installed.
+Use **`WorkspacesLive`** when you do not need git-based change detection. It is
+lighter and does not require git to be installed. It provides: `WorkspaceRoot`,
+`PackageManagerDetector`, `WorkspaceDiscovery`, `DependencyGraph`,
+`TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`.
 
-Use `WorkspacesFullLive` when you need `ChangeDetector` or `PackageResolver`
-(which requires `CommandExecutor` for git operations).
+Use **`WorkspacesFullLive`** when you need `ChangeDetector` or
+`PackageResolver`. These services use `CommandExecutor` to run git commands.
+It provides all 9 services.
 
 ### Individual Layers
 
@@ -104,8 +140,8 @@ import {
 } from "workspaces-effect";
 ```
 
-You can compose these manually with `Layer.provide` to build exactly the
-service set you need.
+You compose them manually with `Layer.provide` to build exactly the service
+set you need.
 
 ## Using with Bun
 
@@ -132,12 +168,15 @@ Effect.runPromise(
 
 ## Next Steps
 
-- [WorkspacePackage API](./workspace-package.md) -- Getters, dependency queries,
-  dual-API pattern, diffs, and readPackageJson
+- [WorkspacePackage API](./workspace-package.md) -- The core data model with
+  getters, dependency queries, and the dual-API pattern
 - [Dependency Analysis](./dependency-analysis.md) -- Build dependency graphs
-  and sort packages
+  and sort packages for build ordering
 - [Change Detection](./change-detection.md) -- Find affected packages from git
   changes
 - [Lockfile Parsing](./lockfile-parsing.md) -- Read and query lockfile data
-- [Architecture Overview](../architecture/overview.md) -- Understand the full
-  service architecture
+  across all package managers
+- [Publishability](./publishability.md) -- Detect which packages can be
+  published and where
+- [Architecture Overview](../architecture/overview.md) -- Full service
+  architecture and error model

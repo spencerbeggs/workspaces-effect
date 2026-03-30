@@ -1,12 +1,20 @@
 {
-	"plansDirectory": ".claude/plans",
 	"permissions": {
-		"allow": ["Write(./**)", "Edit(./**)", "mcp__playwright", "mcp__github"]
+		"allow": [
+			"Write(./**)",
+			"Edit(./**)",
+			"Write(.claude/design/**)",
+			"Write(.claude/plans/**)",
+			"Edit(.claude/design/**)",
+			"Edit(.claude/plans/**)"
+		]
 	},
 	"enableAllProjectMcpServers": true,
 	"enabledPlugins": {
-		"workflow@savvy-web-claude-tools": true,
+		"design-docs@spencerbeggs": true,
+		"vitest-agent-reporter@spencerbeggs": true,
 		"changesets@savvy-web-systems": true,
-		"design-docs@spencerbeggs": true
-	}
+		"vitest@savvy-webs-syetems": true
+	},
+	"plansDirectory": ".claude/plans"
 }
