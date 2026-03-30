@@ -1,5 +1,16 @@
 # workspaces-effect
 
+## 0.3.0
+
+### Bug Fixes
+
+* [`7841a2a`](https://github.com/spencerbeggs/workspaces-effect/commit/7841a2aa10455b82f67b1bc4abbc6a7762659531) Fix pnpm v9+ lockfile parsing for catalogs with `{ specifier, version }` format
+* Fix integrity check for all package managers by adding `relativePath` to `ResolvedPackage`
+
+### Other
+
+* [`7841a2a`](https://github.com/spencerbeggs/workspaces-effect/commit/7841a2aa10455b82f67b1bc4abbc6a7762659531) Restructure tests to follow `@savvy-web/vitest` discovery convention with real generated lockfile fixtures
+
 ## 0.2.0
 
 ### Breaking Changes
