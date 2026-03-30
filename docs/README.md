@@ -1,34 +1,35 @@
 # workspaces-effect Documentation
 
-Comprehensive documentation for `workspaces-effect`.
+User-facing documentation for `workspaces-effect`, an Effect-TS library for
+monorepo workspace tooling.
 
-## Table of Contents
-
-### Getting Started
+## Getting Started
 
 - [Getting Started](./guides/getting-started.md) -- Installation, first
-  example, and platform setup
+  program, layers, and platform setup
 
-### Architecture
+## Architecture
 
-- [Architecture Overview](./architecture/overview.md) -- Service groups, layers,
-  and composition model
-- [Services Reference](./architecture/services.md) -- All 9 services with their
-  APIs and error types
+- [Architecture Overview](./architecture/overview.md) -- Service groups, layer
+  composition, platform independence, and error model
+- [Services Reference](./architecture/services.md) -- Complete API reference for
+  all 9 services
 
-### Guides
+## Guides
 
-- [WorkspacePackage API](./guides/workspace-package.md) -- Getters, dependency
-  queries, dual-API pattern, diffs, and readPackageJson
-- [Dependency Analysis](./guides/dependency-analysis.md) -- Building dependency
-  graphs and topological sorting
-- [Change Detection](./guides/change-detection.md) -- Git-based change detection
-  and affected package computation
-- [Lockfile Parsing](./guides/lockfile-parsing.md) -- Reading lockfiles and
-  checking integrity
-- [Publishability](./guides/publishability.md) -- Detecting publishable packages
-  and their targets
+- [WorkspacePackage API](./guides/workspace-package.md) -- Computed getters,
+  dependency queries, dual-API pattern, diffs, and readPackageJson
+- [Dependency Analysis](./guides/dependency-analysis.md) -- Dependency graphs,
+  topological sorting, parallel build levels, and cycle detection
+- [Change Detection](./guides/change-detection.md) -- Git-based change
+  detection, affected packages, and CI pipeline integration
+- [Lockfile Parsing](./guides/lockfile-parsing.md) -- Unified lockfile reading,
+  resolved versions, workspace dependencies, integrity checking, and PM
+  extensions
+- [Publishability](./guides/publishability.md) -- Detecting publishable
+  packages, publish targets, and selective publishing workflows
 
-### Troubleshooting
+## Reference
 
-- [Troubleshooting](./troubleshooting.md) -- Common issues and solutions
+- [Troubleshooting](./troubleshooting.md) -- Every error type with causes and
+  solutions

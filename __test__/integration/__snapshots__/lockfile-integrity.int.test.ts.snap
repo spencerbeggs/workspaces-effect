@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`LockfileReader.checkIntegrity integration: bun > v1 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: bun > v2 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: bun > v3 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: npm > v1 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: npm > v2 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: pnpm > v1 > returns integrity result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: pnpm > v2 > returns integrity result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: pnpm > v3 > returns integrity result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: yarn > v1 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;
+
+exports[`LockfileReader.checkIntegrity integration: yarn > v2 > returns exit result (snapshot) 1`] = `
+{
+  "_tag": "Success",
+  "value": LockfileIntegrity {
+    "extraWorkspaces": [],
+    "missingWorkspaces": [],
+    "unsatisfiedConstraints": [],
+    "valid": true,
+  },
+}
+`;

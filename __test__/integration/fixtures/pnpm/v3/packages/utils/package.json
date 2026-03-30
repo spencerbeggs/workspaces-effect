@@ -1,0 +1,7 @@
+{
+	"name": "@test-monorepo/utils",
+	"version": "1.0.0",
+	"devDependencies": {
+		"typescript": "^5.3.0"
+	}
+}

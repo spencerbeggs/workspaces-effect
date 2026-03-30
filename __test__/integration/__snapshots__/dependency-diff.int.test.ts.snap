@@ -1,0 +1,115 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DependencyDiff integration: bun > core package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "fsevents": "^2.3.0",
+    "zod": "catalog:",
+  },
+  "changed": {},
+  "removed": {
+    "typescript": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: bun > utils package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "vitest": "catalog:testing",
+  },
+  "changed": {},
+  "removed": {
+    "chalk": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: npm > core package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "fsevents": "^2.3.0",
+    "react": "^19.0.0",
+    "zod": "^3.23.0",
+  },
+  "changed": {
+    "lodash": {
+      "from": "^4.17.21",
+      "to": "^4.17.23",
+    },
+  },
+  "removed": {
+    "typescript": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: npm > utils package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "vitest": "^3.0.0",
+  },
+  "changed": {},
+  "removed": {
+    "chalk": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: pnpm > core package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "effect": "catalog:silk",
+    "fsevents": "^2.3.0",
+    "zod": "catalog:",
+  },
+  "changed": {},
+  "removed": {
+    "typescript": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: pnpm > utils package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "@effect/platform": "catalog:silk",
+    "vitest": "^3.0.0",
+  },
+  "changed": {},
+  "removed": {
+    "chalk": "catalog:",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: yarn > core package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "fsevents": "^2.3.0",
+    "react": "^19.0.0",
+    "zod": "^3.23.0",
+  },
+  "changed": {
+    "lodash": {
+      "from": "^4.17.21",
+      "to": "^4.17.23",
+    },
+  },
+  "removed": {
+    "typescript": "^5.3.0",
+  },
+}
+`;
+
+exports[`DependencyDiff integration: yarn > utils package diff v1→v2 matches snapshot 1`] = `
+{
+  "added": {
+    "vitest": "^3.0.0",
+  },
+  "changed": {},
+  "removed": {
+    "chalk": "^5.3.0",
+  },
+}
+`;

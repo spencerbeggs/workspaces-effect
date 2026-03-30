@@ -96,7 +96,8 @@ export const parseYarnLockfile = (
 		const workspaceNames = new Set<string>();
 		const workspaceEntries = new Map<string, WorkspaceEntry>();
 
-		// First pass: identify workspace entries
+		// Decode each entry once and cache in a Map, skipping __metadata
+		const decoded = new Map<string, Schema.Schema.Type<typeof YarnEntrySchema>>();
 		for (const [key, value] of Object.entries(raw)) {
 			if (key === "__metadata") continue;
 			const entry = yield* Schema.decodeUnknown(YarnEntrySchema)(value).pipe(
@@ -109,27 +110,19 @@ export const parseYarnLockfile = (
 						}),
 				),
 			);
+			decoded.set(key, entry);
+		}
 
+		// First pass: identify workspace names
+		for (const [key, entry] of decoded) {
 			if (entry.linkType === "soft") {
 				const name = extractYarnPackageName(key);
 				if (name) workspaceNames.add(name);
 			}
 		}
 
-		// Second pass: build packages
-		for (const [key, value] of Object.entries(raw)) {
-			if (key === "__metadata") continue;
-			const entry = yield* Schema.decodeUnknown(YarnEntrySchema)(value).pipe(
-				Effect.mapError(
-					(e) =>
-						new LockfileParseError({
-							lockfilePath,
-							format: "yarn",
-							cause: e,
-						}),
-				),
-			);
-
+		// Second pass: build packages (reuse already-decoded entries)
+		for (const [key, entry] of decoded) {
 			const name = extractYarnPackageName(key);
 			if (!name) continue;
 
@@ -141,6 +134,7 @@ export const parseYarnLockfile = (
 					version: entry.version ?? "0.0.0",
 					integrity: entry.checksum,
 					isWorkspace,
+					...(isWorkspace ? { relativePath: extractYarnWorkspacePath(key) } : {}),
 				}),
 			);
 
@@ -189,12 +183,40 @@ export const parseYarnLockfile = (
  * @internal
  */
 const extractYarnPackageName = (key: string): string | undefined => {
-	// Find the last @npm: or @workspace: segment
-	const npmIdx = key.lastIndexOf("@npm:");
-	const wsIdx = key.lastIndexOf("@workspace:");
+	// Compound keys like "@scope/name@workspace:*, @scope/name@workspace:packages/foo"
+	// Use the first descriptor to extract the package name
+	const descriptor = key.includes(", ") ? key.split(", ")[0] : key;
+	// Check for @patch: first — it embeds @npm: inside the patch descriptor
+	const patchIdx = descriptor.indexOf("@patch:");
+	if (patchIdx > 0) return descriptor.slice(0, patchIdx);
+	const npmIdx = descriptor.lastIndexOf("@npm:");
+	const wsIdx = descriptor.lastIndexOf("@workspace:");
 	const idx = Math.max(npmIdx, wsIdx);
 	if (idx <= 0) return undefined;
-	return key.slice(0, idx);
+	return descriptor.slice(0, idx);
+};
+
+/**
+ * Extract workspace-relative filesystem path from a yarn lockfile key.
+ *
+ * Handles keys like `"@scope/name@workspace:packages/foo"` by extracting
+ * the path segment after `@workspace:`. For keys with multiple descriptors
+ * (e.g., `"@scope/name@workspace:*, @scope/name@workspace:packages/foo"`),
+ * finds the first descriptor that contains a non-`*` path.
+ *
+ * @internal
+ */
+const extractYarnWorkspacePath = (key: string): string | undefined => {
+	// Keys can have multiple descriptors separated by ", "
+	const descriptors = key.split(", ");
+	for (const desc of descriptors) {
+		const wsIdx = desc.lastIndexOf("@workspace:");
+		if (wsIdx >= 0) {
+			const path = desc.slice(wsIdx + "@workspace:".length);
+			if (path && path !== "*") return path;
+		}
+	}
+	return undefined;
 };
 
 /**

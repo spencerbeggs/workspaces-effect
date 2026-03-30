@@ -9,11 +9,11 @@
  */
 
 import { FileSystem, Path } from "@effect/platform";
-import { Effect, Layer, Option, Request, RequestResolver } from "effect";
+import { Effect, Exit, Layer, Option, Request, RequestResolver } from "effect";
 import type { LockfileParseError } from "../errors/LockfileParseError.js";
 import { LockfileReadError } from "../errors/LockfileReadError.js";
 import type { PackageManagerType } from "../schemas/core.js";
-import type { ResolvedPackage } from "../schemas/lockfile.js";
+import { LockfileData, ResolvedPackage, WorkspaceDependency } from "../schemas/lockfile.js";
 import { LockfileReader } from "../services/LockfileReader.js";
 import { PackageManagerDetector } from "../services/PackageManagerDetector.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
@@ -144,7 +144,62 @@ export const LockfileReaderLive = Layer.effect(
 			),
 		);
 
-		const lockfileData = yield* parseLockfile(content, lockfilePath, pm);
+		let lockfileData = yield* parseLockfile(content, lockfilePath, pm);
+
+		// For pnpm, resolve importer paths to actual package names from package.json
+		if (pm === "pnpm") {
+			const pathToName = new Map<string, string>();
+			for (const pkg of lockfileData.packages) {
+				if (pkg.isWorkspace && pkg.relativePath) {
+					const pkgJsonPath = path.join(root, pkg.relativePath, "package.json");
+					const exit = yield* Effect.exit(
+						fs
+							.readFileString(pkgJsonPath)
+							.pipe(Effect.flatMap((content) => Effect.try(() => JSON.parse(content) as { name?: string }))),
+					);
+					if (Exit.isSuccess(exit) && exit.value.name) {
+						pathToName.set(pkg.relativePath, exit.value.name);
+					}
+				}
+			}
+
+			if (pathToName.size > 0) {
+				// Rebuild packages with resolved names
+				const resolvedPackages = lockfileData.packages.map((pkg) => {
+					if (!pkg.isWorkspace || !pkg.relativePath) return pkg;
+					const realName = pathToName.get(pkg.relativePath);
+					if (!realName) return pkg;
+					return new ResolvedPackage({
+						name: realName,
+						version: pkg.version,
+						integrity: pkg.integrity,
+						isWorkspace: pkg.isWorkspace,
+						relativePath: pkg.relativePath,
+						dependencies: pkg.dependencies,
+					});
+				});
+
+				// Rebuild workspace dependencies with resolved names
+				const resolvedWsDeps = lockfileData.workspaceDependencies.map((dep) => {
+					const fromName = pathToName.get(dep.from) ?? dep.from;
+					const toName = pathToName.get(dep.to) ?? dep.to;
+					return new WorkspaceDependency({
+						from: fromName,
+						to: toName,
+						depType: dep.depType,
+						constraint: dep.constraint,
+					});
+				});
+
+				lockfileData = new LockfileData({
+					packageManager: lockfileData.packageManager,
+					lockfileVersion: lockfileData.lockfileVersion,
+					packages: resolvedPackages,
+					workspaceDependencies: resolvedWsDeps,
+					pmSpecific: lockfileData.pmSpecific,
+				});
+			}
+		}
 
 		// Build multi-version lookup index
 		const packageIndex = new Map<string, Array<ResolvedPackage>>();

@@ -173,6 +173,7 @@ const toLockfileData = (raw: BunLockfileRaw): LockfileData => {
 					name,
 					version: wsEntry.version ?? "0.0.0",
 					isWorkspace: true,
+					relativePath: wsPath,
 				}),
 			);
 			workspaceEntries.set(name, {

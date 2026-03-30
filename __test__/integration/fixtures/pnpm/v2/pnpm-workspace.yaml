@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+
+catalogs:
+  default:
+    lodash: "^4.17.23"
+    chalk: "^5.3.0"
+    zod: "^3.23.0"
+  silk:
+    "@effect/platform": ">=0.78.0"
+    effect: ">=3.14.0"

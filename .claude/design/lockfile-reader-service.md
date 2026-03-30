@@ -5,8 +5,8 @@ category: architecture
 status: complete
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-03-29
+last-synced: 2026-03-29
 authors:
   - C. Spencer Beggs
 tags:
@@ -308,7 +308,7 @@ export class LockfileReader extends Context.Tag(
 | `resolvedVersion(name)` | `Option<ResolvedPackage>` | never | Returns Option.none for unknown packages; uses Request/RequestResolver internally |
 | `checkIntegrity(name)` | `Option<string>` | `PackageNotInLockfileError` | Option because workspace pkgs lack hashes |
 | `importersFor(path)` | `ReadonlyArray<WorkspaceDependency>` | never | Returns empty array if path not found |
-| `catalogEntries()` | `Record<string, Record<string, string>>` | never | Empty record for non-catalog PMs |
+| `catalogEntries()` | `Record<string, Record<string, string>>` | never | Empty record for non-catalog PMs. Note: pnpm v10 stores catalog entries as `{ specifier, version }` objects internally; `catalogEntries()` normalizes to plain strings. |
 | `overrides()` | `Record<string, string>` | never | Empty record if no overrides |
 
 Design principle: methods that perform lookups by user-provided keys

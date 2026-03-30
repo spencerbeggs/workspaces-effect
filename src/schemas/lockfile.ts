@@ -58,6 +58,7 @@ export class ResolvedPackage extends Schema.Class<ResolvedPackage>("ResolvedPack
 	version: Schema.String,
 	integrity: Schema.optional(Schema.String),
 	isWorkspace: Schema.Boolean,
+	relativePath: Schema.optional(Schema.String),
 	dependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
 		default: () => ({}),
 	}),
@@ -134,7 +135,16 @@ export class PnpmExtension extends Schema.Class<PnpmExtension>("PnpmExtension")(
 	catalogs: Schema.optional(
 		Schema.Record({
 			key: Schema.String,
-			value: Schema.Record({ key: Schema.String, value: Schema.String }),
+			value: Schema.Record({
+				key: Schema.String,
+				value: Schema.Union(
+					Schema.String,
+					Schema.Struct({
+						specifier: Schema.String,
+						version: Schema.String,
+					}),
+				),
+			}),
 		}),
 	),
 	overrides: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
