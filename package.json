@@ -65,18 +65,18 @@
 	},
 	"dependencies": {
 		"jsonc-effect": "^0.2.1",
-		"minimatch": "^10.2.4",
+		"minimatch": "^10.2.5",
 		"semver-effect": "^0.2.1",
 		"yaml-effect": "^0.2.2"
 	},
 	"devDependencies": {
 		"@effect/platform": "catalog:silk",
 		"@effect/platform-node": "catalog:silk",
-		"@savvy-web/changesets": "^0.7.1",
-		"@savvy-web/commitlint": "^0.4.5",
-		"@savvy-web/lint-staged": "^0.6.6",
+		"@savvy-web/changesets": "^0.7.4",
+		"@savvy-web/commitlint": "^0.5.2",
+		"@savvy-web/lint-staged": "^0.7.3",
 		"@savvy-web/rslib-builder": "^0.19.1",
-		"@savvy-web/vitest": "^1.2.0",
+		"@savvy-web/vitest": "^1.2.2",
 		"effect": "catalog:silk"
 	},
 	"peerDependencies": {
