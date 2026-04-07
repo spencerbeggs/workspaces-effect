@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"dependencies": {
 		"@test-monorepo/utils": "workspace:*",
-		"lodash": "^4.17.23",
+		"lodash": "^4.18.1",
 		"zod": "^3.23.0"
 	},
 	"peerDependencies": {
