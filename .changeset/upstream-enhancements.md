@@ -14,7 +14,7 @@ PackageManagerDetector now includes a `runtime` field (`"node"` or `"bun"`) on t
 
 ### Extendable PublishConfig
 
-PublishConfig is now a Schema.Class instead of a Schema.Struct, enabling downstream packages to extend it with additional fields via field spreading.
+PublishConfig is now a Schema.Class instead of a Schema.Struct, enabling downstream packages to extend it with `PublishConfig.extend()` to add custom fields.
 
 ### Expanded PublishConfig Fields
 

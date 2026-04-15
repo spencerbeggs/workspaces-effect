@@ -167,9 +167,8 @@ describe("PublishConfig class", () => {
 		expect(config.access).toBeUndefined();
 	});
 
-	it("can be extended via Schema.Class subclass", () => {
-		class SilkPublishConfig extends Schema.Class<SilkPublishConfig>("SilkPublishConfig")({
-			...PublishConfig.fields,
+	it("can be extended with PublishConfig.extend", () => {
+		class SilkPublishConfig extends PublishConfig.extend<SilkPublishConfig>("SilkPublishConfig")({
 			targets: Schema.optional(Schema.Array(Schema.String)),
 		}) {}
 		const config = new SilkPublishConfig({
@@ -180,19 +179,23 @@ describe("PublishConfig class", () => {
 		expect(config.targets).toEqual(["npm", "github"]);
 	});
 
-	it("can be extended with Schema.extend using PublishConfig.fields", () => {
-		const SilkPublishConfig = Schema.extend(
-			Schema.Struct(PublishConfig.fields),
-			Schema.Struct({
-				targets: Schema.optional(Schema.Array(Schema.String)),
-			}),
-		);
-		const decoded = Schema.decodeUnknownSync(SilkPublishConfig)({
+	it("extended class inherits all base fields", () => {
+		class SilkPublishConfig extends PublishConfig.extend<SilkPublishConfig>("SilkPublishConfig")({
+			targets: Schema.optional(Schema.Array(Schema.String)),
+		}) {}
+		const config = new SilkPublishConfig({
 			access: "public",
-			targets: ["npm", "github"],
+			registry: "https://registry.npmjs.org/",
+			directory: "dist/npm",
+			tag: "latest",
+			linkDirectory: true,
+			targets: ["npm"],
 		});
-		expect(decoded.access).toBe("public");
-		expect(decoded.targets).toEqual(["npm", "github"]);
+		expect(config.registry).toBe("https://registry.npmjs.org/");
+		expect(config.directory).toBe("dist/npm");
+		expect(config.tag).toBe("latest");
+		expect(config.linkDirectory).toBe(true);
+		expect(config.targets).toEqual(["npm"]);
 	});
 });
 
