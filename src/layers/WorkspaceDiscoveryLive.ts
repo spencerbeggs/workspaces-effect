@@ -65,12 +65,8 @@ const readWorkspacePatterns = (
 			}
 		}
 
-		return yield* Effect.fail(
-			new WorkspaceDiscoveryError({
-				root,
-				reason: "no workspace patterns found in pnpm-workspace.yaml or package.json",
-			}),
-		);
+		// No workspace config found — standalone package
+		return [];
 	});
 
 /**
@@ -173,7 +169,14 @@ const resolvePattern = (
 			const fullBase = path.join(root, baseDir);
 
 			const exists = yield* fs.exists(fullBase).pipe(Effect.orElseSucceed(() => false));
-			if (!exists) return [];
+			if (!exists) {
+				return yield* Effect.fail(
+					new WorkspaceDiscoveryError({
+						root,
+						reason: `workspace pattern "${pattern}" references non-existent directory "${baseDir}"`,
+					}),
+				);
+			}
 
 			const entries = yield* fs.readDirectory(fullBase).pipe(Effect.orElseSucceed(() => [] as string[]));
 
@@ -251,12 +254,22 @@ const readWorkspacePackage = (
 			);
 		}
 
+		const version = decoded.version;
+		if (!version) {
+			return yield* Effect.fail(
+				new WorkspaceDiscoveryError({
+					root,
+					reason: `package.json at ${pkgJsonPath} has no version field`,
+				}),
+			);
+		}
+
 		// Compute relative path from root
 		const relativePath = path.relative(root, pkgDir);
 
 		return new WorkspacePackage({
 			name,
-			version: decoded.version ?? "0.0.0",
+			version,
 			path: pkgDir,
 			relativePath,
 			private: decoded.private ?? false,
@@ -350,6 +363,10 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					},
 				);
 
+				// Filter out any workspace package that resolves to root (avoids
+				// duplication when patterns include ".")
+				const nonRootPackages = workspacePackages.filter((p) => p.relativePath !== "." && p.path !== resolvedRoot);
+
 				// Read root package.json and prepend as first entry
 				const rootPkgJsonPath = path.join(resolvedRoot, "package.json");
 				const rootContent = yield* fs.readFileString(rootPkgJsonPath).pipe(
@@ -379,9 +396,26 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					),
 				);
 
+				if (!rootDecoded.name) {
+					return yield* Effect.fail(
+						new WorkspaceDiscoveryError({
+							root: resolvedRoot,
+							reason: `root package.json at ${rootPkgJsonPath} has no name field`,
+						}),
+					);
+				}
+				if (!rootDecoded.version) {
+					return yield* Effect.fail(
+						new WorkspaceDiscoveryError({
+							root: resolvedRoot,
+							reason: `root package.json at ${rootPkgJsonPath} has no version field`,
+						}),
+					);
+				}
+
 				const rootPkg = new WorkspacePackage({
-					name: rootDecoded.name ?? path.basename(resolvedRoot),
-					version: rootDecoded.version ?? "0.0.0",
+					name: rootDecoded.name,
+					version: rootDecoded.version,
 					path: resolvedRoot,
 					relativePath: ".",
 					private: rootDecoded.private ?? false,
@@ -392,7 +426,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					publishConfig: rootDecoded.publishConfig,
 				});
 
-				const packages = [rootPkg, ...workspacePackages];
+				const packages = [rootPkg, ...nonRootPackages];
 
 				cachedPackages = packages;
 				yield* Effect.logInfo("Workspace packages discovered").pipe(

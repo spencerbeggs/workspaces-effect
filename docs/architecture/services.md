@@ -79,11 +79,13 @@ Inspect lockfiles and `package.json` at the workspace root.
 - `type`: `"npm" | "pnpm" | "yarn" | "bun"`
 - `version`: `string | undefined` -- extracted from the `packageManager` field
   in root `package.json`
+- `runtime`: `"node" | "bun"` -- the runtime environment (bun PM implies bun
+  runtime, all others are node)
 
 ```typescript
 const detector = yield* PackageManagerDetector;
 const pm = yield* detector.detect("/path/to/monorepo");
-console.log(pm.type, pm.version); // "pnpm", "9.15.4"
+console.log(pm.type, pm.version, pm.runtime); // "pnpm", "9.15.4", "node"
 ```
 
 ---
@@ -92,7 +94,9 @@ console.log(pm.type, pm.version); // "pnpm", "9.15.4"
 
 Lists all workspace packages by resolving glob patterns from workspace config.
 The root workspace package (with `relativePath: "."`) is included as the first
-entry.
+entry. If no workspace configuration is found (no `pnpm-workspace.yaml` and no
+`workspaces` field in `package.json`), discovery falls back to treating the root
+package as a standalone single-package workspace.
 
 **Layer:** `WorkspaceDiscoveryLive`
 **Service deps:** `WorkspaceRoot`, `PackageManagerDetector`

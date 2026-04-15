@@ -106,6 +106,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				{
 					[`${root}/package.json`]: JSON.stringify({
 						name: "my-monorepo",
+						version: "0.0.0",
 						workspaces: ["packages/*"],
 					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
@@ -137,6 +138,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				{
 					[`${root}/package.json`]: JSON.stringify({
 						name: "my-monorepo",
+						version: "0.0.0",
 						workspaces: { packages: ["apps/*"] },
 					}),
 					[`${root}/apps/web/package.json`]: JSON.stringify({
@@ -269,22 +271,22 @@ describe("WorkspaceDiscoveryLive", () => {
 			expect(result[1].devDependencies).toEqual({ vitest: "^3.0.0" });
 		});
 
-		it("fails when no workspace patterns found", async () => {
+		it("returns standalone package when no workspace patterns found", async () => {
 			const root = "/projects/monorepo";
 			const layer = testLayer(root, {
-				[`${root}/package.json`]: JSON.stringify({ name: "not-a-monorepo" }),
+				[`${root}/package.json`]: JSON.stringify({ name: "not-a-monorepo", version: "1.0.0" }),
 			});
 
 			const result = await Effect.runPromise(
 				Effect.gen(function* () {
 					const discovery = yield* WorkspaceDiscovery;
-					return yield* discovery.listPackages().pipe(Effect.flip);
+					return yield* discovery.listPackages();
 				}).pipe(Effect.provide(layer)),
 			);
 
-			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
-			expect(result._tag).toBe("WorkspaceDiscoveryError");
-			expect(result.message).toContain("Workspace discovery failed");
+			expect(result).toHaveLength(1);
+			expect(result[0].name).toBe("not-a-monorepo");
+			expect(result[0].isRootWorkspace).toBe(true);
 		});
 
 		it("includes root workspace package as first entry", async () => {
@@ -507,6 +509,389 @@ describe("WorkspaceDiscoveryLive", () => {
 				}).pipe(Effect.provide(layer)),
 			);
 
+			expect(result).toHaveLength(2);
+		});
+	});
+
+	describe("root-as-package dedup", () => {
+		it('does not duplicate root when patterns include "."', async () => {
+			const root = "/projects/root-pkg";
+			const layer = testLayer(root, {
+				[`${root}/pnpm-workspace.yaml`]: "packages:\n  - '.'",
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-root-pkg",
+					version: "1.0.0",
+				}),
+			});
+			const packages = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(packages).toHaveLength(1);
+			expect(packages[0].name).toBe("my-root-pkg");
+			expect(packages[0].isRootWorkspace).toBe(true);
+		});
+
+		it("does not duplicate root when patterns resolve to root directory", async () => {
+			const root = "/projects/mixed";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - '.'\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-mono",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
+						name: "@scope/pkg-a",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["pkg-a"],
+				},
+			);
+			const packages = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			// Root + pkg-a = 2 (root NOT duplicated)
+			expect(packages).toHaveLength(2);
+			const rootPkgs = packages.filter((p) => p.isRootWorkspace);
+			expect(rootPkgs).toHaveLength(1);
+		});
+	});
+
+	describe("standalone fallback", () => {
+		it("returns root as single workspace when no workspace config exists", async () => {
+			const root = "/projects/standalone";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-standalone-pkg",
+					version: "1.0.0",
+				}),
+			});
+			const packages = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(packages).toHaveLength(1);
+			expect(packages[0].name).toBe("my-standalone-pkg");
+			expect(packages[0].isRootWorkspace).toBe(true);
+		});
+
+		it("returns root as single workspace for private standalone package", async () => {
+			const root = "/projects/standalone-private";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-app",
+					version: "1.0.0",
+					private: true,
+				}),
+			});
+			const packages = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(packages).toHaveLength(1);
+			expect(packages[0].private).toBe(true);
+		});
+	});
+
+	describe("error paths", () => {
+		it("fails when workspace package.json has no name field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/bad/package.json`]: JSON.stringify({
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["bad"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no name field");
+		});
+
+		it("fails when workspace package.json has no version field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/no-version/package.json`]: JSON.stringify({
+						name: "@scope/no-version",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["no-version"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no version field");
+		});
+
+		it("fails when workspace package.json contains invalid JSON", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/bad-json/package.json`]: "{ invalid json !!!",
+				},
+				{
+					[`${root}/packages`]: ["bad-json"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("invalid JSON");
+		});
+
+		it("fails when root package.json has no name field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					version: "1.0.0",
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no name field");
+		});
+
+		it("fails when root package.json has no version field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-root",
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no version field");
+		});
+
+		it("fails when glob base directory does not exist", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'nonexistent/*'",
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-monorepo",
+					version: "0.0.0",
+					private: true,
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("non-existent directory");
+		});
+	});
+
+	describe("pnpm-workspace.yaml parsing edge cases", () => {
+		it("handles comments in packages list", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  # comment\n  - 'packages/*'\n  # another comment",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/pkg/package.json`]: JSON.stringify({
+						name: "pkg",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["pkg"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toHaveLength(2);
+		});
+
+		it("handles empty packages section", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/pnpm-workspace.yaml`]: "packages:\nsomeOtherKey: value",
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-standalone",
+					version: "1.0.0",
+				}),
+			});
+			// Empty packages section falls through to standalone fallback
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toHaveLength(1);
+			expect(result[0].name).toBe("my-standalone");
+		});
+
+		it("handles double-star pattern (packages/**)", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/**'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/pkg/package.json`]: JSON.stringify({
+						name: "pkg",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["pkg"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toHaveLength(2);
+			expect(result[1].name).toBe("pkg");
+		});
+
+		it("pnpm-workspace.yaml takes priority over package.json workspaces", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						workspaces: ["apps/*"],
+					}),
+					[`${root}/packages/lib/package.json`]: JSON.stringify({
+						name: "lib",
+						version: "1.0.0",
+					}),
+					[`${root}/apps/web/package.json`]: JSON.stringify({
+						name: "web",
+						version: "0.1.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["lib"],
+					[`${root}/apps`]: ["web"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
+			// Only "packages/*" from pnpm-workspace.yaml, NOT "apps/*" from package.json
+			const names = result.map((p) => p.name);
+			expect(names).toContain("lib");
+			expect(names).not.toContain("web");
+		});
+
+		it("stops parsing at next top-level YAML key", async () => {
+			const root = "/projects/monorepo";
+			const yaml = "packages:\n  - 'packages/*'\ncatalogs:\n  default:\n    effect: ^3.0.0";
+			const layer = testLayer(
+				root,
+				{
+					[`${root}/pnpm-workspace.yaml`]: yaml,
+					[`${root}/package.json`]: JSON.stringify({
+						name: "my-monorepo",
+						version: "0.0.0",
+						private: true,
+					}),
+					[`${root}/packages/pkg/package.json`]: JSON.stringify({
+						name: "pkg",
+						version: "1.0.0",
+					}),
+				},
+				{
+					[`${root}/packages`]: ["pkg"],
+				},
+			);
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages();
+				}).pipe(Effect.provide(layer)),
+			);
 			expect(result).toHaveLength(2);
 		});
 	});

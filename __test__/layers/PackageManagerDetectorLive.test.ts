@@ -236,6 +236,71 @@ describe("PackageManagerDetectorLive", () => {
 		});
 	});
 
+	describe("runtime detection", () => {
+		it("detects node runtime for pnpm", async () => {
+			const layer = testLayer({
+				"/root/pnpm-workspace.yaml": "packages:\n  - 'packages/*'",
+				"/root/package.json": JSON.stringify({ packageManager: "pnpm@10.33.0" }),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/root");
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result.runtime).toBe("node");
+		});
+
+		it("detects bun runtime for bun PM", async () => {
+			const layer = testLayer({
+				"/root/bun.lock": "{}",
+				"/root/package.json": JSON.stringify({
+					packageManager: "bun@1.2.0",
+					workspaces: ["packages/*"],
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/root");
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result.runtime).toBe("bun");
+		});
+
+		it("detects node runtime for npm", async () => {
+			const layer = testLayer({
+				"/root/package.json": JSON.stringify({
+					workspaces: ["packages/*"],
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/root");
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result.runtime).toBe("node");
+		});
+
+		it("detects node runtime for yarn", async () => {
+			const layer = testLayer({
+				"/root/yarn.lock": "",
+				"/root/package.json": JSON.stringify({
+					packageManager: "yarn@4.0.0",
+					workspaces: ["packages/*"],
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/root");
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result.runtime).toBe("node");
+		});
+	});
+
 	it("pnpm takes priority over all others", async () => {
 		const layer = testLayer({
 			"/root/pnpm-workspace.yaml": true,

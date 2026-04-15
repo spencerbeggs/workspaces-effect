@@ -11,6 +11,7 @@ program, and understanding how layers work.
 - [Understanding Layers](#understanding-layers)
 - [Using Composite Layers](#using-composite-layers)
 - [Using with Bun](#using-with-bun)
+- [Synchronous Utilities](#synchronous-utilities)
 - [Next Steps](#next-steps)
 
 ## Installation
@@ -35,10 +36,15 @@ You choose the Effect and platform versions. workspaces-effect requires
 - Node.js 22+ or Bun 1.0+
 - Effect 3.x
 
-Your monorepo must have workspace configuration:
+Workspace configuration is recommended but not required:
 
 - **pnpm:** `pnpm-workspace.yaml` at the root
 - **npm / yarn / bun:** `workspaces` field in root `package.json`
+- **Standalone:** If no workspace configuration is found, the root
+  `package.json` is treated as a single-package workspace
+
+Each workspace `package.json` must have both a `name` and `version` field.
+Packages missing a `version` field will cause a `WorkspaceDiscoveryError`.
 
 ## Your First Program
 
@@ -165,6 +171,93 @@ Effect.runPromise(
   ),
 );
 ```
+
+## Synchronous Utilities
+
+Not every consumer can use Effect pipelines. Configuration files, lint-staged
+handlers, and other synchronous tool hooks need plain functions that return
+immediately. workspaces-effect exports two synchronous helpers for these
+contexts:
+
+```typescript
+import {
+  findWorkspaceRootSync,
+  getWorkspacePackagesSync,
+} from "workspaces-effect";
+```
+
+### findWorkspaceRootSync
+
+Walks up from a starting directory looking for workspace markers
+(`pnpm-workspace.yaml` or a `package.json` with a `workspaces` field). Returns
+the absolute path to the workspace root, or `null` if none is found.
+
+```typescript
+const root = findWorkspaceRootSync(); // starts from process.cwd()
+const root2 = findWorkspaceRootSync("/some/nested/dir");
+
+if (root) {
+  console.log("Workspace root:", root);
+}
+```
+
+### getWorkspacePackagesSync
+
+Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves
+them to directories, and returns an array of `{ name, path }` objects. Returns
+`null` if the root directory does not exist.
+
+Unlike the Effect-based `listPackages()`, this function does **not** include the
+root package -- it returns only packages matched by workspace patterns.
+
+```typescript
+const root = findWorkspaceRootSync();
+if (root) {
+  const packages = getWorkspacePackagesSync(root);
+  if (packages) {
+    for (const pkg of packages) {
+      console.log(`${pkg.name} at ${pkg.path}`);
+    }
+  }
+}
+```
+
+### Example: lint-staged handler
+
+A typical use case is filtering staged files by package in a lint-staged
+configuration:
+
+```javascript
+// lint-staged.config.js
+import {
+  findWorkspaceRootSync,
+  getWorkspacePackagesSync,
+} from "workspaces-effect";
+
+const root = findWorkspaceRootSync();
+const packages = root ? getWorkspacePackagesSync(root) : null;
+
+export default {
+  "*.ts": (files) => {
+    // Use packages list to scope commands per workspace package
+    return `eslint ${files.join(" ")}`;
+  },
+};
+```
+
+### Differences from the Effect API
+
+| | Effect API | Sync API |
+| --- | --- | --- |
+| **Import** | Services + layers | Standalone functions |
+| **Error handling** | Typed `TaggedError` values | Returns `null` on failure |
+| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` excludes root |
+| **Caching** | Per-layer request caching | No caching (re-reads on each call) |
+| **Platform** | `@effect/platform` (Node, Bun) | `node:fs` and `node:path` directly |
+| **Observability** | Spans + structured logging | None |
+
+The sync API is intentionally minimal. For richer functionality (dependency
+graphs, change detection, lockfile parsing), use the full Effect services.
 
 ## Next Steps
 

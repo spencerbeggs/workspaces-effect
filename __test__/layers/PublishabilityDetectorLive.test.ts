@@ -5,7 +5,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { PublishabilityDetectorLive } from "../../src/layers/PublishabilityDetectorLive.js";
-import { WorkspacePackage } from "../../src/schemas/core.js";
+import { PublishConfig, WorkspacePackage } from "../../src/schemas/core.js";
 import { PublishTarget } from "../../src/schemas/publish.js";
 import { PublishabilityDetector } from "../../src/services/PublishabilityDetector.js";
 
@@ -29,7 +29,7 @@ const pkg = (
 		private: opts.private ?? false,
 		dependencies: {},
 		devDependencies: {},
-		publishConfig: opts.publishConfig,
+		publishConfig: opts.publishConfig ? new PublishConfig(opts.publishConfig) : undefined,
 	});
 
 const ROOT = "/workspace";

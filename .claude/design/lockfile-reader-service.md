@@ -2,11 +2,11 @@
 title: "LockfileReader Service Interface Design"
 module: core
 category: architecture
-status: complete
+status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-29
-last-synced: 2026-03-29
+updated: 2026-04-15
+last-synced: 2026-04-15
 authors:
   - C. Spencer Beggs
 tags:
@@ -1065,11 +1065,12 @@ describe("LockfileReaderLive (pnpm)", () => {
    proves unnecessary in practice, merge into `LockfileParseError` with a
    `reason` field.
 
-4. **Extended package.json fields for PublishabilityDetector**: The current
-   `WorkspacePackage` schema does not include `publishConfig`, `files`, or
-   other fields relevant to publishability. The schema may need extension,
-   or `PublishabilityDetector` may need to read raw `package.json` files
-   directly via FileSystem.
+4. **Extended package.json fields for PublishabilityDetector**: RESOLVED
+   (2026-04-15). `WorkspacePackage` now includes `publishConfig` field
+   (using the `PublishConfig` Schema.Class with `access`, `registry`,
+   `directory`, `tag`, `linkDirectory`). `PublishTarget` Schema.Class added
+   for resolved publish target metadata. `DetectedPackageManager` now
+   includes `runtime: "node" | "bun"` field.
 
 5. **Effect.Service migration timing**: RESOLVED (2026-03-14). Not migrating.
    `Context.Tag` + `Layer.effect` is the established pattern. `Effect.Service`

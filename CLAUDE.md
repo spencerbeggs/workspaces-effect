@@ -5,8 +5,8 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-All phases complete plus WorkspacePackage enrichment (Issue #12). 316 tests
-passing (200 unit + 116 integration). Full observability (spans + structured
+All phases complete plus WorkspacePackage enrichment (Issue #12). 386 tests
+passing (250 unit + 136 integration). Full observability (spans + structured
 logging) across all services. Request/RequestResolver with per-layer caching
 for DependencyGraph and LockfileReader lookups. Integrity check works for all
 4 package managers. Composite layers: WorkspacesLive (no git),
@@ -18,6 +18,16 @@ ResolvedPackage has optional relativePath field for workspace-aware resolution.
 WorkspaceDiscovery.importerMap() added. listPackages() now includes root
 workspace (breaking change). PnpmExtension.catalogs accepts union type for
 pnpm v9+ format (catalogs defined in pnpm-workspace.yaml in v10).
+PublishConfig is a Schema.Class with `tag` and `linkDirectory` fields
+(PublishConfigSchema alias removed). DetectedPackageManager has `runtime`
+field ("node" | "bun"). WorkspaceDiscoveryLive has standalone fallback
+(returns root as single workspace when no config) and deduplicates root when
+patterns include ".". resolvePattern errors on non-existent base directory.
+readWorkspacePackage requires version field (no silent "0.0.0" default for
+child packages). PublishTarget schema and shared parser utilities fully tested.
+Sync API (`src/sync.ts`): `findWorkspaceRootSync` and
+`getWorkspacePackagesSync` exported for non-Effect contexts (e.g., lint-staged
+handlers); uses `node:fs`/`node:path` directly.
 
 ## Design Documents
 
@@ -45,11 +55,13 @@ Load these when working on the corresponding area:
 - Eager data construction in `Layer.effect`
 - Request/RequestResolver with per-layer `Request.makeCache` for deduplication
 - `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
+- PublishConfig is a `Schema.Class` (not Schema.Struct); no PublishConfigSchema alias
 - Tests in `__test__/` using @savvy-web/vitest discovery convention
 - Test fixtures in `__test__/integration/fixtures/` (real generated lockfiles for all 4 PMs)
 - Shared test utilities in `__test__/utils/` (fixtures.ts, layers.ts, mock-fs.ts)
 - Static dual-API wiring in `src/index.ts` (semver-effect pattern)
 - Standalone utility functions in `src/utils/` directory
+- Sync API in `src/sync.ts` uses `node:fs`/`node:path` directly (exception to `@effect/platform` rule); keep sync functions minimal and free of Effect dependencies
 
 ## Commands
 

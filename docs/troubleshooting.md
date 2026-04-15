@@ -85,14 +85,19 @@ Effect.catchTag("PackageManagerDetectionError", (e) =>
 **Causes:**
 
 - Workspace glob patterns resolve to invalid or inaccessible directories
+- A workspace pattern references a non-existent base directory (e.g.,
+  `"packages/*"` when `packages/` does not exist)
 - Filesystem permissions prevent reading matched directories
 - Malformed patterns in `pnpm-workspace.yaml` or `package.json` `workspaces`
+- A workspace `package.json` is missing the required `name` or `version` field
 
 **Solutions:**
 
 1. Verify workspace patterns are correct (e.g., `["packages/*"]`)
-2. Check that matched directories exist and contain a `package.json`
-3. Ensure filesystem permissions allow reading
+2. Check that base directories in patterns exist on disk
+3. Check that matched directories exist and contain a `package.json`
+4. Ensure every workspace `package.json` has both `name` and `version` fields
+5. Ensure filesystem permissions allow reading
 
 ```typescript
 Effect.catchTag("WorkspaceDiscoveryError", (e) =>

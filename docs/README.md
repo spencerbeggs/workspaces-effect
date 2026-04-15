@@ -6,7 +6,7 @@ monorepo workspace tooling.
 ## Getting Started
 
 - [Getting Started](./guides/getting-started.md) -- Installation, first
-  program, layers, and platform setup
+  program, layers, platform setup, and synchronous utilities
 
 ## Architecture
 
@@ -18,7 +18,7 @@ monorepo workspace tooling.
 ## Guides
 
 - [WorkspacePackage API](./guides/workspace-package.md) -- Computed getters,
-  dependency queries, dual-API pattern, diffs, and readPackageJson
+  dependency queries, dual-API pattern, diffs, PublishConfig, and readPackageJson
 - [Dependency Analysis](./guides/dependency-analysis.md) -- Dependency graphs,
   topological sorting, parallel build levels, and cycle detection
 - [Change Detection](./guides/change-detection.md) -- Git-based change

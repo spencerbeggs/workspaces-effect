@@ -22,6 +22,7 @@ describe("Discovery layers integration", () => {
 			"/projects/monorepo/pnpm-workspace.yaml": "packages:\n  - packages/*",
 			"/projects/monorepo/package.json": JSON.stringify({
 				name: "my-monorepo",
+				version: "0.0.0",
 				packageManager: "pnpm@10.32.1",
 			}),
 		};
@@ -161,6 +162,7 @@ describe("Workspace layers composition", () => {
 			"/projects/monorepo/pnpm-workspace.yaml": "packages:\n  - 'packages/*'",
 			"/projects/monorepo/package.json": JSON.stringify({
 				name: "my-monorepo",
+				version: "0.0.0",
 				packageManager: "pnpm@10.32.1",
 			}),
 		};
@@ -199,6 +201,7 @@ describe("Workspace layers composition", () => {
 			"/projects/monorepo/pnpm-workspace.yaml": "packages:\n  - 'packages/*'",
 			"/projects/monorepo/package.json": JSON.stringify({
 				name: "my-monorepo",
+				version: "0.0.0",
 				packageManager: "pnpm@10.32.1",
 			}),
 			"/projects/monorepo/packages/pkg-a/package.json": JSON.stringify({

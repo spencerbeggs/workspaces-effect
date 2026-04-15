@@ -26,6 +26,13 @@ export interface DetectedPackageManager {
 	readonly type: PackageManagerType;
 	/** The version string, or `undefined` if not specified in `packageManager`. */
 	readonly version: string | undefined;
+	/**
+	 * The inferred runtime environment based on the detected package manager.
+	 * `"bun"` when the PM is Bun; `"node"` for npm, pnpm, and yarn.
+	 * Note: this reflects the package manager type, not the actual Node.js/Bun
+	 * process — a Bun project using npm will still report `"node"`.
+	 */
+	readonly runtime: "node" | "bun";
 }
 
 /**

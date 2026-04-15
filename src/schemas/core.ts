@@ -139,9 +139,9 @@ const WorkspaceField = Schema.Union(
  * @example Decoding publishConfig
  * ```typescript
  * import { Schema } from "effect";
- * import { PublishConfigSchema } from "workspaces-effect";
+ * import { PublishConfig } from "workspaces-effect";
  *
- * const config = Schema.decodeUnknownSync(PublishConfigSchema)({
+ * const config = new PublishConfig({
  *   access: "public",
  *   registry: "https://registry.npmjs.org",
  * });
@@ -149,18 +149,15 @@ const WorkspaceField = Schema.Union(
  *
  * @public
  */
-export const PublishConfigSchema = Schema.Struct({
+export class PublishConfig extends Schema.Class<PublishConfig>("PublishConfig")({
 	access: Schema.optional(Schema.Literal("public", "restricted")),
 	registry: Schema.optional(Schema.String),
 	directory: Schema.optional(Schema.String),
-});
+	tag: Schema.optional(Schema.String),
+	linkDirectory: Schema.optional(Schema.Boolean),
+}) {}
 
-/**
- * TypeScript type for the {@link PublishConfigSchema} schema.
- *
- * @public
- */
-export type PublishConfigType = Schema.Schema.Type<typeof PublishConfigSchema>;
+export type PublishConfigType = PublishConfig;
 
 /**
  * Minimal package.json schema for workspace discovery.
@@ -206,7 +203,7 @@ export const PackageJsonSchema = Schema.Struct({
 	peerDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	optionalDependencies: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 	packageManager: Schema.optional(Schema.String),
-	publishConfig: Schema.optional(PublishConfigSchema),
+	publishConfig: Schema.optional(PublishConfig),
 });
 
 /**
@@ -280,7 +277,7 @@ export class WorkspacePackage extends Schema.Class<WorkspacePackage>("WorkspaceP
 	optionalDependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
 		default: () => ({}),
 	}),
-	publishConfig: Schema.optional(PublishConfigSchema),
+	publishConfig: Schema.optional(PublishConfig),
 }) {
 	get isRootWorkspace(): boolean {
 		return this.relativePath === ".";

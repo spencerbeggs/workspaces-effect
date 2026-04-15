@@ -2,11 +2,11 @@
 title: "Bun Lockfile Format Reference"
 module: core
 category: reference
-status: complete
+status: current
 completeness: 90
 created: 2026-03-12
 updated: 2026-03-14
-last-synced: 2026-03-14
+last-synced: 2026-04-15
 related:
   - architecture.md
   - phase4-configuration-lockfiles.md

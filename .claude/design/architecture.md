@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-29
-last-synced: 2026-03-29
+updated: 2026-04-15
+last-synced: 2026-04-15
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -42,8 +42,9 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 206 tests passing, all typechecking. Full observability
-(spans + structured logging) across all services.
+All phases complete. 386 tests passing (250 unit + 136 integration), all
+typechecking. Full observability (spans + structured logging) across all
+services.
 
 - **Phase 1 (Discovery)**: WorkspaceRootLive, PackageManagerDetectorLive,
   WorkspaceDiscoveryLive
@@ -73,6 +74,20 @@ All phases complete. 206 tests passing, all typechecking. Full observability
   `relativePath` field for workspace packages (used by integrity checker
   to locate package.json). `PnpmExtension.catalogs` accepts union type
   `string | { specifier, version }` for pnpm v9/v10 compatibility.
+- **Schema updates (2026-04-15)**: `PublishConfig` converted to
+  `Schema.Class` with expanded fields (`tag`, `linkDirectory`).
+  `DetectedPackageManager` interface gained `runtime: "node" | "bun"` field.
+  `PublishTarget` schema added for resolved publish target metadata.
+  `WorkspaceDiscoveryLive` improvements: standalone fallback (empty patterns
+  produce root-only workspace), `resolvePattern` errors on missing base
+  directory, `readWorkspacePackage` requires both `name` and `version` fields.
+- **Sync API (2026-04-15)**: `findWorkspaceRootSync` and
+  `getWorkspacePackagesSync` added in `src/sync.ts` and exported from
+  `src/index.ts`. Synchronous, non-Effect utilities for consumers that
+  cannot use Effect pipelines (lint-staged, Vitest config). Uses direct
+  `node:fs`/`node:path` imports (intentional exception to platform
+  abstraction rule). Root package excluded from sync results (unlike
+  Effect `listPackages()`).
 
 ## Design Goals
 
@@ -140,6 +155,10 @@ with per-layer caching. See `phase4-configuration-lockfiles.md`.
 
 PublishabilityDetector checks `private` field and `publishConfig.access`.
 Users can provide custom layers to override detection strategy.
+`PublishConfig` is a `Schema.Class` with fields: `access`, `registry`,
+`directory`, `tag`, `linkDirectory`. `PublishTarget` is a separate
+`Schema.Class` representing resolved publish target metadata with fields:
+`name`, `registry`, `directory`, `access`, `provenance`.
 
 ### Service Interface Pattern
 
@@ -316,17 +335,70 @@ The library depends on these `@effect/platform` services:
 | `Path` | Cross-platform path joining, resolution |
 | `Command` | Git operations for change detection |
 
-No direct `node:fs`, `node:path`, or `node:child_process` imports.
+No direct `node:fs`, `node:path`, or `node:child_process` imports in the
+Effect service layer. The sole exception is `src/sync.ts` which provides
+synchronous non-Effect utilities and intentionally uses `node:fs` and
+`node:path` (see "Sync API" section below).
+
+## Sync API
+
+`src/sync.ts` provides two synchronous, non-Effect utility functions for
+consumers that cannot use Effect pipelines (e.g., lint-staged handlers,
+Vitest config files, or simple scripts). Exported from the package barrel
+as `findWorkspaceRootSync` and `getWorkspacePackagesSync`.
+
+| Function | Signature | Description |
+| --- | --- | --- |
+| `findWorkspaceRootSync` | `(cwd?: string) => string \| null` | Walk up from `cwd` looking for `pnpm-workspace.yaml` or `package.json` with `workspaces` field |
+| `getWorkspacePackagesSync` | `(root: string) => ReadonlyArray<{ name: string; path: string }> \| null` | Resolve workspace patterns and return `{ name, path }` for each child package |
+
+### Design Rationale
+
+- **Non-Effect escape hatch**: Effect pipelines require async context and
+  layer provision. Some integration points (e.g., lint-staged `--filter`,
+  Vitest dynamic project lists) need a synchronous answer with zero setup.
+- **Direct `node:` imports**: Uses `node:fs` (`existsSync`, `readFileSync`,
+  `readdirSync`) and `node:path` (`dirname`, `join`, `resolve`) directly.
+  This is intentional -- the sync API operates outside the Effect runtime and
+  cannot use `@effect/platform` FileSystem/Path services.
+- **Root package excluded**: Unlike the Effect-based `listPackages()`,
+  `getWorkspacePackagesSync` returns only packages matched by workspace
+  patterns (no root package). This avoids confusion in lint-staged contexts
+  where root package changes are not meaningful.
+- **Silent error handling**: Parse/read errors are swallowed (returns `null`
+  or empty array) rather than thrown. A typo in workspace patterns produces
+  an empty result rather than an error, which prevents breaking downstream
+  pipelines.
+- **pnpm-workspace.yaml parsing**: Implements its own minimal YAML parser
+  for the `packages:` field rather than pulling in a YAML dependency,
+  keeping the sync codepath dependency-free.
+
+### Differences from Effect API
+
+| Aspect | Effect API (`WorkspaceDiscovery`) | Sync API |
+| --- | --- | --- |
+| Runtime | Effect pipeline with layers | Plain synchronous Node.js |
+| Root package | Included (first entry) | Excluded |
+| Error handling | Typed `WorkspaceDiscoveryError` | Returns `null` or `[]` |
+| Version field | Requires `name` and `version` | Requires `name` only |
+| Platform | `@effect/platform` (Node or Bun) | `node:fs`/`node:path` only |
+| Caching | Per-layer memoization | None |
 
 ## Package Manager Support
 
 Detection order (first match wins):
 
-1. **pnpm** -- `pnpm-workspace.yaml` exists
+1. **pnpm** -- `pnpm-workspace.yaml` exists (runtime: `"node"`)
 2. **bun** -- `bun.lock` or `bun.lockb` exists AND `packageManager` starts
-   with `bun@`
+   with `bun@` (runtime: `"bun"`)
 3. **yarn** -- `yarn.lock` exists AND `packageManager` starts with `yarn@`
+   (runtime: `"node"`)
 4. **npm** -- fallback if `package.json` has `workspaces` field
+   (runtime: `"node"`)
+
+`DetectedPackageManager.runtime` is `"bun"` for bun workspaces and `"node"`
+for all other package managers. This enables downstream consumers to select
+the correct platform context (NodeContext vs BunContext).
 
 | PM | Config Source | Patterns |
 | --- | --- | --- |
@@ -358,3 +430,8 @@ details. Key decisions:
 - **Root package in listPackages()** (Issue #12 breaking change) -- root
   workspace always included as first entry; `isRootWorkspace` getter for
   filtering
+- **Sync API as escape hatch** -- `src/sync.ts` uses `node:` imports
+  directly; this is an intentional exception to the platform abstraction
+  rule because synchronous callers (lint-staged, Vitest config) cannot
+  boot an Effect runtime. The sync API does not participate in caching,
+  observability, or typed errors.
