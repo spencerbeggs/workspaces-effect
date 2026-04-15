@@ -106,6 +106,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				{
 					[`${root}/package.json`]: JSON.stringify({
 						name: "my-monorepo",
+						version: "0.0.0",
 						workspaces: ["packages/*"],
 					}),
 					[`${root}/packages/pkg-a/package.json`]: JSON.stringify({
@@ -137,6 +138,7 @@ describe("WorkspaceDiscoveryLive", () => {
 				{
 					[`${root}/package.json`]: JSON.stringify({
 						name: "my-monorepo",
+						version: "0.0.0",
 						workspaces: { packages: ["apps/*"] },
 					}),
 					[`${root}/apps/web/package.json`]: JSON.stringify({
@@ -272,7 +274,7 @@ describe("WorkspaceDiscoveryLive", () => {
 		it("returns standalone package when no workspace patterns found", async () => {
 			const root = "/projects/monorepo";
 			const layer = testLayer(root, {
-				[`${root}/package.json`]: JSON.stringify({ name: "not-a-monorepo" }),
+				[`${root}/package.json`]: JSON.stringify({ name: "not-a-monorepo", version: "1.0.0" }),
 			});
 
 			const result = await Effect.runPromise(
@@ -689,6 +691,40 @@ describe("WorkspaceDiscoveryLive", () => {
 			);
 			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
 			expect(result.message).toContain("invalid JSON");
+		});
+
+		it("fails when root package.json has no name field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					version: "1.0.0",
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no name field");
+		});
+
+		it("fails when root package.json has no version field", async () => {
+			const root = "/projects/monorepo";
+			const layer = testLayer(root, {
+				[`${root}/package.json`]: JSON.stringify({
+					name: "my-root",
+				}),
+			});
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					return yield* discovery.listPackages().pipe(Effect.flip);
+				}).pipe(Effect.provide(layer)),
+			);
+			expect(result).toBeInstanceOf(WorkspaceDiscoveryError);
+			expect(result.message).toContain("no version field");
 		});
 
 		it("fails when glob base directory does not exist", async () => {

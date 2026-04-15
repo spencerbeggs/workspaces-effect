@@ -396,9 +396,26 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					),
 				);
 
+				if (!rootDecoded.name) {
+					return yield* Effect.fail(
+						new WorkspaceDiscoveryError({
+							root: resolvedRoot,
+							reason: `root package.json at ${rootPkgJsonPath} has no name field`,
+						}),
+					);
+				}
+				if (!rootDecoded.version) {
+					return yield* Effect.fail(
+						new WorkspaceDiscoveryError({
+							root: resolvedRoot,
+							reason: `root package.json at ${rootPkgJsonPath} has no version field`,
+						}),
+					);
+				}
+
 				const rootPkg = new WorkspacePackage({
-					name: rootDecoded.name ?? path.basename(resolvedRoot),
-					version: rootDecoded.version ?? "0.0.0",
+					name: rootDecoded.name,
+					version: rootDecoded.version,
 					path: resolvedRoot,
 					relativePath: ".",
 					private: rootDecoded.private ?? false,
