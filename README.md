@@ -14,6 +14,7 @@ An [Effect](https://effect.website) library for monorepo workspace tooling. Disc
 - Git-based change detection to find affected packages from file changes
 - Lockfile parsing for pnpm, npm, yarn, and bun with integrity verification
 - Platform independent -- runs on Node.js or Bun via `@effect/platform` abstractions
+- Synchronous helpers (`findWorkspaceRootSync`, `getWorkspacePackagesSync`) for non-Effect contexts like lint-staged
 
 ## Installation
 

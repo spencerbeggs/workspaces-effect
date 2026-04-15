@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /**
  * Find the workspace root by walking up from `cwd`.
@@ -139,6 +139,9 @@ const resolvePattern = (root: string, pattern: string): string[] => {
 	if (pattern.endsWith("/*") || pattern.endsWith("/**")) {
 		const baseDir = pattern.replace(/\/\*+$/, "");
 		const fullBase = join(root, baseDir);
+		// Silently return empty for missing dirs — the sync API is designed for
+		// lint-staged handlers where throwing would break the pipeline. A typo
+		// in patterns produces an empty result rather than an error.
 		if (!existsSync(fullBase)) return [];
 
 		try {
@@ -170,7 +173,9 @@ const resolvePattern = (root: string, pattern: string): string[] => {
  * Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`,
  * resolves them to directories, and reads each `package.json` name.
  * Returns an array of `{ name, path }` objects, or `null` if the root
- * directory doesn't exist.
+ * directory doesn't exist. Unlike the Effect-based `listPackages()`, this
+ * function does not include the root package — it returns only packages
+ * matched by workspace patterns.
  *
  * @param root - Absolute path to the workspace root
  * @returns Array of workspace packages (excluding root), or `null`

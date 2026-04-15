@@ -2,7 +2,7 @@
 title: "Phase 4: Configuration & Lockfiles Design"
 module: core
 category: architecture
-status: complete
+status: current
 completeness: 95
 created: 2026-03-12
 updated: 2026-04-15

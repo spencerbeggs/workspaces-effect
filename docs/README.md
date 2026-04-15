@@ -6,7 +6,7 @@ monorepo workspace tooling.
 ## Getting Started
 
 - [Getting Started](./guides/getting-started.md) -- Installation, first
-  program, layers, and platform setup
+  program, layers, platform setup, and synchronous utilities
 
 ## Architecture
 

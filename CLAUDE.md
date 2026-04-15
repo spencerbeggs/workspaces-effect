@@ -25,6 +25,9 @@ field ("node" | "bun"). WorkspaceDiscoveryLive has standalone fallback
 patterns include ".". resolvePattern errors on non-existent base directory.
 readWorkspacePackage requires version field (no silent "0.0.0" default for
 child packages). PublishTarget schema and shared parser utilities fully tested.
+Sync API (`src/sync.ts`): `findWorkspaceRootSync` and
+`getWorkspacePackagesSync` exported for non-Effect contexts (e.g., lint-staged
+handlers); uses `node:fs`/`node:path` directly.
 
 ## Design Documents
 
@@ -58,6 +61,7 @@ Load these when working on the corresponding area:
 - Shared test utilities in `__test__/utils/` (fixtures.ts, layers.ts, mock-fs.ts)
 - Static dual-API wiring in `src/index.ts` (semver-effect pattern)
 - Standalone utility functions in `src/utils/` directory
+- Sync API in `src/sync.ts` uses `node:fs`/`node:path` directly (exception to `@effect/platform` rule); keep sync functions minimal and free of Effect dependencies
 
 ## Commands
 

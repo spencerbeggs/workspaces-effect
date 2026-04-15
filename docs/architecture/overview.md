@@ -11,6 +11,7 @@ transitive services manually.
 - [Service Groups](#service-groups)
 - [Layer Composition](#layer-composition)
 - [Platform Independence](#platform-independence)
+- [Synchronous Utilities](#synchronous-utilities)
 - [Error Model](#error-model)
 
 ## Service Groups
@@ -156,6 +157,23 @@ program.pipe(Effect.provide(BunContext.layer));
 `NodeContext.layer` and `BunContext.layer` both provide `FileSystem`, `Path`,
 and `CommandExecutor`, so either works with both `WorkspacesLive` and
 `WorkspacesFullLive`.
+
+## Synchronous Utilities
+
+For non-Effect contexts that cannot use services and layers (e.g., lint-staged
+handlers, configuration files, build tool hooks), two synchronous functions are
+exported directly:
+
+- `findWorkspaceRootSync(cwd?)` -- finds the workspace root by walking up from
+  `cwd` (defaults to `process.cwd()`). Returns `string | null`.
+- `getWorkspacePackagesSync(root)` -- lists workspace packages as
+  `ReadonlyArray<{ name: string; path: string }> | null`.
+
+These use `node:fs` and `node:path` directly instead of `@effect/platform`
+abstractions, so they are Node.js-only. They provide no caching, observability,
+or typed errors -- return `null` on failure. See the
+[Getting Started](../guides/getting-started.md#synchronous-utilities) guide for
+usage examples.
 
 ## Error Model
 
