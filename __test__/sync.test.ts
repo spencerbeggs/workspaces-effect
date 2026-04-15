@@ -31,80 +31,91 @@ describe("findWorkspaceRootSync", () => {
 	});
 
 	it("walks past standalone package to find enclosing workspace root", () => {
-		// The standalone fixture has no workspace config, but it's nested
-		// inside the test repo which does — so it finds the repo root
 		const root = findWorkspaceRootSync(resolve(FIXTURES, "standalone"));
 		expect(root).not.toBeNull();
 		expect(root).not.toBe(resolve(FIXTURES, "standalone"));
 	});
 
 	it("defaults to process.cwd() when no argument provided", () => {
-		// The real cwd is a workspace root (this repo), so it should find it
 		const root = findWorkspaceRootSync();
 		expect(root).not.toBeNull();
 		expect(typeof root).toBe("string");
 	});
 
-	it("returns null for nonexistent directory", () => {
-		const root = findWorkspaceRootSync("/nonexistent/path/that/does/not/exist");
+	it("returns null when no workspace root exists above path", () => {
+		// Walk up from /tmp which has no workspace config above it
+		const root = findWorkspaceRootSync("/tmp");
 		expect(root).toBeNull();
+	});
+
+	it("throws for nonexistent directory", () => {
+		expect(() => findWorkspaceRootSync("/nonexistent/path/that/does/not/exist")).toThrow();
 	});
 });
 
 describe("getWorkspacePackagesSync", () => {
-	it("returns packages from pnpm workspace", () => {
+	it("includes root as first entry", () => {
 		const root = resolve(FIXTURES, "pnpm/basic");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		expect(packages[0].name).toBe("pnpm-basic-monorepo");
+		expect(packages[0].path).toBe(root);
+	});
+
+	it("returns root + workspace packages from pnpm workspace", () => {
+		const root = resolve(FIXTURES, "pnpm/basic");
+		const packages = getWorkspacePackagesSync(root);
+		const names = packages.map((p) => p.name);
+		expect(names).toContain("pnpm-basic-monorepo");
 		expect(names).toContain("@scope/lib-public");
 		expect(names).toContain("@scope/lib-private");
 		expect(names).toContain("@scope/lib-linked");
 	});
 
-	it("returns packages from npm workspace", () => {
+	it("returns root + workspace packages from npm workspace", () => {
 		const root = resolve(FIXTURES, "npm/basic");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
+		expect(names).toContain("npm-basic-monorepo");
 		expect(names).toContain("@scope/npm-lib-a");
 	});
 
-	it("returns packages from yarn workspace", () => {
+	it("returns root + workspace packages from yarn workspace", () => {
 		const root = resolve(FIXTURES, "yarn/basic");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
+		expect(names).toContain("yarn-basic-monorepo");
 		expect(names).toContain("@scope/yarn-lib-a");
 	});
 
-	it("returns packages from bun workspace", () => {
+	it("returns root + workspace packages from bun workspace", () => {
 		const root = resolve(FIXTURES, "bun/basic");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
+		expect(names).toContain("bun-basic-monorepo");
 		expect(names).toContain("@scope/bun-lib-a");
 	});
 
 	it("includes path for each package", () => {
 		const root = resolve(FIXTURES, "pnpm/basic");
 		const packages = getWorkspacePackagesSync(root);
-		const pub = packages?.find((p) => p.name === "@scope/lib-public");
+		const pub = packages.find((p) => p.name === "@scope/lib-public");
 		expect(pub).toBeDefined();
 		expect(pub?.path).toBe(resolve(root, "packages/lib-public"));
 	});
 
-	it("returns empty array for standalone package (no workspace config)", () => {
-		const packages = getWorkspacePackagesSync(resolve(FIXTURES, "standalone"));
-		expect(packages).not.toBeNull();
-		expect(packages).toEqual([]);
+	it("returns root as single entry for standalone package", () => {
+		const root = resolve(FIXTURES, "standalone");
+		const packages = getWorkspacePackagesSync(root);
+		expect(packages).toHaveLength(1);
+		expect(packages[0].name).toBe("standalone-pkg");
+		expect(packages[0].path).toBe(root);
 	});
 
 	it("handles multiple workspace roots", () => {
 		const root = resolve(FIXTURES, "pnpm/multi-root");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
+		expect(names).toContain("multi-root-monorepo");
 		expect(names).toContain("@scope/mr-lib-a");
 		expect(names).toContain("@scope/mr-web");
 	});
@@ -112,8 +123,7 @@ describe("getWorkspacePackagesSync", () => {
 	it("handles negation patterns", () => {
 		const root = resolve(FIXTURES, "pnpm/negation");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
 		expect(names).toContain("@scope/neg-included");
 		expect(names).not.toContain("@scope/neg-excluded");
 	});
@@ -121,15 +131,20 @@ describe("getWorkspacePackagesSync", () => {
 	it("handles explicit paths", () => {
 		const root = resolve(FIXTURES, "pnpm/explicit-paths");
 		const packages = getWorkspacePackagesSync(root);
-		expect(packages).not.toBeNull();
-		const names = packages?.map((p) => p.name);
+		const names = packages.map((p) => p.name);
 		expect(names).toContain("@scope/ep-foo");
 		expect(names).toContain("@scope/ep-bar");
 		expect(names).not.toContain("@scope/ep-baz");
 	});
 
-	it("returns null for nonexistent directory", () => {
-		const packages = getWorkspacePackagesSync("/nonexistent/path");
-		expect(packages).toBeNull();
+	it('deduplicates root when patterns include "."', () => {
+		const root = resolve(FIXTURES, "pnpm/root-as-package");
+		const packages = getWorkspacePackagesSync(root);
+		expect(packages).toHaveLength(1);
+		expect(packages[0].name).toBe("root-only-pkg");
+	});
+
+	it("throws for nonexistent directory", () => {
+		expect(() => getWorkspacePackagesSync("/nonexistent/path")).toThrow();
 	});
 });

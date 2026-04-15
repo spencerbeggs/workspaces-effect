@@ -19,16 +19,18 @@ import { dirname, join, resolve } from "node:path";
  *
  * @param cwd - Starting directory (defaults to `process.cwd()`)
  * @returns Absolute path to workspace root, or `null`
+ * @throws If the provided path does not exist
  *
  * @public
  */
 export const findWorkspaceRootSync = (cwd?: string): string | null => {
-	let current: string;
-	try {
-		current = resolve(cwd ?? process.cwd());
-	} catch {
-		return null;
+	const startDir = resolve(cwd ?? process.cwd());
+
+	if (cwd !== undefined && !existsSync(startDir)) {
+		throw new Error(`Directory does not exist: ${startDir}`);
 	}
+
+	let current = startDir;
 
 	for (;;) {
 		if (existsSync(join(current, "pnpm-workspace.yaml"))) {
@@ -53,6 +55,22 @@ export const findWorkspaceRootSync = (cwd?: string): string | null => {
 			return null;
 		}
 		current = parent;
+	}
+};
+
+/**
+ * Read the root package.json name field.
+ *
+ * @internal
+ */
+const readRootPackageName = (root: string): string | undefined => {
+	try {
+		const content = readFileSync(join(root, "package.json"), "utf-8");
+		const parsed = JSON.parse(content) as Record<string, unknown>;
+		const name = parsed.name;
+		return typeof name === "string" && name.length > 0 ? name : undefined;
+	} catch {
+		return undefined;
 	}
 };
 
@@ -139,9 +157,6 @@ const resolvePattern = (root: string, pattern: string): string[] => {
 	if (pattern.endsWith("/*") || pattern.endsWith("/**")) {
 		const baseDir = pattern.replace(/\/\*+$/, "");
 		const fullBase = join(root, baseDir);
-		// Silently return empty for missing dirs — the sync API is designed for
-		// lint-staged handlers where throwing would break the pipeline. A typo
-		// in patterns produces an empty result rather than an error.
 		if (!existsSync(fullBase)) return [];
 
 		try {
@@ -172,23 +187,29 @@ const resolvePattern = (root: string, pattern: string): string[] => {
  *
  * Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`,
  * resolves them to directories, and reads each `package.json` name.
- * Returns an array of `{ name, path }` objects, or `null` if the root
- * directory doesn't exist. Unlike the Effect-based `listPackages()`, this
- * function does not include the root package — it returns only packages
- * matched by workspace patterns.
+ * Always includes the root package as the first entry, matching the
+ * behavior of the Effect-based `listPackages()`.
  *
  * @param root - Absolute path to the workspace root
- * @returns Array of workspace packages (excluding root), or `null`
+ * @returns Array of workspace packages with root as first entry
+ * @throws If the root directory does not exist
  *
  * @public
  */
 export const getWorkspacePackagesSync = (
 	root: string,
-): ReadonlyArray<{ readonly name: string; readonly path: string }> | null => {
-	if (!existsSync(root)) return null;
+): ReadonlyArray<{ readonly name: string; readonly path: string }> => {
+	if (!existsSync(root)) {
+		throw new Error(`Directory does not exist: ${root}`);
+	}
+
+	const rootName = readRootPackageName(root);
+	const rootPkg = rootName ? { name: rootName, path: root } : undefined;
 
 	const patterns = readPatterns(root);
-	if (patterns.length === 0) return [];
+	if (patterns.length === 0) {
+		return rootPkg ? [rootPkg] : [];
+	}
 
 	const included = new Set<string>();
 	const excluded = new Set<string>();
@@ -203,8 +224,18 @@ export const getWorkspacePackagesSync = (
 
 	for (const ex of excluded) included.delete(ex);
 
+	// Filter out any workspace that resolves to root (dedup when patterns include ".")
+	const resolvedRoot = resolve(root);
+	const nonRootDirs = Array.from(included)
+		.filter((dir) => resolve(dir) !== resolvedRoot)
+		.sort();
+
 	const packages: Array<{ name: string; path: string }> = [];
-	for (const dir of Array.from(included).sort()) {
+	if (rootPkg) {
+		packages.push(rootPkg);
+	}
+
+	for (const dir of nonRootDirs) {
 		try {
 			const content = readFileSync(join(dir, "package.json"), "utf-8");
 			const parsed = JSON.parse(content) as Record<string, unknown>;
