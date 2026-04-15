@@ -20,6 +20,10 @@ PublishConfig is now a Schema.Class instead of a Schema.Struct, enabling downstr
 
 PublishConfig now includes `tag` (npm standard) and `linkDirectory` (pnpm extension) fields.
 
+### Synchronous Workspace API
+
+New `findWorkspaceRootSync` and `getWorkspacePackagesSync` functions for non-Effect contexts (e.g., lint-staged handlers). Enables dropping the `workspace-tools` dependency.
+
 ## Bug Fixes
 
 ### Root-as-Package Deduplication

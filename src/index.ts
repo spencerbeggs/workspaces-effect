@@ -135,6 +135,8 @@ export { TopologicalSorter } from "./services/TopologicalSorter.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";
 // ── Services ─────────────────────────────────────────────────────────
 export { WorkspaceRoot } from "./services/WorkspaceRoot.js";
+// ── Sync API ────────────────────────────────────────────────────────
+export { findWorkspaceRootSync, getWorkspacePackagesSync } from "./sync.js";
 // ── Utils ────────────────────────────────────────────────────────────
 export {
 	dependencyDiff,
