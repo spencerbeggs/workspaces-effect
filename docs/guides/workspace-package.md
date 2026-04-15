@@ -13,6 +13,7 @@ usage.
 - [Dependency Query Methods](#dependency-query-methods)
 - [Dual-API Pattern](#dual-api-pattern)
 - [Dependency Diff](#dependency-diff)
+- [PublishConfig](#publishconfig)
 - [Reading package.json](#reading-packagejson)
 - [Importer Map](#importer-map)
 - [Root Package in listPackages](#root-package-in-listpackages)
@@ -30,7 +31,7 @@ usage.
 | `devDependencies` | `Record<string, string>` | `{}` | Development dependencies |
 | `peerDependencies` | `Record<string, string>` | `{}` | Peer dependencies |
 | `optionalDependencies` | `Record<string, string>` | `{}` | Optional dependencies |
-| `publishConfig` | `PublishConfigType \| undefined` | `undefined` | Publishing configuration |
+| `publishConfig` | `PublishConfig \| undefined` | `undefined` | Publishing configuration (see [PublishConfig](#publishconfig)) |
 
 ## Computed Getters
 
@@ -215,6 +216,44 @@ WorkspacePackage.dependencyDiff(app, api);
 
 // Static data-last (pipeable)
 pipe(app, WorkspacePackage.dependencyDiff(api));
+```
+
+## PublishConfig
+
+`PublishConfig` is an Effect `Schema.Class` representing the `publishConfig`
+field from `package.json`. It captures registry, access control, directory
+override, and additional fields used by package managers:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `access` | `"public" \| "restricted" \| undefined` | Scoped package visibility |
+| `registry` | `string \| undefined` | Custom registry URL |
+| `directory` | `string \| undefined` | Subdirectory to publish |
+| `tag` | `string \| undefined` | npm dist-tag for publishing (e.g., `"beta"`, `"latest"`) |
+| `linkDirectory` | `boolean \| undefined` | pnpm `linkDirectory` extension |
+
+Because `PublishConfig` is a `Schema.Class`, you can construct instances
+directly and extend it with `Schema.extend` for downstream use:
+
+```typescript
+import { Schema } from "effect";
+import { PublishConfig } from "workspaces-effect";
+
+// Construct directly
+const config = new PublishConfig({
+  access: "public",
+  registry: "https://registry.npmjs.org",
+  tag: "latest",
+  linkDirectory: true,
+});
+
+// Extend with additional fields for downstream packages
+const CustomPublishConfig = Schema.extend(
+  PublishConfig,
+  Schema.Struct({
+    targets: Schema.optional(Schema.Array(Schema.String)),
+  }),
+);
 ```
 
 ## Reading package.json

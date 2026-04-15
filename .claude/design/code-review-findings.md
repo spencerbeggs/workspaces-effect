@@ -3,10 +3,10 @@ title: "Code Review Findings — Phase 1/2 Audit"
 module: core
 category: review
 status: current
-completeness: 80
+completeness: 85
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-03-14
+updated: 2026-04-15
+last-synced: 2026-04-15
 related:
   - architecture.md
   - phase2-dependency-graph.md
@@ -151,10 +151,15 @@ non-workspace repos. No guard that the path is actually a workspace root.
 - Issue 5 (JSON.parse) — FIXED: Wrapped in Effect.try with typed error
 - Issue 6 (double WorkspaceRootLive) — FIXED: Integration test uses mock root
 
+**Fixed (upstream-updates)**:
+
+- Issue 7 (peerDependencies) — FIXED: `WorkspacePackage` now includes
+  `peerDependencies` and `optionalDependencies` fields. Phase 2 graph
+  can now optionally include peer deps.
+
 **Should fix soon**:
 
 - Issue 3 (`/**` glob) — affects Yarn Berry users
-- Issue 7 (peerDependencies) — Phase 2 graph completeness
 
 **Nice to have**:
 

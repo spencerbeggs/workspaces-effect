@@ -1,6 +1,6 @@
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { WorkspacePackage } from "../src/schemas/core.js";
+import { PublishConfig, WorkspacePackage } from "../src/schemas/core.js";
 
 const rootPkg = new WorkspacePackage({
 	name: "my-monorepo",
@@ -27,6 +27,46 @@ const unscopedPkg = new WorkspacePackage({
 	path: "/workspace/packages/my-lib",
 	relativePath: "packages/my-lib",
 	private: true,
+});
+
+describe("PublishConfig", () => {
+	it("decodes tag field", () => {
+		const result = Schema.decodeUnknownSync(PublishConfig)({
+			access: "public",
+			tag: "beta",
+		});
+		expect(result.tag).toBe("beta");
+	});
+
+	it("decodes linkDirectory field", () => {
+		const result = Schema.decodeUnknownSync(PublishConfig)({
+			access: "public",
+			linkDirectory: true,
+		});
+		expect(result.linkDirectory).toBe(true);
+	});
+
+	it("decodes with all fields", () => {
+		const result = Schema.decodeUnknownSync(PublishConfig)({
+			access: "public",
+			registry: "https://registry.npmjs.org/",
+			directory: "dist/npm",
+			tag: "latest",
+			linkDirectory: true,
+		});
+		expect(result.access).toBe("public");
+		expect(result.registry).toBe("https://registry.npmjs.org/");
+		expect(result.directory).toBe("dist/npm");
+		expect(result.tag).toBe("latest");
+		expect(result.linkDirectory).toBe(true);
+	});
+
+	it("decodes with no fields (all optional)", () => {
+		const result = Schema.decodeUnknownSync(PublishConfig)({});
+		expect(result.access).toBeUndefined();
+		expect(result.tag).toBeUndefined();
+		expect(result.linkDirectory).toBeUndefined();
+	});
 });
 
 describe("WorkspacePackage getters", () => {
@@ -104,6 +144,55 @@ describe("WorkspacePackage instance methods", () => {
 		expect(scopedPkg.matchesDependency("effect")).toBe(true);
 		expect(scopedPkg.matchesDependency("*test*")).toBe(true);
 		expect(scopedPkg.matchesDependency("@scope/*")).toBe(false);
+	});
+});
+
+describe("PublishConfig class", () => {
+	it("is a Schema.Class instance", () => {
+		const config = new PublishConfig({
+			access: "public",
+			registry: "https://registry.npmjs.org/",
+			directory: "dist/npm",
+			tag: "latest",
+			linkDirectory: true,
+		});
+		expect(config.access).toBe("public");
+		expect(config.registry).toBe("https://registry.npmjs.org/");
+		expect(config.tag).toBe("latest");
+		expect(config.linkDirectory).toBe(true);
+	});
+
+	it("can be constructed with no fields", () => {
+		const config = new PublishConfig({});
+		expect(config.access).toBeUndefined();
+	});
+
+	it("can be extended via Schema.Class subclass", () => {
+		class SilkPublishConfig extends Schema.Class<SilkPublishConfig>("SilkPublishConfig")({
+			...PublishConfig.fields,
+			targets: Schema.optional(Schema.Array(Schema.String)),
+		}) {}
+		const config = new SilkPublishConfig({
+			access: "public",
+			targets: ["npm", "github"],
+		});
+		expect(config.access).toBe("public");
+		expect(config.targets).toEqual(["npm", "github"]);
+	});
+
+	it("can be extended with Schema.extend using PublishConfig.fields", () => {
+		const SilkPublishConfig = Schema.extend(
+			Schema.Struct(PublishConfig.fields),
+			Schema.Struct({
+				targets: Schema.optional(Schema.Array(Schema.String)),
+			}),
+		);
+		const decoded = Schema.decodeUnknownSync(SilkPublishConfig)({
+			access: "public",
+			targets: ["npm", "github"],
+		});
+		expect(decoded.access).toBe("public");
+		expect(decoded.targets).toEqual(["npm", "github"]);
 	});
 });
 

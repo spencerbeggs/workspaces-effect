@@ -110,7 +110,7 @@ export {
 	PackageJsonSchema,
 	PackageManager,
 	PackageName,
-	PublishConfigSchema,
+	PublishConfig,
 	WorkspaceInfo,
 	WorkspacePackage,
 	WorkspacePath,

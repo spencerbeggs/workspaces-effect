@@ -35,10 +35,15 @@ You choose the Effect and platform versions. workspaces-effect requires
 - Node.js 22+ or Bun 1.0+
 - Effect 3.x
 
-Your monorepo must have workspace configuration:
+Workspace configuration is recommended but not required:
 
 - **pnpm:** `pnpm-workspace.yaml` at the root
 - **npm / yarn / bun:** `workspaces` field in root `package.json`
+- **Standalone:** If no workspace configuration is found, the root
+  `package.json` is treated as a single-package workspace
+
+Each workspace `package.json` must have both a `name` and `version` field.
+Packages missing a `version` field will cause a `WorkspaceDiscoveryError`.
 
 ## Your First Program
 

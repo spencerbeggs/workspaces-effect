@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-29
-last-synced: 2026-03-29
+updated: 2026-04-15
+last-synced: 2026-04-15
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -42,8 +42,9 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 206 tests passing, all typechecking. Full observability
-(spans + structured logging) across all services.
+All phases complete. 386 tests passing (250 unit + 136 integration), all
+typechecking. Full observability (spans + structured logging) across all
+services.
 
 - **Phase 1 (Discovery)**: WorkspaceRootLive, PackageManagerDetectorLive,
   WorkspaceDiscoveryLive
@@ -73,6 +74,13 @@ All phases complete. 206 tests passing, all typechecking. Full observability
   `relativePath` field for workspace packages (used by integrity checker
   to locate package.json). `PnpmExtension.catalogs` accepts union type
   `string | { specifier, version }` for pnpm v9/v10 compatibility.
+- **Schema updates (2026-04-15)**: `PublishConfig` converted to
+  `Schema.Class` with expanded fields (`tag`, `linkDirectory`).
+  `DetectedPackageManager` interface gained `runtime: "node" | "bun"` field.
+  `PublishTarget` schema added for resolved publish target metadata.
+  `WorkspaceDiscoveryLive` improvements: standalone fallback (empty patterns
+  produce root-only workspace), `resolvePattern` errors on missing base
+  directory, `readWorkspacePackage` requires both `name` and `version` fields.
 
 ## Design Goals
 
@@ -140,6 +148,10 @@ with per-layer caching. See `phase4-configuration-lockfiles.md`.
 
 PublishabilityDetector checks `private` field and `publishConfig.access`.
 Users can provide custom layers to override detection strategy.
+`PublishConfig` is a `Schema.Class` with fields: `access`, `registry`,
+`directory`, `tag`, `linkDirectory`. `PublishTarget` is a separate
+`Schema.Class` representing resolved publish target metadata with fields:
+`name`, `registry`, `directory`, `access`, `provenance`.
 
 ### Service Interface Pattern
 
@@ -322,11 +334,17 @@ No direct `node:fs`, `node:path`, or `node:child_process` imports.
 
 Detection order (first match wins):
 
-1. **pnpm** -- `pnpm-workspace.yaml` exists
+1. **pnpm** -- `pnpm-workspace.yaml` exists (runtime: `"node"`)
 2. **bun** -- `bun.lock` or `bun.lockb` exists AND `packageManager` starts
-   with `bun@`
+   with `bun@` (runtime: `"bun"`)
 3. **yarn** -- `yarn.lock` exists AND `packageManager` starts with `yarn@`
+   (runtime: `"node"`)
 4. **npm** -- fallback if `package.json` has `workspaces` field
+   (runtime: `"node"`)
+
+`DetectedPackageManager.runtime` is `"bun"` for bun workspaces and `"node"`
+for all other package managers. This enables downstream consumers to select
+the correct platform context (NodeContext vs BunContext).
 
 | PM | Config Source | Patterns |
 | --- | --- | --- |

@@ -22,8 +22,8 @@ Find and identify the monorepo workspace.
 | Service | Purpose |
 | --- | --- |
 | `WorkspaceRoot` | Find the monorepo root by walking up from `cwd` |
-| `PackageManagerDetector` | Detect the package manager in use (npm, pnpm, yarn, bun) |
-| `WorkspaceDiscovery` | List all workspace packages by resolving glob patterns |
+| `PackageManagerDetector` | Detect the package manager and runtime in use (npm, pnpm, yarn, bun) |
+| `WorkspaceDiscovery` | List all workspace packages by resolving glob patterns (standalone fallback if no config) |
 
 ### Group 2: Package Analysis
 

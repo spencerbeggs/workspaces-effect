@@ -1,0 +1,10 @@
+{
+	"name": "@scope/lib-linked",
+	"version": "1.0.0",
+	"publishConfig": {
+		"access": "public",
+		"directory": "dist/dev",
+		"linkDirectory": true,
+		"tag": "beta"
+	}
+}

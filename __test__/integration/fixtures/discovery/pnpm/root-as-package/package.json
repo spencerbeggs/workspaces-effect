@@ -1,0 +1,8 @@
+{
+	"name": "root-only-pkg",
+	"version": "1.0.0",
+	"packageManager": "pnpm@10.33.0",
+	"publishConfig": {
+		"access": "public"
+	}
+}

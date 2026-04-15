@@ -26,6 +26,8 @@ export interface DetectedPackageManager {
 	readonly type: PackageManagerType;
 	/** The version string, or `undefined` if not specified in `packageManager`. */
 	readonly version: string | undefined;
+	/** The runtime environment: bun PM implies bun runtime, everything else is node. */
+	readonly runtime: "node" | "bun";
 }
 
 /**

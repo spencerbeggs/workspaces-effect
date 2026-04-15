@@ -17,6 +17,7 @@ import {
 	PackageNotFoundError,
 	PackageResolver,
 	WorkspaceDiscovery,
+	WorkspaceDiscoveryError,
 	WorkspaceInfo,
 	WorkspacePackage,
 	WorkspaceRoot,
@@ -235,6 +236,26 @@ describe("LockfileIntegrityError", () => {
 	});
 });
 
+describe("WorkspaceDiscoveryError", () => {
+	it("has correct _tag and message", () => {
+		const err = new WorkspaceDiscoveryError({
+			root: "/projects/monorepo",
+			reason: "no workspace patterns found",
+		});
+		expect(err._tag).toBe("WorkspaceDiscoveryError");
+		expect(err.message).toContain("/projects/monorepo");
+		expect(err.message).toContain("no workspace patterns found");
+	});
+
+	it("formats message as expected", () => {
+		const err = new WorkspaceDiscoveryError({
+			root: "/root",
+			reason: "test reason",
+		});
+		expect(err.message).toBe('Workspace discovery failed at "/root": test reason');
+	});
+});
+
 describe("LockfileReader tag", () => {
 	it("is accessible in Effect.gen", () => {
 		const program = Effect.gen(function* () {
@@ -358,7 +379,7 @@ describe("Service tags", () => {
 		});
 
 		const testDetector = Layer.succeed(PackageManagerDetector, {
-			detect: () => Effect.succeed({ type: "pnpm" as const, version: "10.0.0" }),
+			detect: () => Effect.succeed({ type: "pnpm" as const, version: "10.0.0", runtime: "node" as const }),
 		});
 
 		const testDiscovery = Layer.succeed(WorkspaceDiscovery, {
