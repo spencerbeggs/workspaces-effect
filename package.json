@@ -1,6 +1,6 @@
 {
 	"name": "workspaces-effect",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"private": true,
 	"description": "Effect-TS library for monorepo workspace tooling — discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry, and Bun.",
 	"keywords": [

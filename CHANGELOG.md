@@ -1,5 +1,35 @@
 # workspaces-effect
 
+## 0.4.0
+
+### Features
+
+* [`05e2515`](https://github.com/spencerbeggs/workspaces-effect/commit/05e251596b38e872d91b64a9f03883dad1041e8d) ### Standalone Package Fallback
+
+WorkspaceDiscovery now returns the root package as a single workspace when no pnpm-workspace.yaml or package.json workspaces field is found, instead of failing with an error.
+
+### Bug Fixes
+
+* [`05e2515`](https://github.com/spencerbeggs/workspaces-effect/commit/05e251596b38e872d91b64a9f03883dad1041e8d) ### Root-as-Package Deduplication
+
+WorkspaceDiscovery no longer duplicates the root workspace when pnpm-workspace.yaml patterns include `"."`.
+
+### Runtime Detection
+
+PackageManagerDetector now includes a `runtime` field (`"node"` or `"bun"`) on the detection result. Bun PM implies bun runtime; all others are node.
+
+### Extendable PublishConfig
+
+PublishConfig is now a Schema.Class instead of a Schema.Struct, enabling downstream packages to extend it with `PublishConfig.extend()` to add custom fields.
+
+### Expanded PublishConfig Fields
+
+PublishConfig now includes `tag` (npm standard) and `linkDirectory` (pnpm extension) fields.
+
+### Synchronous Workspace API
+
+New `findWorkspaceRootSync` and `getWorkspacePackagesSync` functions for non-Effect contexts (e.g., lint-staged handlers). Enables dropping the `workspace-tools` dependency.
+
 ## 0.3.0
 
 ### Bug Fixes
