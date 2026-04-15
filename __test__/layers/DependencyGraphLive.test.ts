@@ -30,6 +30,7 @@ const pkg = (name: string, deps: Record<string, string> = {}, devDeps: Record<st
 		name,
 		version: "1.0.0",
 		path: `/workspace/packages/${name}`,
+		packageJsonPath: `/workspace/packages/${name}/package.json`,
 		relativePath: `packages/${name}`,
 		dependencies: deps,
 		devDependencies: devDeps,

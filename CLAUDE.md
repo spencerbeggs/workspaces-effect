@@ -11,8 +11,10 @@ logging) across all services. Request/RequestResolver with per-layer caching
 for DependencyGraph and LockfileReader lookups. Integrity check works for all
 4 package managers. Composite layers: WorkspacesLive (no git),
 WorkspacesFullLive (with git). WorkspacePackage has peerDependencies,
-optionalDependencies, computed getters (isRootWorkspace, packageJsonPath,
-isPublic, scope, unscopedName, allDependencies), instance methods + static
+optionalDependencies, packageJsonPath (stored Schema.NonEmptyString field,
+computed at construction via Path.join in WorkspaceDiscoveryLive),
+computed getters (isRootWorkspace, isPublic, scope, unscopedName,
+allDependencies), instance methods + static
 dual-API functions, DependencyDiff, readPackageJson utility.
 ResolvedPackage has optional relativePath field for workspace-aware resolution.
 WorkspaceDiscovery.importerMap() added. listPackages() now includes root

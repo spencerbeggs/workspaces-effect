@@ -6,6 +6,7 @@ const rootPkg = new WorkspacePackage({
 	name: "my-monorepo",
 	version: "1.0.0",
 	path: "/workspace",
+	packageJsonPath: "/workspace/package.json",
 	relativePath: ".",
 });
 
@@ -13,6 +14,7 @@ const scopedPkg = new WorkspacePackage({
 	name: "@scope/utils",
 	version: "2.0.0",
 	path: "/workspace/packages/utils",
+	packageJsonPath: "/workspace/packages/utils/package.json",
 	relativePath: "packages/utils",
 	private: false,
 	dependencies: { effect: "^3.0.0" },
@@ -25,6 +27,7 @@ const unscopedPkg = new WorkspacePackage({
 	name: "my-lib",
 	version: "1.0.0",
 	path: "/workspace/packages/my-lib",
+	packageJsonPath: "/workspace/packages/my-lib/package.json",
 	relativePath: "packages/my-lib",
 	private: true,
 });
@@ -75,7 +78,7 @@ describe("WorkspacePackage getters", () => {
 		expect(scopedPkg.isRootWorkspace).toBe(false);
 	});
 
-	it("packageJsonPath appends package.json", () => {
+	it("packageJsonPath stores the package.json path", () => {
 		expect(rootPkg.packageJsonPath).toBe("/workspace/package.json");
 		expect(scopedPkg.packageJsonPath).toBe("/workspace/packages/utils/package.json");
 	});
@@ -205,6 +208,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "1.0.0" },
 		});
@@ -212,6 +216,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "1.0.0", b: "2.0.0" },
 		});
@@ -226,6 +231,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "1.0.0", b: "2.0.0" },
 		});
@@ -233,6 +239,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "1.0.0" },
 		});
@@ -247,6 +254,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "1.0.0" },
 		});
@@ -254,6 +262,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			dependencies: { a: "2.0.0" },
 		});
@@ -268,6 +277,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			peerDependencies: { react: "^17.0.0" },
 		});
@@ -275,6 +285,7 @@ describe("WorkspacePackage.dependencyDiff", () => {
 			name: "pkg",
 			version: "1.0.0",
 			path: "/workspace/pkg",
+			packageJsonPath: "/workspace/pkg/package.json",
 			relativePath: "pkg",
 			peerDependencies: { react: "^18.0.0" },
 		});

@@ -18,6 +18,7 @@ const pkg = new WorkspacePackage({
 	name: "@scope/utils",
 	version: "1.0.0",
 	path: "/workspace/packages/utils",
+	packageJsonPath: "/workspace/packages/utils/package.json",
 	relativePath: "packages/utils",
 	dependencies: { effect: "^3.0.0" },
 	devDependencies: { vitest: "^3.0.0" },
@@ -79,6 +80,7 @@ describe("standalone dual functions", () => {
 				name: "pkg",
 				version: "1.0.0",
 				path: "/workspace/pkg",
+				packageJsonPath: "/workspace/pkg/package.json",
 				relativePath: "pkg",
 				dependencies: { a: "1.0.0" },
 			});
@@ -86,6 +88,7 @@ describe("standalone dual functions", () => {
 				name: "pkg",
 				version: "1.0.0",
 				path: "/workspace/pkg",
+				packageJsonPath: "/workspace/pkg/package.json",
 				relativePath: "pkg",
 				dependencies: { a: "2.0.0", b: "1.0.0" },
 			});
@@ -99,6 +102,7 @@ describe("standalone dual functions", () => {
 				name: "pkg",
 				version: "1.0.0",
 				path: "/workspace/pkg",
+				packageJsonPath: "/workspace/pkg/package.json",
 				relativePath: "pkg",
 				dependencies: { a: "1.0.0" },
 			});
@@ -106,6 +110,7 @@ describe("standalone dual functions", () => {
 				name: "pkg",
 				version: "1.0.0",
 				path: "/workspace/pkg",
+				packageJsonPath: "/workspace/pkg/package.json",
 				relativePath: "pkg",
 				dependencies: { b: "1.0.0" },
 			});
@@ -122,6 +127,7 @@ describe("readPackageJson", () => {
 			name: "test-pkg",
 			version: "1.0.0",
 			path: "/workspace/packages/test",
+			packageJsonPath: "/workspace/packages/test/package.json",
 			relativePath: "packages/test",
 		});
 

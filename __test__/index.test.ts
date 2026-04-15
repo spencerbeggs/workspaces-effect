@@ -75,6 +75,7 @@ describe("WorkspacePackage schema class", () => {
 			name: "@scope/my-pkg",
 			version: "1.0.0",
 			path: "/workspaces/my-pkg",
+			packageJsonPath: "/workspaces/my-pkg/package.json",
 			relativePath: "packages/my-pkg",
 		});
 		expect(pkg.name).toBe("@scope/my-pkg");
@@ -87,6 +88,7 @@ describe("WorkspacePackage schema class", () => {
 			name: "pkg-a",
 			version: "2.0.0",
 			path: "/root/packages/pkg-a",
+			packageJsonPath: "/root/packages/pkg-a/package.json",
 			relativePath: "packages/pkg-a",
 			private: true,
 			dependencies: { "pkg-b": "workspace:*" },
