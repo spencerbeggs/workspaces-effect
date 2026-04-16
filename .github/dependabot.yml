@@ -5,10 +5,7 @@ version: 2
 updates:
   # Root workspace dependencies
   - package-ecosystem: "npm"
-    directories:
-      - "/"
-      - "/docs"
-      - "/pkgs/*"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"

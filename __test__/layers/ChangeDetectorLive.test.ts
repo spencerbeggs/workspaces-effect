@@ -19,6 +19,7 @@ const makePackage = (name: string, pkgPath: string): WorkspacePackage =>
 		name,
 		version: "1.0.0",
 		path: pkgPath,
+		packageJsonPath: `${pkgPath}/package.json`,
 		relativePath: pkgPath.replace("/projects/monorepo/", ""),
 	});
 

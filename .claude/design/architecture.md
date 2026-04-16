@@ -54,7 +54,7 @@ services.
   PublishabilityDetectorLive, integrity checker, parsers for pnpm/npm/yarn/bun
 - **WorkspacePackage Enrichment** (Issue #12): `peerDependencies` and
   `optionalDependencies` fields, computed getters (`isRootWorkspace`,
-  `packageJsonPath`, `isPublic`, `scope`, `unscopedName`, `allDependencies`),
+  `isPublic`, `scope`, `unscopedName`, `allDependencies`),
   instance methods (`hasDependency`, `hasDevDependency`, `hasPeerDependency`,
   `hasOptionalDependency`, `hasAnyDependencyOn`, `dependencyVersion`,
   `matchesDependency`, `dependencyDiff`), `DependencyDiff` interface, static
@@ -88,6 +88,13 @@ services.
   `node:fs`/`node:path` imports (intentional exception to platform
   abstraction rule). Root package excluded from sync results (unlike
   Effect `listPackages()`).
+- **Path internals (Issue #34)**: `WorkspacePackage.packageJsonPath` converted
+  from a computed getter (template literal `${this.path}/package.json`) to a
+  stored `Schema.NonEmptyString` field. The value is computed at construction
+  time in `WorkspaceDiscoveryLive` using `@effect/platform` `Path.join`,
+  ensuring platform-correct path separators. This is a breaking change for
+  any code that relied on the getter; the field is now required at
+  construction.
 
 ## Design Goals
 
@@ -199,19 +206,20 @@ workspace package with its metadata and dependencies.
 | `name` | `string` | (required) |
 | `version` | `string` | (required) |
 | `path` | `string` | (required) |
+| `packageJsonPath` | `string` | (required) |
 | `relativePath` | `string` | (required) |
 | `private` | `boolean` | `true` |
 | `dependencies` | `Record<string, string>` | `{}` |
 | `devDependencies` | `Record<string, string>` | `{}` |
 | `peerDependencies` | `Record<string, string>` | `{}` |
 | `optionalDependencies` | `Record<string, string>` | `{}` |
+| `publishConfig` | `PublishConfig` | (optional) |
 
 ### Computed Getters
 
 | Getter | Returns | Derivation |
 | --- | --- | --- |
 | `isRootWorkspace` | `boolean` | `this.relativePath === "."` |
-| `packageJsonPath` | `string` | `` `${this.path}/package.json` `` |
 | `isPublic` | `boolean` | `!this.private` |
 | `scope` | `Option<string>` | Extract `@scope` from name, or `Option.none()` |
 | `unscopedName` | `string` | Strip `@scope/` prefix if present |

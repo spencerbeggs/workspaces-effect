@@ -25,6 +25,7 @@ const pkg = (
 		name,
 		version: "1.0.0",
 		path: `/workspace/packages/${name}`,
+		packageJsonPath: `/workspace/packages/${name}/package.json`,
 		relativePath: `packages/${name}`,
 		private: opts.private ?? false,
 		dependencies: {},

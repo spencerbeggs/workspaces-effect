@@ -237,6 +237,7 @@ export interface DependencyDiff {
  * - `name` — the package name (non-empty string).
  * - `version` — the package version string.
  * - `path` — absolute filesystem path to the package directory.
+ * - `packageJsonPath` — absolute path to the package's `package.json` file.
  * - `relativePath` — path relative to the workspace root.
  * - `private` — whether the package is marked private (defaults to `false`).
  * - `dependencies` — production dependency map (defaults to `{}`).
@@ -253,6 +254,7 @@ export interface DependencyDiff {
  *   name: "@my-org/utils",
  *   version: "1.0.0",
  *   path: "/workspace/packages/utils",
+ *   packageJsonPath: "/workspace/packages/utils/package.json",
  *   relativePath: "packages/utils",
  * });
  * ```
@@ -263,6 +265,7 @@ export class WorkspacePackage extends Schema.Class<WorkspacePackage>("WorkspaceP
 	name: Schema.NonEmptyString,
 	version: Schema.String,
 	path: Schema.NonEmptyString,
+	packageJsonPath: Schema.NonEmptyString,
 	relativePath: Schema.String,
 	private: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 	dependencies: Schema.optionalWith(Schema.Record({ key: Schema.String, value: Schema.String }), {
@@ -281,10 +284,6 @@ export class WorkspacePackage extends Schema.Class<WorkspacePackage>("WorkspaceP
 }) {
 	get isRootWorkspace(): boolean {
 		return this.relativePath === ".";
-	}
-
-	get packageJsonPath(): string {
-		return `${this.path}/package.json`;
 	}
 
 	get isPublic(): boolean {

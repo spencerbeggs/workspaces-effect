@@ -31,6 +31,7 @@ usage.
 | `devDependencies` | `Record<string, string>` | `{}` | Development dependencies |
 | `peerDependencies` | `Record<string, string>` | `{}` | Peer dependencies |
 | `optionalDependencies` | `Record<string, string>` | `{}` | Optional dependencies |
+| `packageJsonPath` | `string` | required | Absolute path to the package's `package.json` file |
 | `publishConfig` | `PublishConfig \| undefined` | `undefined` | Publishing configuration (see [PublishConfig](#publishconfig)) |
 
 ## Computed Getters
@@ -40,7 +41,6 @@ Every `WorkspacePackage` instance exposes these computed properties:
 | Getter | Returns | Description |
 | --- | --- | --- |
 | `isRootWorkspace` | `boolean` | `true` when `relativePath === "."` |
-| `packageJsonPath` | `string` | Absolute path to `package.json` (e.g., `"/ws/pkgs/utils/package.json"`) |
 | `isPublic` | `boolean` | `true` when `private` is `false` |
 | `scope` | `Option<string>` | The `@scope` portion (e.g., `Option.some("@myorg")`), or `Option.none()` |
 | `unscopedName` | `string` | Package name without the `@scope/` prefix |
@@ -56,9 +56,9 @@ const program = Effect.gen(function* () {
   const pkg = yield* discovery.getPackage("@myorg/utils");
 
   console.log(pkg.isRootWorkspace);   // false
-  console.log(pkg.packageJsonPath);   // "/workspace/packages/utils/package.json"
   console.log(pkg.isPublic);          // true
   console.log(pkg.unscopedName);      // "utils"
+  console.log(pkg.packageJsonPath);   // "/workspace/packages/utils/package.json" (stored field)
 
   if (Option.isSome(pkg.scope)) {
     console.log(pkg.scope.value);     // "@myorg"
