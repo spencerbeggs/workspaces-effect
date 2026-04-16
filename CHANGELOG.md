@@ -1,5 +1,13 @@
 # workspaces-effect
 
+## 0.4.1
+
+### Refactoring
+
+* [`d3a9b50`](https://github.com/spencerbeggs/workspaces-effect/commit/d3a9b506a395271dbeed94bf33f96b7ba82c6511) `WorkspacePackage.packageJsonPath` is now computed at construction time using
+  `@effect/platform`'s `Path.join` instead of a hardcoded forward slash,
+  ensuring consistent cross-platform path handling.
+
 ## 0.4.0
 
 ### Features
