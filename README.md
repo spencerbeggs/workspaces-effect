@@ -76,6 +76,77 @@ Two composite layers cover most use cases:
 - **`WorkspacesFullLive`** -- all services including change detection
   (additionally requires `CommandExecutor`)
 
+## Custom publishability detectors
+
+`PublishabilityDetector` is a `Context.Tag` like every other service, so you can
+swap the default implementation with `Layer.succeed` when you need
+non-vanilla publish semantics (e.g. private packages that should still publish
+under specific conditions, registry-aware target expansion, organisation
+conventions). Provide your custom layer instead of `PublishabilityDetectorLive`
+-- everything downstream that yields `PublishabilityDetector` picks up the new
+behaviour transparently.
+
+```typescript
+import { Effect, Layer } from "effect";
+import { NodeContext } from "@effect/platform-node";
+import {
+  PublishabilityDetector,
+  PublishTarget,
+  WorkspaceDiscovery,
+  WorkspacesLive,
+} from "workspaces-effect";
+
+// Always publish to GitHub Packages alongside the package's own publishConfig
+// target -- a common requirement for orgs that mirror to a private registry.
+const ORG_REGISTRY = "https://npm.pkg.github.com/";
+
+const OrgMirrorDetector = Layer.succeed(PublishabilityDetector, {
+  detect: (pkg, _root) =>
+    Effect.sync(() => {
+      if (pkg.private && !pkg.publishConfig?.access) return [];
+
+      const primary = new PublishTarget({
+        name: pkg.name,
+        registry: pkg.publishConfig?.registry ?? "https://registry.npmjs.org/",
+        directory: pkg.publishConfig?.directory ?? ".",
+        access: pkg.publishConfig?.access ?? "public",
+        provenance: false,
+      });
+
+      const mirror = new PublishTarget({
+        name: pkg.name,
+        registry: ORG_REGISTRY,
+        directory: pkg.publishConfig?.directory ?? ".",
+        access: pkg.publishConfig?.access ?? "restricted",
+        provenance: false,
+      });
+
+      return primary.registry === mirror.registry ? [primary] : [primary, mirror];
+    }),
+});
+
+const program = Effect.gen(function* () {
+  const discovery = yield* WorkspaceDiscovery;
+  const detector = yield* PublishabilityDetector;
+  for (const pkg of yield* discovery.listPackages()) {
+    const targets = yield* detector.detect(pkg, "/path/to/root");
+    if (targets.length > 0) console.log(pkg.name, targets.map((t) => t.registry));
+  }
+});
+
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(OrgMirrorDetector),
+    Effect.provide(WorkspacesLive),
+    Effect.provide(NodeContext.layer),
+  ),
+);
+```
+
+The same pattern applies to any other service in the library -- `WorkspaceRoot`,
+`PackageManagerDetector`, `LockfileReader`, etc. all expose `Context.Tag`s
+that consumers can rebind.
+
 ## Documentation
 
 For architecture details, API reference, and advanced usage, see

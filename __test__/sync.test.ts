@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { WorkspacePackage } from "../src/schemas/core.js";
 import { findWorkspaceRootSync, getWorkspacePackagesSync } from "../src/sync.js";
 
 const FIXTURES = resolve(import.meta.dirname, "integration/fixtures/discovery");
@@ -146,5 +147,57 @@ describe("getWorkspacePackagesSync", () => {
 
 	it("throws for nonexistent directory", () => {
 		expect(() => getWorkspacePackagesSync("/nonexistent/path")).toThrow();
+	});
+
+	describe("WorkspacePackage shape", () => {
+		const root = resolve(FIXTURES, "pnpm/basic");
+
+		it("returns WorkspacePackage instances", () => {
+			const packages = getWorkspacePackagesSync(root);
+			for (const pkg of packages) {
+				expect(pkg).toBeInstanceOf(WorkspacePackage);
+			}
+		});
+
+		it("populates version, packageJsonPath, and relativePath", () => {
+			const packages = getWorkspacePackagesSync(root);
+			const pub = packages.find((p) => p.name === "@scope/lib-public");
+			expect(pub).toBeDefined();
+			expect(pub?.version).toBeTypeOf("string");
+			expect(pub?.version.length).toBeGreaterThan(0);
+			expect(pub?.packageJsonPath).toBe(resolve(root, "packages/lib-public/package.json"));
+			expect(pub?.relativePath).toBe("packages/lib-public");
+		});
+
+		it("root package has relativePath '.' and isRootWorkspace true", () => {
+			const packages = getWorkspacePackagesSync(root);
+			expect(packages[0].relativePath).toBe(".");
+			expect(packages[0].isRootWorkspace).toBe(true);
+		});
+
+		it("decodes publishConfig when present", () => {
+			const packages = getWorkspacePackagesSync(root);
+			const pub = packages.find((p) => p.name === "@scope/lib-public");
+			expect(pub?.publishConfig?.access).toBe("public");
+		});
+
+		it("populates dependency maps with empty defaults", () => {
+			const packages = getWorkspacePackagesSync(root);
+			for (const pkg of packages) {
+				expect(pkg.dependencies).toEqual(expect.any(Object));
+				expect(pkg.devDependencies).toEqual(expect.any(Object));
+				expect(pkg.peerDependencies).toEqual(expect.any(Object));
+				expect(pkg.optionalDependencies).toEqual(expect.any(Object));
+			}
+		});
+
+		it("standalone package returns a single WorkspacePackage with isRootWorkspace true", () => {
+			const standalone = getWorkspacePackagesSync(resolve(FIXTURES, "standalone"));
+			expect(standalone).toHaveLength(1);
+			expect(standalone[0]).toBeInstanceOf(WorkspacePackage);
+			expect(standalone[0].name).toBe("standalone-pkg");
+			expect(standalone[0].isRootWorkspace).toBe(true);
+			expect(standalone[0].publishConfig?.access).toBe("public");
+		});
 	});
 });
