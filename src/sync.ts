@@ -8,7 +8,8 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { PublishConfig, WorkspacePackage } from "./schemas/core.js";
 
 /**
  * Find the workspace root by walking up from `cwd`.
@@ -55,22 +56,6 @@ export const findWorkspaceRootSync = (cwd?: string): string | null => {
 			return null;
 		}
 		current = parent;
-	}
-};
-
-/**
- * Read the root package.json name field.
- *
- * @internal
- */
-const readRootPackageName = (root: string): string | undefined => {
-	try {
-		const content = readFileSync(join(root, "package.json"), "utf-8");
-		const parsed = JSON.parse(content) as Record<string, unknown>;
-		const name = parsed.name;
-		return typeof name === "string" && name.length > 0 ? name : undefined;
-	} catch {
-		return undefined;
 	}
 };
 
@@ -182,33 +167,94 @@ const resolvePattern = (root: string, pattern: string): string[] => {
 	return [];
 };
 
+const isStringRecord = (v: unknown): v is Record<string, string> =>
+	v !== null && typeof v === "object" && !Array.isArray(v);
+
+const buildPublishConfig = (raw: unknown): PublishConfig | undefined => {
+	if (raw === null || typeof raw !== "object") return undefined;
+	const r = raw as Record<string, unknown>;
+	const access = r.access === "public" || r.access === "restricted" ? r.access : undefined;
+	const registry = typeof r.registry === "string" ? r.registry : undefined;
+	const directory = typeof r.directory === "string" ? r.directory : undefined;
+	const tag = typeof r.tag === "string" ? r.tag : undefined;
+	const linkDirectory = typeof r.linkDirectory === "boolean" ? r.linkDirectory : undefined;
+	if (
+		access === undefined &&
+		registry === undefined &&
+		directory === undefined &&
+		tag === undefined &&
+		linkDirectory === undefined
+	) {
+		return undefined;
+	}
+	return new PublishConfig({ access, registry, directory, tag, linkDirectory });
+};
+
+/**
+ * Read a `package.json` and construct a {@link WorkspacePackage}, or return
+ * `null` if the file is missing/unreadable, has no name, or has no version.
+ *
+ * @internal
+ */
+const readWorkspacePackageSync = (root: string, pkgDir: string): WorkspacePackage | null => {
+	const pkgJsonPath = join(pkgDir, "package.json");
+	let parsed: Record<string, unknown>;
+	try {
+		const content = readFileSync(pkgJsonPath, "utf-8");
+		parsed = JSON.parse(content) as Record<string, unknown>;
+	} catch {
+		return null;
+	}
+
+	const name = typeof parsed.name === "string" && parsed.name.length > 0 ? parsed.name : undefined;
+	const version = typeof parsed.version === "string" && parsed.version.length > 0 ? parsed.version : undefined;
+	if (!name || !version) return null;
+
+	const relativePath = pkgDir === root ? "." : relative(root, pkgDir);
+
+	return new WorkspacePackage({
+		name,
+		version,
+		path: pkgDir,
+		packageJsonPath: pkgJsonPath,
+		relativePath,
+		private: parsed.private === true,
+		dependencies: isStringRecord(parsed.dependencies) ? parsed.dependencies : {},
+		devDependencies: isStringRecord(parsed.devDependencies) ? parsed.devDependencies : {},
+		peerDependencies: isStringRecord(parsed.peerDependencies) ? parsed.peerDependencies : {},
+		optionalDependencies: isStringRecord(parsed.optionalDependencies) ? parsed.optionalDependencies : {},
+		publishConfig: buildPublishConfig(parsed.publishConfig),
+	});
+};
+
 /**
  * List workspace packages synchronously.
  *
  * Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`,
- * resolves them to directories, and reads each `package.json` name.
- * Always includes the root package as the first entry, matching the
- * behavior of the Effect-based `listPackages()`.
+ * resolves them to directories, and parses each `package.json` into a
+ * {@link WorkspacePackage}. The root package is always the first entry,
+ * matching the behavior of the Effect-based `WorkspaceDiscovery.listPackages()`.
  *
  * @param root - Absolute path to the workspace root
  * @returns Array of workspace packages with root as first entry
- * @throws If the root directory does not exist
+ * @throws If the root directory does not exist, or if the root
+ *   `package.json` is missing required `name` or `version` fields
  *
  * @public
  */
-export const getWorkspacePackagesSync = (
-	root: string,
-): ReadonlyArray<{ readonly name: string; readonly path: string }> => {
+export const getWorkspacePackagesSync = (root: string): ReadonlyArray<WorkspacePackage> => {
 	if (!existsSync(root)) {
 		throw new Error(`Directory does not exist: ${root}`);
 	}
 
-	const rootName = readRootPackageName(root);
-	const rootPkg = rootName ? { name: rootName, path: root } : undefined;
+	const rootPkg = readWorkspacePackageSync(root, root);
+	if (rootPkg === null) {
+		throw new Error(`Root package.json at ${join(root, "package.json")} is missing required name or version`);
+	}
 
 	const patterns = readPatterns(root);
 	if (patterns.length === 0) {
-		return rootPkg ? [rootPkg] : [];
+		return [rootPkg];
 	}
 
 	const included = new Set<string>();
@@ -230,22 +276,10 @@ export const getWorkspacePackagesSync = (
 		.filter((dir) => resolve(dir) !== resolvedRoot)
 		.sort();
 
-	const packages: Array<{ name: string; path: string }> = [];
-	if (rootPkg) {
-		packages.push(rootPkg);
-	}
-
+	const packages: WorkspacePackage[] = [rootPkg];
 	for (const dir of nonRootDirs) {
-		try {
-			const content = readFileSync(join(dir, "package.json"), "utf-8");
-			const parsed = JSON.parse(content) as Record<string, unknown>;
-			const name = parsed.name;
-			if (typeof name === "string" && name.length > 0) {
-				packages.push({ name, path: dir });
-			}
-		} catch {
-			// Skip unreadable packages
-		}
+		const pkg = readWorkspacePackageSync(root, dir);
+		if (pkg !== null) packages.push(pkg);
 	}
 
 	return packages;

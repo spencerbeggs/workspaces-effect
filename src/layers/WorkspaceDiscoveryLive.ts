@@ -291,13 +291,15 @@ const readWorkspacePackage = (
  * @remarks
  * Requires {@link WorkspaceRoot}, `FileSystem`, and `Path`. The workspace
  * root is eagerly resolved at layer construction time using `process.cwd()`
- * as the starting directory. Discovered packages are cached for the lifetime
- * of the layer.
+ * as the starting directory. Discovery method calls accept an optional
+ * `cwd` parameter to resolve a different root for that single call;
+ * results are cached per resolved root path for the lifetime of the layer.
  *
  * @privateRemarks
- * Uses `process.cwd()` for root resolution. Consumers needing a different
- * starting directory should provide a custom `WorkspaceRoot` layer. Package
- * results are cached in a mutable closure variable.
+ * Eagerly resolves the default root from `process.cwd()` at layer
+ * construction. Per-call `cwd` arguments are resolved on demand via
+ * `WorkspaceRoot.find` and memoized in a `Map` keyed by the absolute
+ * resolved root path.
  *
  * @example
  * ```typescript
@@ -332,11 +334,10 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
 
-		// Eagerly resolve root at layer construction time.
-		// Uses process.cwd() as the search starting point.
-		// Consumers who need a different cwd should provide a
-		// custom WorkspaceRoot layer that returns the desired root.
-		const resolvedRoot = yield* rootService.find(process.cwd()).pipe(
+		// Eagerly resolve the default root at layer construction time.
+		// Uses process.cwd() as the search starting point. Per-call `cwd`
+		// arguments are resolved on demand by `resolveRoot` below.
+		const defaultRoot = yield* rootService.find(process.cwd()).pipe(
 			Effect.mapError(
 				(e) =>
 					new WorkspaceDiscoveryError({
@@ -346,35 +347,45 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 			),
 		);
 
-		// Cache for discovered packages
-		let cachedPackages: ReadonlyArray<WorkspacePackage> | undefined;
+		// Per-root cache of discovered packages keyed by absolute resolved root.
+		const cache = new Map<string, ReadonlyArray<WorkspacePackage>>();
 
-		const discoverPackages = (): Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError> =>
+		const resolveRoot = (cwd: string | undefined): Effect.Effect<string, WorkspaceDiscoveryError> =>
+			cwd === undefined
+				? Effect.succeed(defaultRoot)
+				: rootService.find(cwd).pipe(
+						Effect.mapError(
+							(e) =>
+								new WorkspaceDiscoveryError({
+									root: e.searchPath,
+									reason: `workspace root not found: ${e.reason}`,
+								}),
+						),
+					);
+
+		const discoverAtRoot = (root: string): Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError> =>
 			Effect.gen(function* () {
-				if (cachedPackages) return cachedPackages;
+				const cached = cache.get(root);
+				if (cached) return cached;
 
-				const patterns = yield* readWorkspacePatterns(fs, path, resolvedRoot);
-				const dirs = yield* resolvePatterns(fs, path, resolvedRoot, patterns);
+				const patterns = yield* readWorkspacePatterns(fs, path, root);
+				const dirs = yield* resolvePatterns(fs, path, root, patterns);
 
-				const workspacePackages = yield* Effect.forEach(
-					dirs,
-					(dir) => readWorkspacePackage(fs, path, resolvedRoot, dir),
-					{
-						concurrency: 10,
-					},
-				);
+				const workspacePackages = yield* Effect.forEach(dirs, (dir) => readWorkspacePackage(fs, path, root, dir), {
+					concurrency: 10,
+				});
 
 				// Filter out any workspace package that resolves to root (avoids
 				// duplication when patterns include ".")
-				const nonRootPackages = workspacePackages.filter((p) => p.relativePath !== "." && p.path !== resolvedRoot);
+				const nonRootPackages = workspacePackages.filter((p) => p.relativePath !== "." && p.path !== root);
 
 				// Read root package.json and prepend as first entry
-				const rootPkgJsonPath = path.join(resolvedRoot, "package.json");
+				const rootPkgJsonPath = path.join(root, "package.json");
 				const rootContent = yield* fs.readFileString(rootPkgJsonPath).pipe(
 					Effect.mapError(
 						() =>
 							new WorkspaceDiscoveryError({
-								root: resolvedRoot,
+								root,
 								reason: `failed to read root ${rootPkgJsonPath}`,
 							}),
 					),
@@ -383,7 +394,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					try: () => JSON.parse(rootContent) as Record<string, unknown>,
 					catch: () =>
 						new WorkspaceDiscoveryError({
-							root: resolvedRoot,
+							root,
 							reason: `invalid JSON in root ${rootPkgJsonPath}`,
 						}),
 				});
@@ -391,7 +402,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 					Effect.mapError(
 						() =>
 							new WorkspaceDiscoveryError({
-								root: resolvedRoot,
+								root,
 								reason: `failed to parse root ${rootPkgJsonPath}`,
 							}),
 					),
@@ -400,7 +411,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				if (!rootDecoded.name) {
 					return yield* Effect.fail(
 						new WorkspaceDiscoveryError({
-							root: resolvedRoot,
+							root,
 							reason: `root package.json at ${rootPkgJsonPath} has no name field`,
 						}),
 					);
@@ -408,7 +419,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				if (!rootDecoded.version) {
 					return yield* Effect.fail(
 						new WorkspaceDiscoveryError({
-							root: resolvedRoot,
+							root,
 							reason: `root package.json at ${rootPkgJsonPath} has no version field`,
 						}),
 					);
@@ -417,7 +428,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				const rootPkg = new WorkspacePackage({
 					name: rootDecoded.name,
 					version: rootDecoded.version,
-					path: resolvedRoot,
+					path: root,
 					packageJsonPath: rootPkgJsonPath,
 					relativePath: ".",
 					private: rootDecoded.private ?? false,
@@ -430,25 +441,34 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 
 				const packages = [rootPkg, ...nonRootPackages];
 
-				cachedPackages = packages;
+				cache.set(root, packages);
 				yield* Effect.logInfo("Workspace packages discovered").pipe(
-					Effect.annotateLogs("workspace.packages.count", packages.length),
+					Effect.annotateLogs({
+						"workspace.root": root,
+						"workspace.packages.count": packages.length,
+					}),
 				);
 				return packages;
+			});
+
+		const discoverPackages = (cwd?: string): Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError> =>
+			Effect.gen(function* () {
+				const root = yield* resolveRoot(cwd);
+				return yield* discoverAtRoot(root);
 			}).pipe(Effect.withSpan("WorkspaceDiscovery.listPackages"));
 
 		return {
 			listPackages: discoverPackages,
 
-			importerMap: () =>
+			importerMap: (cwd?: string) =>
 				Effect.gen(function* () {
-					const packages = yield* discoverPackages();
+					const packages = yield* discoverPackages(cwd);
 					return new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>;
 				}).pipe(Effect.withSpan("WorkspaceDiscovery.importerMap")),
 
-			getPackage: (name: string) =>
+			getPackage: (name: string, cwd?: string) =>
 				Effect.gen(function* () {
-					const packages = yield* discoverPackages();
+					const packages = yield* discoverPackages(cwd);
 					const found = packages.find((p) => p.name === name);
 					if (found) {
 						yield* Effect.logDebug("Package resolved").pipe(Effect.annotateLogs("workspace.package", name));

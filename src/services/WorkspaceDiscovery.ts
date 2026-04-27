@@ -65,22 +65,28 @@ export class WorkspaceDiscovery extends Context.Tag("@spencerbeggs/workspaces-ef
 		 *
 		 * Resolves workspace glob patterns and reads each matched `package.json`.
 		 *
+		 * @param cwd - Optional starting directory. When provided, the workspace
+		 *   root is resolved fresh from `cwd` for this call (results cached per
+		 *   resolved root). When omitted, uses the root that was eagerly resolved
+		 *   from `process.cwd()` at layer construction time.
 		 * @returns An Effect that succeeds with a readonly array of
 		 *   {@link WorkspacePackage} records, or fails with
 		 *   {@link WorkspaceDiscoveryError} if workspace patterns cannot be resolved.
 		 */
-		readonly listPackages: () => Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError>;
+		readonly listPackages: (cwd?: string) => Effect.Effect<ReadonlyArray<WorkspacePackage>, WorkspaceDiscoveryError>;
 
 		/**
 		 * Get a specific workspace package by name.
 		 *
 		 * @param name - The package name as declared in its `package.json` `name` field.
+		 * @param cwd - Optional starting directory. See {@link listPackages} for behavior.
 		 * @returns An Effect that succeeds with the matching {@link WorkspacePackage},
 		 *   or fails with {@link PackageNotFoundError} if no workspace package has that
 		 *   name, or {@link WorkspaceDiscoveryError} if discovery itself fails.
 		 */
 		readonly getPackage: (
 			name: string,
+			cwd?: string,
 		) => Effect.Effect<WorkspacePackage, PackageNotFoundError | WorkspaceDiscoveryError>;
 
 		/**
@@ -89,8 +95,11 @@ export class WorkspaceDiscovery extends Context.Tag("@spencerbeggs/workspaces-ef
 		 * Useful for mapping lockfile importer keys to their workspace packages.
 		 * Built from `listPackages()` output and inherits its caching.
 		 *
+		 * @param cwd - Optional starting directory. See {@link listPackages} for behavior.
 		 * @returns An Effect that succeeds with a ReadonlyMap keyed by relativePath.
 		 */
-		readonly importerMap: () => Effect.Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>;
+		readonly importerMap: (
+			cwd?: string,
+		) => Effect.Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>;
 	}
 >() {}
