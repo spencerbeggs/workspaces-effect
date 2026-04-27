@@ -41,8 +41,8 @@ importers:
         specifier: ^0.2.1
         version: 0.2.1(effect@3.21.2)
       yaml-effect:
-        specifier: ^0.2.3
-        version: 0.2.3(effect@3.21.2)
+        specifier: ^0.4.0
+        version: 0.4.0(effect@3.21.2)
     devDependencies:
       '@effect/platform':
         specifier: catalog:silk
@@ -3952,6 +3952,11 @@ packages:
 
   yaml-effect@0.2.3:
     resolution: {integrity: sha512-378iw8DWn+6cLzHfOZFLEPu/UXcymHtixKe+CM9OFk9G/uFeQfRU/WNnKRVjIkTCj9M8EwJdiOgH3rOrUwyFyQ==}
+    peerDependencies:
+      effect: '>=3.21.0'
+
+  yaml-effect@0.4.0:
+    resolution: {integrity: sha512-WHco6UeMCFnnKv+Zw442uUgUbJOtIjP2AYRG8JIcFLHaF0lHE35qF0brTOD4fKxhi0QSXi5jywR2lF33CKOytw==}
     peerDependencies:
       effect: '>=3.21.0'
 
@@ -8291,6 +8296,10 @@ snapshots:
   y18n@5.0.8: {}
 
   yaml-effect@0.2.3(effect@3.21.2):
+    dependencies:
+      effect: 3.21.2
+
+  yaml-effect@0.4.0(effect@3.21.2):
     dependencies:
       effect: 3.21.2
 
