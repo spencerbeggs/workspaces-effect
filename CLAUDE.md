@@ -7,7 +7,10 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 All phases complete plus WorkspacePackage enrichment (Issue #12). 386 tests
 passing (250 unit + 136 integration). Full observability (spans + structured
-logging) across all services. Request/RequestResolver with per-layer caching
+logging at Debug level) across all services -- library is silent under
+Effect's default logger; consumers opt in via
+`Logger.withMinimumLogLevel(LogLevel.Debug)`. See README "Observability"
+section. Request/RequestResolver with per-layer caching
 for DependencyGraph and LockfileReader lookups. Integrity check works for all
 4 package managers. Composite layers: WorkspacesLive (no git),
 WorkspacesFullLive (with git). WorkspacePackage has peerDependencies,
@@ -55,6 +58,7 @@ Load these when working on the corresponding area:
 - `Data.TaggedError` with exported Base constants
 - CommandExecutor resolved at layer construction for R=never methods
 - Eager data construction in `Layer.effect`
+- Internal service events use `Effect.logDebug` (not `logInfo`); library stays silent under the default logger
 - Request/RequestResolver with per-layer `Request.makeCache` for deduplication
 - `Schema.transformOrFail` + `Schema.compose` for parsing pipelines
 - PublishConfig is a `Schema.Class` (not Schema.Struct); no PublishConfigSchema alias

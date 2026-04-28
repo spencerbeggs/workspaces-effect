@@ -95,7 +95,7 @@ const detectPackageManager = (
 				version: pmInfo?.name === "pnpm" ? pmInfo.version : undefined,
 				runtime: "node" as const,
 			};
-			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			yield* Effect.logDebug("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
 			return result;
 		}
 
@@ -108,7 +108,7 @@ const detectPackageManager = (
 				version: pmInfo.version,
 				runtime: "bun" as const,
 			};
-			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			yield* Effect.logDebug("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
 			return result;
 		}
 
@@ -120,7 +120,7 @@ const detectPackageManager = (
 				version: pmInfo.version,
 				runtime: "node" as const,
 			};
-			yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+			yield* Effect.logDebug("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
 			return result;
 		}
 
@@ -136,7 +136,7 @@ const detectPackageManager = (
 					version: pmInfo?.name === "npm" ? pmInfo.version : undefined,
 					runtime: "node" as const,
 				};
-				yield* Effect.logInfo("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
+				yield* Effect.logDebug("Package manager detected").pipe(Effect.annotateLogs("workspace.pm", result.type));
 				return result;
 			}
 		}

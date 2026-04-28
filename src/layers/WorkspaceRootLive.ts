@@ -83,7 +83,7 @@ const findWorkspaceRoot = (
 			const result = yield* checkForWorkspaceRoot(fs, path, current).pipe(Effect.option);
 
 			if (result._tag === "Some") {
-				yield* Effect.logInfo("Workspace root found").pipe(Effect.annotateLogs("workspace.root", result.value));
+				yield* Effect.logDebug("Workspace root found").pipe(Effect.annotateLogs("workspace.root", result.value));
 				return result.value;
 			}
 

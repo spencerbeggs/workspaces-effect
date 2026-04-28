@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-04-15
-last-synced: 2026-04-15
+updated: 2026-04-28
+last-synced: 2026-04-28
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -65,7 +65,12 @@ services.
 - **Internal patterns**: Request/RequestResolver with per-layer caching for
   DependencyGraph and LockfileReader lookups
 - **Observability**: Effect.withSpan on all service methods and layer
-  construction; structured logging at Info/Debug/Trace levels
+  construction; structured logging at Debug/Trace levels only -- the library
+  is silent under Effect's default logger. Consumers opt in via
+  `Logger.withMinimumLogLevel(LogLevel.Debug)` (or lower) or by attaching a
+  custom logger. Log annotations (`workspace.root`, `workspace.pm`,
+  `workspace.packages.count`, etc.) are unchanged. See the README
+  "Observability" section for subscription examples.
 - **Test organization**: Tests in top-level `__test__/` directory (not
   co-located in `src/`), following the `@savvy-web/vitest` discovery
   convention. Shared test utilities in `__test__/utils/`. Integration tests

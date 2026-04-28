@@ -442,7 +442,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 				const packages = [rootPkg, ...nonRootPackages];
 
 				cache.set(root, packages);
-				yield* Effect.logInfo("Workspace packages discovered").pipe(
+				yield* Effect.logDebug("Workspace packages discovered").pipe(
 					Effect.annotateLogs({
 						"workspace.root": root,
 						"workspace.packages.count": packages.length,

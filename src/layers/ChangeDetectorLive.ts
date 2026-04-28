@@ -136,7 +136,7 @@ export const ChangeDetectorLive = Layer.effect(
 					const committedFiles = yield* runGitLines(cwd, "diff", "--name-only", `${options.base}...${options.head}`);
 
 					if (!options.includeUncommitted) {
-						yield* Effect.logInfo("Changed files detected").pipe(
+						yield* Effect.logDebug("Changed files detected").pipe(
 							Effect.annotateLogs("workspace.files.count", committedFiles.length),
 						);
 						return committedFiles;
@@ -148,7 +148,7 @@ export const ChangeDetectorLive = Layer.effect(
 
 					const allFiles = new Set([...committedFiles, ...unstagedFiles, ...stagedFiles, ...untrackedFiles]);
 					const sorted = Array.from(allFiles).sort();
-					yield* Effect.logInfo("Changed files detected").pipe(
+					yield* Effect.logDebug("Changed files detected").pipe(
 						Effect.annotateLogs("workspace.files.count", sorted.length),
 					);
 					return sorted;
@@ -187,7 +187,7 @@ export const ChangeDetectorLive = Layer.effect(
 						}
 					}
 					const sorted = packages.sort((a, b) => a.name.localeCompare(b.name));
-					yield* Effect.logInfo("Changed packages detected").pipe(
+					yield* Effect.logDebug("Changed packages detected").pipe(
 						Effect.annotateLogs("workspace.packages.count", sorted.length),
 					);
 					return sorted;
@@ -241,7 +241,7 @@ export const ChangeDetectorLive = Layer.effect(
 						.map((name) => packageMap.get(name))
 						.filter((pkg): pkg is WorkspacePackage => pkg !== undefined)
 						.sort((a, b) => a.name.localeCompare(b.name));
-					yield* Effect.logInfo("Affected packages detected").pipe(
+					yield* Effect.logDebug("Affected packages detected").pipe(
 						Effect.annotateLogs("workspace.packages.count", result.length),
 					);
 					return result;
