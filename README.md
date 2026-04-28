@@ -147,6 +147,51 @@ The same pattern applies to any other service in the library -- `WorkspaceRoot`,
 `PackageManagerDetector`, `LockfileReader`, etc. all expose `Context.Tag`s
 that consumers can rebind.
 
+## Observability
+
+`workspaces-effect` is silent at the default log level. Internal
+events (workspace root discovery, package manager detection, lockfile
+reads, change detection, etc.) are emitted via Effect's structured
+logger at `Debug` level with annotations like `workspace.root`,
+`workspace.pm`, and `workspace.packages.count`.
+
+To see those events, lower the minimum log level:
+
+```typescript
+import { Effect, Logger, LogLevel } from "effect";
+
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(WorkspacesLive),
+    Effect.provide(NodeContext.layer),
+    Logger.withMinimumLogLevel(LogLevel.Debug),
+  ),
+);
+```
+
+To route events somewhere other than the console (a collector,
+OpenTelemetry, a test sink, etc.), replace or add a logger:
+
+```typescript
+import { Effect, Logger } from "effect";
+
+const collectingLogger = Logger.make(({ logLevel, message, annotations }) => {
+  // ship to your destination of choice; logLevel is usually what you route on
+});
+
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(WorkspacesLive),
+    Effect.provide(NodeContext.layer),
+    Effect.provide(Logger.replace(Logger.defaultLogger, collectingLogger)),
+  ),
+);
+```
+
+Errors are still raised through the typed error channel
+(`WorkspaceRootNotFoundError`, `LockfileReadError`, etc.) -- the
+logger only carries informational events.
+
 ## Documentation
 
 For architecture details, API reference, and advanced usage, see

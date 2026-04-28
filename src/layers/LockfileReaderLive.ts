@@ -209,7 +209,7 @@ export const LockfileReaderLive = Layer.effect(
 			packageIndex.set(pkg.name, existing);
 		}
 
-		yield* Effect.logInfo("Lockfile reader initialized").pipe(
+		yield* Effect.logDebug("Lockfile reader initialized").pipe(
 			Effect.annotateLogs({
 				"workspace.pm": pm,
 				"workspace.packages.count": lockfileData.packages.length,
@@ -248,7 +248,7 @@ export const LockfileReaderLive = Layer.effect(
 			checkIntegrity: () =>
 				Effect.gen(function* () {
 					const result = yield* checkLockfileIntegrity(lockfileData, root, fs, path);
-					yield* Effect.logInfo("Lockfile integrity check complete").pipe(
+					yield* Effect.logDebug("Lockfile integrity check complete").pipe(
 						Effect.annotateLogs({
 							"workspace.integrity.valid": result.valid,
 							"workspace.integrity.issues":
