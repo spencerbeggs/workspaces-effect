@@ -1,5 +1,21 @@
 # workspaces-effect
 
+## 0.5.1
+
+### Documentation
+
+* [`8863d31`](https://github.com/spencerbeggs/workspaces-effect/commit/8863d3102e0a02975d36bc4d4bd821e8f405dfc6) New "Observability" section in the README documenting how to subscribe to internal events by lowering the log level or replacing the logger.
+
+### Refactoring
+
+* [`8863d31`](https://github.com/spencerbeggs/workspaces-effect/commit/8863d3102e0a02975d36bc4d4bd821e8f405dfc6) Internal observability events now emit at `Debug` level instead of `Info`. The library is silent under Effect's default logger; consumers who want to see workspace-root discovery, package-manager detection, lockfile reads, and change-detection events can opt in via `Logger.withMinimumLogLevel(LogLevel.Debug)` or by attaching a custom logger. Affects `WorkspaceRootLive`, `PackageManagerDetectorLive`, `LockfileReaderLive`, `WorkspaceDiscoveryLive`, and `ChangeDetectorLive`. Log annotations (`workspace.root`, `workspace.pm`, `workspace.packages.count`, etc.) are unchanged.
+
+### Dependencies
+
+* | [`8863d31`](https://github.com/spencerbeggs/workspaces-effect/commit/8863d3102e0a02975d36bc4d4bd821e8f405dfc6) | Dependency | Type    | Action | From   | To |
+  | :------------------------------------------------------------------------------------------------------------- | :--------- | :------ | :----- | :----- | -- |
+  | yaml-effect                                                                                                    | dependency | updated | ^0.4.0 | ^0.5.0 |    |
+
 ## 0.5.0
 
 ### Breaking Changes
