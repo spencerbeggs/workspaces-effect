@@ -173,14 +173,18 @@ To route events somewhere other than the console (a collector,
 OpenTelemetry, a test sink, etc.), replace or add a logger:
 
 ```typescript
-import { Logger } from "effect";
+import { Effect, Logger } from "effect";
 
-const collectingLogger = Logger.make(({ message, annotations }) => {
-  // ship to your destination of choice
+const collectingLogger = Logger.make(({ logLevel, message, annotations }) => {
+  // ship to your destination of choice; logLevel is usually what you route on
 });
 
-program.pipe(
-  Effect.provide(Logger.replace(Logger.defaultLogger, collectingLogger)),
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(WorkspacesLive),
+    Effect.provide(NodeContext.layer),
+    Effect.provide(Logger.replace(Logger.defaultLogger, collectingLogger)),
+  ),
 );
 ```
 
