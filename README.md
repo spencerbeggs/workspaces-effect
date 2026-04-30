@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/workspaces-effect)](https://www.npmjs.com/package/workspaces-effect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
 
 An [Effect](https://effect.website) library for monorepo workspace tooling. Discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry and Bun through composable Effect services with typed errors and platform independence.
 
