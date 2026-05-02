@@ -1,5 +1,73 @@
 # workspaces-effect
 
+## 0.6.0
+
+### Breaking Changes
+
+* [`37391c0`](https://github.com/spencerbeggs/workspaces-effect/commit/37391c02bd4eb7f3ff2103739c4a981591ca5e86) ### `LockfileReader` service errors surface from method calls
+
+Errors that previously failed `Layer.provide(LockfileReaderLive)` now surface
+from the first invocation of `readLockfile`, `resolvedVersion`,
+`workspaceDependencies`, or `checkIntegrity`. The error union exposed by these
+methods has been widened to a new exported `LockfileInitError` alias:
+
+```ts
+type LockfileInitError =
+  | WorkspaceRootNotFoundError
+  | PackageManagerDetectionError
+  | LockfileReadError
+  | LockfileParseError;
+```
+
+Programs that previously relied on construction-time failure should move their
+error handling to the call site. Programs that already wrapped a method call
+in `Effect.runPromise` will continue to see failures, just routed through the
+program's error channel rather than the layer's.
+
+### Performance
+
+* [`37391c0`](https://github.com/spencerbeggs/workspaces-effect/commit/37391c02bd4eb7f3ff2103739c4a981591ca5e86) ### Defer I/O in `LockfileReaderLive` and `WorkspaceDiscoveryLive`
+
+Moves all filesystem I/O out of the `Layer.effect` constructors and into the
+service methods, memoized per layer instance via `Effect.cached`. Layer
+construction is now O(1); the workspace root walk, package-manager detection,
+lockfile read, and lockfile parse are paid on the first method call rather
+than every time a fresh layer is composed.
+
+Consumers that build a layer per call site — Vitest reporters with multiple
+projects, CLIs that compose layers per subcommand, tests that swap layers
+between cases — no longer pay the eager initialization cost N times.
+Downstream `vitest-agent-reporter` measured a 10× wall-clock improvement
+(44s → 4.3s) on a five-project monorepo by switching to the lighter slice
+that was the workaround for this issue.
+
+Closes #60.
+
+### Documentation
+
+* [`37391c0`](https://github.com/spencerbeggs/workspaces-effect/commit/37391c02bd4eb7f3ff2103739c4a981591ca5e86) Address eight stale design-doc audit issues (#47, #48, #49, #50, #51, #54,
+  \#55, #57). No code changes.
+
+- `architecture.md`: corrected error-type count from 11 to 12 (missing
+  `LockfileIntegrityError`); added the optional `cwd` parameter to the
+  documented `WorkspaceDiscovery` method signatures.
+- `CLAUDE.md`: removed two stale references to a non-existent `pkgs/`
+  directory and replaced the example test command with a single-package
+  equivalent; updated the code-review summary from "5/10 fixed" to
+  "6/10 fixed".
+- `code-review-findings.md`: replaced the open-ended "Should fix soon"
+  marker on Issue 3 (`/**` glob) with a reference to the new GitHub issue
+  \#62 that tracks the fix.
+- `phase4-configuration-lockfiles.md`: replaced the stale, self-referential
+  composite layer example with the real `Layer.mergeAll` shape from
+  `src/layers/WorkspacesLive.ts`.
+- `phase3-change-detection.md`: corrected the false claim that
+  `ChangeDetectorLive` does not resolve `CommandExecutor`; the layer does
+  yield it inside `Layer.effect` so service methods have `R = never`.
+- `research-notes.md`: promoted from `draft`/60 % to `current`/100 % and
+  added a header marking the document as historical reference material that
+  informed the architecture rather than a prescriptive spec.
+
 ## 0.5.1
 
 ### Documentation
