@@ -88,6 +88,7 @@ export { WorkspaceDiscoveryError, WorkspaceDiscoveryErrorBase } from "./errors/W
 export { WorkspaceRootNotFoundError, WorkspaceRootNotFoundErrorBase } from "./errors/WorkspaceRootNotFoundError.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
+export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
