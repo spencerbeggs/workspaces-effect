@@ -13,6 +13,7 @@ dependencies, and integrity checks.
 - [Integrity Checking](#integrity-checking)
 - [PM-Specific Extensions](#pm-specific-extensions)
 - [Error Handling](#error-handling)
+- [Lazy Initialization](#lazy-initialization)
 
 ## Supported Formats
 
@@ -234,13 +235,28 @@ if (lockfile.pmSpecific?._tag === "bun") {
 
 ## Error Handling
 
-Lockfile operations can fail with three error types:
+Lockfile operations can fail with several error types. Initialization
+failures (root discovery, package-manager detection, lockfile read, lockfile
+parse) surface from the **first** call to any `LockfileReader` method as a
+member of the exported `LockfileInitError` union:
 
-| Error | Cause |
-| --- | --- |
-| `LockfileReadError` | Lockfile does not exist or cannot be read from disk |
-| `LockfileParseError` | Lockfile exists but contains invalid or unparseable content |
-| `LockfileIntegrityError` | Integrity check itself cannot complete |
+```typescript
+import type { LockfileInitError } from "workspaces-effect";
+
+// LockfileInitError =
+//   | WorkspaceRootNotFoundError
+//   | PackageManagerDetectionError
+//   | LockfileReadError
+//   | LockfileParseError
+```
+
+| Error | Cause | Where it surfaces |
+| --- | --- | --- |
+| `WorkspaceRootNotFoundError` | No workspace root found from `process.cwd()` | First method call (member of `LockfileInitError`) |
+| `PackageManagerDetectionError` | Cannot determine PM type at the resolved root | First method call (member of `LockfileInitError`) |
+| `LockfileReadError` | Lockfile does not exist or cannot be read from disk | First method call (member of `LockfileInitError`) |
+| `LockfileParseError` | Lockfile exists but contains invalid or unparseable content | First method call (member of `LockfileInitError`) |
+| `LockfileIntegrityError` | Integrity check itself cannot complete | `checkIntegrity()` only |
 
 `LockfileReadError` has `lockfilePath` and `reason` fields.
 `LockfileParseError` has `lockfilePath`, `format`, and `cause` fields.
@@ -251,6 +267,12 @@ const program = Effect.gen(function* () {
   const reader = yield* LockfileReader;
   return yield* reader.readLockfile();
 }).pipe(
+  Effect.catchTag("WorkspaceRootNotFoundError", (e) =>
+    Effect.logWarning(`No workspace root: ${e.reason}`),
+  ),
+  Effect.catchTag("PackageManagerDetectionError", (e) =>
+    Effect.logWarning(`PM detection failed: ${e.reason}`),
+  ),
   Effect.catchTag("LockfileReadError", (e) =>
     Effect.logWarning(`No lockfile at ${e.lockfilePath}: ${e.reason}`),
   ),
@@ -260,4 +282,39 @@ const program = Effect.gen(function* () {
 );
 ```
 
+`checkIntegrity()` widens the error channel further:
+`LockfileInitError | LockfileIntegrityError`.
+
 See [Troubleshooting](../troubleshooting.md) for detailed solutions.
+
+## Lazy Initialization
+
+`LockfileReaderLive` defers all I/O (workspace-root discovery, package-manager
+detection, lockfile read, and lockfile parse) until the first call to
+`readLockfile`, `resolvedVersion`, `workspaceDependencies`, or
+`checkIntegrity`. The result is memoized for the lifetime of the layer
+instance via `Effect.cached`, so subsequent calls reuse the cached parse.
+
+The practical implications:
+
+- **Layer construction is O(1).** Building the layer (e.g., via
+  `Effect.provide(WorkspacesLive)`) performs no filesystem work. Programs that
+  compose the layer but never invoke a `LockfileReader` method pay nothing.
+- **Errors surface from the first method call**, not from
+  `Effect.provide(LockfileReaderLive)`. Code that previously relied on
+  construction-time failure (for example, by handling errors in a wrapper
+  around `Layer.provide`) must move its handling to the call site.
+- **Both success and failure are memoized.** If the first call fails because
+  the lockfile cannot be parsed, every subsequent call on the same layer
+  instance fails with the same error. Build a fresh layer instance to retry.
+- **The Layer E channel is `never`.** The error variants previously listed on
+  `LockfileReaderLive` (`LockfileReadError`, `LockfileParseError`, and the
+  others above) now appear on each method's E channel as `LockfileInitError`
+  variants. `WorkspaceDiscoveryLive` similarly defers its default-root walk
+  and now has an E channel of `never`.
+
+This change exists primarily to benefit consumers that build the layer per
+call site (Vitest reporters with multiple projects, CLIs that compose layers
+per subcommand, tests that swap layers between cases) -- the previous eager
+construction paid the read/parse cost N times for N layer instances. See
+GitHub issue #60 for context.

@@ -192,6 +192,57 @@ Errors are still raised through the typed error channel
 (`WorkspaceRootNotFoundError`, `LockfileReadError`, etc.) -- the
 logger only carries informational events.
 
+## Lazy lockfile and discovery initialization
+
+`LockfileReaderLive` and `WorkspaceDiscoveryLive` defer all I/O (workspace
+root discovery, package-manager detection, lockfile read, and lockfile parse)
+to the first call to a service method. The work is memoized for the lifetime
+of the layer instance via `Effect.cached`, so layer construction itself is
+O(1). This benefits consumers that build the layer per call site -- Vitest
+reporters with multiple projects, CLIs that compose layers per subcommand,
+and tests that swap layers between cases (issue #60).
+
+The trade-off is that errors which used to fail
+`Effect.provide(LockfileReaderLive)` now surface from each method's E
+channel instead. The four init-time errors are exported as a single union
+type alias for convenient handling:
+
+```typescript
+import type { LockfileInitError } from "workspaces-effect";
+
+// LockfileInitError =
+//   | WorkspaceRootNotFoundError
+//   | PackageManagerDetectionError
+//   | LockfileReadError
+//   | LockfileParseError
+```
+
+Every `LockfileReader` method (`readLockfile`, `resolvedVersion`,
+`workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E
+channel; `checkIntegrity` additionally lists `LockfileIntegrityError`. Code
+that previously relied on layer-construction failure should move its handler
+to the call site:
+
+```typescript
+import { Effect } from "effect";
+import { LockfileReader, WorkspacesLive } from "workspaces-effect";
+
+const program = Effect.gen(function* () {
+  const reader = yield* LockfileReader;
+  return yield* reader.readLockfile();
+}).pipe(
+  Effect.catchTag("LockfileReadError", (e) =>
+    Effect.logWarning(`No lockfile at ${e.lockfilePath}: ${e.reason}`),
+  ),
+  Effect.catchTag("LockfileParseError", (e) =>
+    Effect.logError(`Cannot parse ${e.format} lockfile at ${e.lockfilePath}`),
+  ),
+);
+```
+
+See the [Lazy Initialization](./docs/guides/lockfile-parsing.md#lazy-initialization)
+section of the lockfile guide for the full discussion.
+
 ## Documentation
 
 For architecture details, API reference, and advanced usage, see

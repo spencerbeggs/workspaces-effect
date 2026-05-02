@@ -2,11 +2,11 @@
 title: "Research Notes: Sibling Repos & Effect Patterns"
 module: core
 category: reference
-status: draft
-completeness: 60
+status: current
+completeness: 100
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-05-02
+last-synced: 2026-05-02
 related:
   - architecture.md
   - effect-patterns-core.md
@@ -19,6 +19,15 @@ tags:
 ---
 
 ## Research Notes: Sibling Repos & Effect Patterns
+
+> **Status**: Reference material, not prescriptive. This document captures the
+> sibling-repo and Effect-docs research that informed the initial design of
+> `workspaces-effect`. The patterns selected from this research were absorbed
+> into `architecture.md` and the `effect-patterns-*.md` documents — those are
+> the authoritative sources for current architecture. This file is preserved
+> as historical context for *why* particular patterns were chosen (and others
+> rejected). Do not treat the catalog below as the current state of the
+> implementation; consult the architecture docs or the source for that.
 
 <!-- TOC -->
 

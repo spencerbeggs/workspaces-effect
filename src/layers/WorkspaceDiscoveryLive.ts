@@ -289,15 +289,17 @@ const readWorkspacePackage = (
  * resolving glob patterns to directories, and parsing each `package.json`.
  *
  * @remarks
- * Requires {@link WorkspaceRoot}, `FileSystem`, and `Path`. The workspace
- * root is eagerly resolved at layer construction time using `process.cwd()`
- * as the starting directory. Discovery method calls accept an optional
- * `cwd` parameter to resolve a different root for that single call;
- * results are cached per resolved root path for the lifetime of the layer.
+ * Requires {@link WorkspaceRoot}, `FileSystem`, and `Path`. Layer construction
+ * is O(1); the default workspace root (resolved from `process.cwd()`) is looked
+ * up lazily on the first method call and cached for the lifetime of the layer.
+ * Discovery method calls accept an optional `cwd` parameter to resolve a
+ * different root for that single call; results are cached per resolved root
+ * path for the lifetime of the layer.
  *
  * @privateRemarks
- * Eagerly resolves the default root from `process.cwd()` at layer
- * construction. Per-call `cwd` arguments are resolved on demand via
+ * The default-root lookup is wrapped in `Effect.cached` so layer construction
+ * is free and consumers that build the layer but never call a method pay
+ * nothing. Per-call `cwd` arguments are resolved on demand via
  * `WorkspaceRoot.find` and memoized in a `Map` keyed by the absolute
  * resolved root path.
  *
@@ -325,7 +327,7 @@ const readWorkspacePackage = (
  */
 export const WorkspaceDiscoveryLive: Layer.Layer<
 	WorkspaceDiscovery,
-	WorkspaceDiscoveryError,
+	never,
 	WorkspaceRoot | FileSystem.FileSystem | Path.Path
 > = Layer.effect(
 	WorkspaceDiscovery,
@@ -334,16 +336,22 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
 
-		// Eagerly resolve the default root at layer construction time.
-		// Uses process.cwd() as the search starting point. Per-call `cwd`
-		// arguments are resolved on demand by `resolveRoot` below.
-		const defaultRoot = yield* rootService.find(process.cwd()).pipe(
-			Effect.mapError(
-				(e) =>
-					new WorkspaceDiscoveryError({
-						root: e.searchPath,
-						reason: `workspace root not found: ${e.reason}`,
-					}),
+		// Lazily resolve the default root on first use. `Effect.cached` memoizes
+		// success and failure for the lifetime of the layer, so consumers that
+		// only invoke methods with an explicit `cwd` never pay the default-root
+		// fs walk, and those that omit `cwd` pay it exactly once. `process.cwd()`
+		// is wrapped in `Effect.suspend` so it is read at first-call time, not at
+		// layer construction (matters for consumers that `process.chdir(...)`
+		// between provide and the first method invocation).
+		const resolveDefaultRoot = yield* Effect.cached(
+			Effect.suspend(() => rootService.find(process.cwd())).pipe(
+				Effect.mapError(
+					(e) =>
+						new WorkspaceDiscoveryError({
+							root: e.searchPath,
+							reason: `workspace root not found: ${e.reason}`,
+						}),
+				),
 			),
 		);
 
@@ -352,7 +360,7 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 
 		const resolveRoot = (cwd: string | undefined): Effect.Effect<string, WorkspaceDiscoveryError> =>
 			cwd === undefined
-				? Effect.succeed(defaultRoot)
+				? resolveDefaultRoot
 				: rootService.find(cwd).pipe(
 						Effect.mapError(
 							(e) =>

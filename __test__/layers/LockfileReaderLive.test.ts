@@ -261,4 +261,102 @@ describe("LockfileReaderLive", () => {
 			}
 		});
 	});
+
+	describe("laziness", () => {
+		it("does no I/O at layer construction", async () => {
+			let findRuns = 0;
+			let detectRuns = 0;
+			let readRuns = 0;
+
+			const layer = LockfileReaderLive.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WorkspaceRoot, {
+							find: () =>
+								Effect.sync(() => {
+									findRuns++;
+									return "/project";
+								}),
+						}),
+						Layer.succeed(PackageManagerDetector, {
+							detect: () =>
+								Effect.sync(() => {
+									detectRuns++;
+									return { type: "pnpm" as const, version: undefined };
+								}),
+						}),
+						FileSystem.layerNoop({
+							readFileString: (filePath: string) =>
+								Effect.suspend(() => {
+									readRuns++;
+									if (filePath.endsWith("pnpm-lock.yaml")) return Effect.succeed(PNPM_FIXTURE);
+									return Effect.fail(notFound(filePath));
+								}),
+						}),
+						Path.layer,
+						Logger.replace(Logger.defaultLogger, Logger.none),
+					),
+				),
+			);
+
+			// Acquire the service from the layer without invoking any of its methods.
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* LockfileReader;
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(findRuns).toBe(0);
+			expect(detectRuns).toBe(0);
+			expect(readRuns).toBe(0);
+		});
+
+		it("memoizes initialization across multiple method calls", async () => {
+			let findRuns = 0;
+			let detectRuns = 0;
+
+			const layer = LockfileReaderLive.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WorkspaceRoot, {
+							find: () =>
+								Effect.sync(() => {
+									findRuns++;
+									return "/project";
+								}),
+						}),
+						Layer.succeed(PackageManagerDetector, {
+							detect: () =>
+								Effect.sync(() => {
+									detectRuns++;
+									return { type: "pnpm" as const, version: undefined };
+								}),
+						}),
+						FileSystem.layerNoop({
+							readFileString: (filePath: string) => {
+								if (filePath.endsWith("pnpm-lock.yaml")) return Effect.succeed(PNPM_FIXTURE);
+								return Effect.fail(notFound(filePath));
+							},
+						}),
+						Path.layer,
+						Logger.replace(Logger.defaultLogger, Logger.none),
+					),
+				),
+			);
+
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const reader = yield* LockfileReader;
+					yield* reader.readLockfile();
+					yield* reader.readLockfile();
+					yield* reader.workspaceDependencies();
+					yield* reader.resolvedVersion("lodash");
+				}).pipe(Effect.provide(layer)),
+			);
+
+			// Initialization runs exactly once; subsequent method calls hit the cache.
+			expect(findRuns).toBe(1);
+			expect(detectRuns).toBe(1);
+		});
+	});
 });

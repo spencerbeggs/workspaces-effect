@@ -2,9 +2,12 @@
 
 workspaces-effect provides 9 composable Effect services organized into four
 groups. Each service is an Effect `Context.Tag` with a live layer
-implementation. All service methods have `R = never` -- dependencies are
-resolved at layer construction time, so consuming code never needs to provide
-transitive services manually.
+implementation. All service methods have `R = never` -- inter-service and
+platform dependencies are resolved when the layer is built, so consuming
+code never needs to provide transitive services manually. Where I/O is
+deferred for performance (`LockfileReader`, `WorkspaceDiscovery`), the work
+runs on the first method call and its errors surface in each method's E
+channel; see [Error Model](#error-model).
 
 ## Table of Contents
 
@@ -211,6 +214,30 @@ const program = Effect.gen(function* () {
   ),
 );
 ```
+
+### LockfileInitError union
+
+`LockfileReader` defers all initialization (workspace-root discovery,
+package-manager detection, lockfile read, and lockfile parse) to the first
+method call. The four errors that can fail that initialization are exposed as
+a single exported type alias for ergonomic handling:
+
+```typescript
+import type { LockfileInitError } from "workspaces-effect";
+
+// LockfileInitError =
+//   | WorkspaceRootNotFoundError
+//   | PackageManagerDetectionError
+//   | LockfileReadError
+//   | LockfileParseError
+```
+
+Every `LockfileReader` method (`readLockfile`, `resolvedVersion`,
+`workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E
+channel. `checkIntegrity` additionally lists `LockfileIntegrityError`. The
+`LockfileReaderLive` and `WorkspaceDiscoveryLive` Layer E channels are
+`never` -- errors no longer surface from `Effect.provide`. See
+[Lockfile Parsing -> Lazy Initialization](../guides/lockfile-parsing.md#lazy-initialization).
 
 For a complete list of error fields and solutions, see
 [Troubleshooting](../troubleshooting.md).

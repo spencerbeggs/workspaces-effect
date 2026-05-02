@@ -355,16 +355,21 @@ const ChangeDetectorLive: Layer.Layer<
   Effect.gen(function* () {
     const resolver = yield* PackageResolver
     const graph = yield* DependencyGraph
-    // CommandExecutor is accessed implicitly via Command.string/Command.lines
+    const executor = yield* CommandExecutor.CommandExecutor
+    // git helpers close over `executor`, so service methods have R = never
     return { changedFiles, changedPackages, affectedPackages }
   }),
 )
 ```
 
-**Important**: The `Command.string` and `Command.lines` functions
-require `CommandExecutor` in the R channel. The ChangeDetectorLive layer
-does NOT resolve CommandExecutor — it passes through as a requirement,
-letting consumers provide `NodeContext.layer` or `BunContext.layer`.
+**Important**: `CommandExecutor` is resolved at layer construction time
+(yielded inside `Layer.effect`) so that all service methods have
+`R = never`, matching the project convention documented in `CLAUDE.md`
+and in `architecture.md`. The git helpers (`runGit`, `runGitLines`,
+`checkGit` in `src/layers/ChangeDetectorLive.ts`) close over the
+resolved `executor`. `CommandExecutor` still appears in the layer's
+requirements, so consumers must provide it via `NodeContext.layer` or
+`BunContext.layer`.
 
 ### Composite layer
 

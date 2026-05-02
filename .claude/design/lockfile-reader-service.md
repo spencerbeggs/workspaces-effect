@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-04-15
-last-synced: 2026-04-15
+updated: 2026-05-02
+last-synced: 2026-05-02
 authors:
   - C. Spencer Beggs
 tags:
@@ -73,16 +73,32 @@ integrity valid?". A unified interface with PM-specific parsing behind the
 scenes follows the same pattern as `PackageManagerDetector` -- one service
 tag, multiple internal strategies.
 
-### Why eager parsing at layer construction
+### Why lazy parsing memoized via `Effect.cached`
 
-Consistent with `DependencyGraphLive` and `TopologicalSorterLive`, the
-lockfile is read and parsed once when the layer is constructed. All service
-methods query the precomputed `LockfileData`. This is appropriate because:
+**Updated 2026-05-02 (Issue #60).** The lockfile is read and parsed lazily on
+the first service method call rather than during `Layer.effect` construction.
+The `Effect.cached`-wrapped initialization runs once per layer instance --
+both success and failure are memoized for the layer's lifetime, so all
+subsequent method calls reuse the cached `LockfileData`.
 
-- Lockfile content is immutable for the duration of a program run
-- Full parsing cost is low (single file read + YAML/JSON parse)
-- Avoids repeated I/O on every method call
-- Errors surface early (at layer construction, not at query time)
+Properties this preserves from the original eager design:
+
+- Lockfile content is read only once per layer instance
+- Full parse cost is paid at most once
+- Repeated `resolvedVersion`/`workspaceDependencies` calls hit the index, not
+  the filesystem
+
+Properties that changed:
+
+- Layer construction is O(1) (allocates the service record only). Consumers
+  that build the layer per call site (Vitest reporters, per-subcommand CLIs,
+  test suites that swap layers between cases) no longer pay N initialization
+  walks for N layer constructions.
+- Errors that previously failed `Layer.provide(LockfileReaderLive)` --
+  workspace-root-not-found, PM-detect failure, lockfile-read failure,
+  lockfile-parse failure -- now surface from the **first method call**
+  through a `LockfileInitError` union exposed in each method's E channel.
+- Programs that compose the layer but never call a method pay nothing.
 
 ### Why separate PublishabilityDetector
 
@@ -180,15 +196,30 @@ export class PackageNotInLockfileError extends PackageNotInLockfileErrorBase<{
 
 ### Error hierarchy rationale
 
+**Updated 2026-05-02 (Issue #60).** All initialization errors now surface from
+the **first method call** rather than from layer construction. The Layer E
+channel for `LockfileReaderLive` is `never`; method E channels include the
+exported `LockfileInitError` union.
+
 | Error | When raised | Where raised |
 | --- | --- | --- |
-| `LockfileNotFoundError` | Lockfile missing from workspace root | Layer construction |
-| `LockfileParseError` | YAML/JSON/JSONC syntax error or Schema validation failure | Layer construction |
-| `LockfileVersionError` | Lockfile version too old or unrecognized | Layer construction |
-| `PackageNotInLockfileError` | Package name not in parsed lockfile data | `resolvedVersion`, `checkIntegrity` |
+| `WorkspaceRootNotFoundError` | Cannot find a workspace root from `process.cwd()` | First method call (deferred init) |
+| `PackageManagerDetectionError` | Cannot determine PM type at the resolved root | First method call (deferred init) |
+| `LockfileReadError` | Lockfile missing or unreadable at the expected path | First method call (deferred init) |
+| `LockfileParseError` | YAML/JSON/JSONC syntax error or Schema validation failure | First method call (deferred init) |
+| `LockfileIntegrityError` | Critical integrity violation between `package.json` and lockfile | `checkIntegrity` |
+| `PackageNotInLockfileError` (spec only) | Package name not in parsed lockfile data | `resolvedVersion`, `checkIntegrity` (current code returns `Option.none` instead) |
 
-The first three are **construction-time** errors (in the Layer's E channel).
-Only `PackageNotInLockfileError` is a **query-time** error (in method return types).
+The four init-time errors are exported as the `LockfileInitError` type
+alias from the package barrel:
+
+```typescript
+export type LockfileInitError =
+  | WorkspaceRootNotFoundError
+  | PackageManagerDetectionError
+  | LockfileReadError
+  | LockfileParseError;
+```
 
 ## LockfileReader Service Interface
 
@@ -207,9 +238,11 @@ import type { PackageNotInLockfileError } from "../errors/index.js"
 /**
  * Service for reading and querying lockfile data.
  *
- * Parses the lockfile for the detected package manager at layer
- * construction time and provides a unified query API. All methods
- * operate on the precomputed data (no additional I/O).
+ * Parses the lockfile for the detected package manager on the first
+ * method call (memoized via `Effect.cached` for the layer's lifetime)
+ * and provides a unified query API. After the first call all methods
+ * operate on the cached data with no additional I/O. Init errors
+ * surface in each method's E channel as a `LockfileInitError` variant.
  */
 export class LockfileReader extends Context.Tag(
   "workspaces-effect/LockfileReader",
@@ -221,7 +254,12 @@ export class LockfileReader extends Context.Tag(
      *
      * Returns the unified LockfileData model containing all resolved
      * packages, workspace dependencies, and PM-specific extensions.
-     * No additional I/O -- data was parsed at layer construction.
+     *
+     * **Implementation note (2026-05-02, Issue #60):** First call performs
+     * the lockfile read + parse (memoized via `Effect.cached`); subsequent
+     * calls return the cached `LockfileData` with no additional I/O. The
+     * actual signature is `readLockfile()` and its E channel includes
+     * `LockfileInitError`.
      */
     readonly lockfileData: () => Effect.Effect<LockfileData>
 
@@ -455,20 +493,29 @@ const lockfileNameFor = (pm: PackageManagerType): string => {
 /**
  * Live layer for LockfileReader.
  *
- * Construction flow:
+ * **Implementation note (2026-05-02, Issue #60):** The implementation now
+ * wraps steps 1-6 in `Effect.cached` so they run on the **first method call**
+ * rather than at layer construction. The Layer E channel narrowed to `never`;
+ * init errors moved into each method's E channel as a `LockfileInitError`
+ * variant. The numbered steps below describe the work done; the difference
+ * is *when* it runs, not *what* it does.
+ *
+ * Initialization flow (lazy, memoized per layer instance):
  * 1. Detect package manager (via PackageManagerDetector)
  * 2. Resolve lockfile path (workspace root + lockfile name)
  * 3. Read lockfile content (via FileSystem)
  * 4. Parse raw content (YAML/JSON/JSONC depending on PM)
  * 5. Validate against PM-specific raw schema (Schema.decode)
  * 6. Transform to unified LockfileData model
- * 7. Store parsed data; service methods query it
+ * 7. Store parsed data in the cached `LockfileState`; service methods read it
  *
- * Errors at any step propagate in the Layer's E channel.
+ * Errors at any step propagate in the **method's** E channel as a
+ * `LockfileInitError` variant on first invocation.
  */
 export const LockfileReaderLive: Layer.Layer<
   LockfileReader,
-  LockfileNotFoundError | LockfileParseError | LockfileVersionError,
+  // Updated 2026-05-02 (Issue #60): init errors moved off Layer E channel.
+  never,
   WorkspaceRoot | PackageManagerDetector | FileSystem.FileSystem | Path.Path
 > = Layer.effect(
   LockfileReader,
