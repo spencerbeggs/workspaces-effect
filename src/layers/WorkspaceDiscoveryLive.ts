@@ -339,9 +339,12 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 		// Lazily resolve the default root on first use. `Effect.cached` memoizes
 		// success and failure for the lifetime of the layer, so consumers that
 		// only invoke methods with an explicit `cwd` never pay the default-root
-		// fs walk, and those that omit `cwd` pay it exactly once.
+		// fs walk, and those that omit `cwd` pay it exactly once. `process.cwd()`
+		// is wrapped in `Effect.suspend` so it is read at first-call time, not at
+		// layer construction (matters for consumers that `process.chdir(...)`
+		// between provide and the first method invocation).
 		const resolveDefaultRoot = yield* Effect.cached(
-			rootService.find(process.cwd()).pipe(
+			Effect.suspend(() => rootService.find(process.cwd())).pipe(
 				Effect.mapError(
 					(e) =>
 						new WorkspaceDiscoveryError({

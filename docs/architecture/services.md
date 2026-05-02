@@ -101,7 +101,7 @@ package as a standalone single-package workspace.
 **Layer:** `WorkspaceDiscoveryLive` (E channel: `never`; default-root
 discovery is deferred to the first method call that omits an explicit `cwd`
 and memoized via `Effect.cached`)
-**Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
+**Service deps:** `WorkspaceRoot`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
