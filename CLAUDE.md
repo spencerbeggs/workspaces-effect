@@ -55,7 +55,7 @@ Load these when working on the corresponding area:
 - `.claude/design/lockfile-reader-service.md` — LockfileReader service interface
 - `.claude/design/lockfile-schemas.md` — all 4 lockfile format schemas
 - `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference
-- `.claude/design/code-review-findings.md` — known issues (5/10 fixed)
+- `.claude/design/code-review-findings.md` — known issues (6/10 fixed)
 - `.claude/design/research-notes.md` — patterns from sibling repos
 
 ## Key Conventions
@@ -100,21 +100,23 @@ pnpm run build:prod        # Build production/npm output only
 ### Running a Single Test
 
 ```bash
-# Run tests for a specific package (replace with actual package name)
-pnpm run test -- --filter=@spencerbeggs/<package-name>
-
 # Run a specific test file
-pnpm vitest run pkgs/<package-name>/__test__/index.test.ts
+pnpm vitest run __test__/layers/DependencyGraphLive.test.ts
+
+# Filter tests by name pattern
+pnpm vitest run -t "lockfile integrity"
 ```
 
 ## Architecture
 
-### Monorepo Structure
+### Repository Structure
 
-- **Package Manager**: pnpm with workspaces
+- **Package Manager**: pnpm (single-package workspace; `pnpm-workspace.yaml`
+  declares `packages: [.]`)
 - **Build Orchestration**: Turbo for caching and task dependencies
-- **Packages**: Located in `pkgs/` directory
-- **Shared Configs**: Located in `lib/configs/`
+- **Source**: `src/` (services, layers, errors, schemas, utils)
+- **Tests**: `__test__/` (unit, integration, fixtures, shared utilities)
+- **Shared Configs**: `lib/configs/`
 
 ### Package Build Pipeline
 

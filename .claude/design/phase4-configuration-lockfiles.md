@@ -497,20 +497,46 @@ concern, not a per-query concern.
 
 ### Composite layer
 
-```typescript
-// All Phase 4 services (includes Discovery for WorkspaceRoot)
-const WorkspacesLive: Layer.Layer<
-  LockfileReader,
-  LockfileReadError | LockfileParseError,
-  WorkspaceRoot | PackageManagerDetector | FileSystem | Path
-> = LockfileReaderLive
+`LockfileReaderLive` ships as part of the top-level `WorkspacesLive` composite
+in `src/layers/WorkspacesLive.ts`, alongside the other six core services:
 
-// Full stack: Discovery + Configuration
-const WorkspacesFullLive = WorkspacesLive.pipe(
-  Layer.provide(WorkspacesLive),
+```typescript
+// All services except git-dependent ones
+// Requires: FileSystem + Path
+export const WorkspacesLive = Layer.mergeAll(
+  WorkspaceRootLive,
+  PackageManagerDetectorLive,
+  WorkspaceDiscoveryLive.pipe(Layer.provide(WorkspaceRootLive)),
+  DependencyGraphLive.pipe(
+    Layer.provide(WorkspaceDiscoveryLive),
+    Layer.provide(WorkspaceRootLive),
+  ),
+  TopologicalSorterLive.pipe(
+    Layer.provide(DependencyGraphLive),
+    Layer.provide(WorkspaceDiscoveryLive),
+    Layer.provide(WorkspaceRootLive),
+  ),
+  LockfileReaderLive.pipe(
+    Layer.provide(WorkspaceRootLive),
+    Layer.provide(PackageManagerDetectorLive),
+  ),
+  PublishabilityDetectorLive, // pure layer, no dependencies
 )
-// Type: Layer.Layer<LockfileReader, LockfileReadError | LockfileParseError, FileSystem | Path>
+
+// Full stack: adds git-dependent services
+// Requires: FileSystem + Path + CommandExecutor
+export const WorkspacesFullLive = Layer.mergeAll(
+  WorkspacesLive,
+  PackageResolverLive.pipe(Layer.provide(WorkspacesLive)),
+  ChangeDetectorLive.pipe(
+    Layer.provide(PackageResolverLive),
+    Layer.provide(WorkspacesLive),
+  ),
+)
 ```
+
+See `architecture.md` (Layer Composition) for the canonical description of
+the composite layer shapes.
 
 ## Testing Strategy
 
