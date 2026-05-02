@@ -7,7 +7,24 @@
 import type { Effect, Option } from "effect";
 import { Context } from "effect";
 import type { LockfileIntegrityError } from "../errors/LockfileIntegrityError.js";
+import type { LockfileParseError } from "../errors/LockfileParseError.js";
+import type { LockfileReadError } from "../errors/LockfileReadError.js";
+import type { PackageManagerDetectionError } from "../errors/PackageManagerDetectionError.js";
+import type { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFoundError.js";
 import type { LockfileData, LockfileIntegrity, ResolvedPackage, WorkspaceDependency } from "../schemas/lockfile.js";
+
+/**
+ * Union of errors that may surface from {@link LockfileReader} method calls
+ * because the live layer defers workspace-root discovery, package-manager
+ * detection, and lockfile read/parse to the first invocation.
+ *
+ * @public
+ */
+export type LockfileInitError =
+	| WorkspaceRootNotFoundError
+	| PackageManagerDetectionError
+	| LockfileReadError
+	| LockfileParseError;
 
 /**
  * Service for reading and querying package manager lockfile data.
@@ -65,11 +82,15 @@ export class LockfileReader extends Context.Tag("@spencerbeggs/workspaces-effect
 		 * Read and parse the workspace lockfile.
 		 *
 		 * Detects the lockfile format from the package manager type and parses it
-		 * into a normalized {@link LockfileData} structure.
+		 * into a normalized {@link LockfileData} structure. The first call resolves
+		 * the workspace root, detects the package manager, and reads/parses the
+		 * lockfile; subsequent calls return the cached result.
 		 *
-		 * @returns An Effect that succeeds with the parsed {@link LockfileData}.
+		 * @returns An Effect that succeeds with the parsed {@link LockfileData}, or
+		 *   fails with a {@link LockfileInitError} variant if any step of the
+		 *   first-call initialization (root find, PM detect, read, parse) fails.
 		 */
-		readonly readLockfile: () => Effect.Effect<LockfileData>;
+		readonly readLockfile: () => Effect.Effect<LockfileData, LockfileInitError>;
 
 		/**
 		 * Look up the resolved version of a package in the lockfile.
@@ -77,17 +98,21 @@ export class LockfileReader extends Context.Tag("@spencerbeggs/workspaces-effect
 		 * @param packageName - The npm package name to look up (e.g., `"react"`).
 		 * @returns An Effect that succeeds with `Option.some(resolvedPackage)` if the
 		 *   package is found in the lockfile, or `Option.none()` if it is not present.
+		 *   Fails with a {@link LockfileInitError} variant on first invocation if
+		 *   initialization fails.
 		 */
-		readonly resolvedVersion: (packageName: string) => Effect.Effect<Option.Option<ResolvedPackage>>;
+		readonly resolvedVersion: (packageName: string) => Effect.Effect<Option.Option<ResolvedPackage>, LockfileInitError>;
 
 		/**
 		 * Get all workspace-to-workspace dependency links from the lockfile.
 		 *
 		 * @returns An Effect that succeeds with a readonly array of
 		 *   {@link WorkspaceDependency} records representing inter-workspace
-		 *   dependency relationships as declared in the lockfile.
+		 *   dependency relationships as declared in the lockfile. Fails with a
+		 *   {@link LockfileInitError} variant on first invocation if initialization
+		 *   fails.
 		 */
-		readonly workspaceDependencies: () => Effect.Effect<ReadonlyArray<WorkspaceDependency>>;
+		readonly workspaceDependencies: () => Effect.Effect<ReadonlyArray<WorkspaceDependency>, LockfileInitError>;
 
 		/**
 		 * Verify lockfile integrity against the current `package.json` files.
@@ -97,8 +122,9 @@ export class LockfileReader extends Context.Tag("@spencerbeggs/workspaces-effect
 		 *
 		 * @returns An Effect that succeeds with a {@link LockfileIntegrity} report, or
 		 *   fails with {@link LockfileIntegrityError} if critical integrity violations
-		 *   are detected.
+		 *   are detected. May also fail with a {@link LockfileInitError} variant on
+		 *   first invocation if initialization fails.
 		 */
-		readonly checkIntegrity: () => Effect.Effect<LockfileIntegrity, LockfileIntegrityError>;
+		readonly checkIntegrity: () => Effect.Effect<LockfileIntegrity, LockfileIntegrityError | LockfileInitError>;
 	}
 >() {}

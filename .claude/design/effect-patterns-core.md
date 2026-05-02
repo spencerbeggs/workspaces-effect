@@ -5,8 +5,8 @@ category: patterns
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-05-02
+last-synced: 2026-05-02
 authors:
   - C. Spencer Beggs
 tags:
@@ -212,6 +212,71 @@ const WorkspaceRootLive = Layer.effect(
   })
 );
 ```
+
+### Defer I/O with Effect.cached for O(1) layer construction
+
+When a layer needs to perform expensive I/O (filesystem walks, lockfile
+reads, network calls) that would otherwise run during `Layer.effect`, wrap
+the work in `Effect.cached` and consume the cached effect from each method.
+This keeps layer construction O(1), pays the I/O at most once per layer
+instance, and keeps all callers sharing the same cached result (success and
+failure are both memoized for the layer's lifetime):
+
+```typescript
+export const LockfileReaderLive: Layer.Layer<
+  LockfileReader,
+  never,
+  WorkspaceRoot | PackageManagerDetector | FileSystem.FileSystem | Path.Path
+> = Layer.effect(
+  LockfileReader,
+  Effect.gen(function* () {
+    const rootService = yield* WorkspaceRoot;
+    const detector = yield* PackageManagerDetector;
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+
+    // Effect.cached memoizes both success AND failure for the lifetime of
+    // the returned effect. Consumers that build the layer but never invoke
+    // a method pay nothing.
+    const initLockfile: Effect.Effect<LockfileState, LockfileInitError> =
+      yield* Effect.cached(
+        Effect.gen(function* () {
+          const root = yield* rootService.find(process.cwd());
+          const { type: pm } = yield* detector.detect(root);
+          // ... read + parse + index build ...
+          return { root, lockfileData, packageIndex } satisfies LockfileState;
+        }).pipe(Effect.withSpan("LockfileReader.init")),
+      );
+
+    return {
+      readLockfile: () =>
+        initLockfile.pipe(Effect.map(({ lockfileData }) => lockfileData)),
+      // ... other methods all consume initLockfile ...
+    };
+  }),
+);
+```
+
+**Trade-off:** Errors that would have failed `Layer.provide(...)` now surface
+from each method's E channel instead. Export a union type alias for the
+deferred error variants so consumers can `catchTag` against them
+ergonomically:
+
+```typescript
+export type LockfileInitError =
+  | WorkspaceRootNotFoundError
+  | PackageManagerDetectionError
+  | LockfileReadError
+  | LockfileParseError;
+```
+
+**When to use:** Choose `Effect.cached` over eager construction when the
+layer is composed per call site (Vitest reporters, per-subcommand CLIs,
+test suites that swap layers between cases) and the I/O cost would otherwise
+multiply with N layer constructions. Used in `LockfileReaderLive` and
+`WorkspaceDiscoveryLive` (Issue #60). For pure in-memory data services with
+no I/O dependency (e.g., `DependencyGraphLive` building a graph from
+already-discovered packages), keep the eager pattern.
 
 ### Layer.succeed for static implementations
 

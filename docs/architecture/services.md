@@ -98,11 +98,16 @@ entry. If no workspace configuration is found (no `pnpm-workspace.yaml` and no
 `workspaces` field in `package.json`), discovery falls back to treating the root
 package as a standalone single-package workspace.
 
-**Layer:** `WorkspaceDiscoveryLive`
+**Layer:** `WorkspaceDiscoveryLive` (E channel: `never`; default-root
+discovery is deferred to the first method call that omits an explicit `cwd`
+and memoized via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
 ### Methods
+
+All methods optionally accept a `cwd` argument. When omitted, the workspace
+root resolved from `process.cwd()` (lazily, on first use) is used.
 
 #### `listPackages()`
 
@@ -344,10 +349,17 @@ const affected = yield* detector.affectedPackages(options);
 Parses lockfiles from all four package managers into a unified schema. The
 correct parser is selected automatically based on the detected package manager.
 
-**Layer:** `LockfileReaderLive`
+**Layer:** `LockfileReaderLive` (E channel: `never`; root discovery, PM
+detection, lockfile read, and lockfile parse are deferred to the first method
+call and memoized for the layer's lifetime via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
 **Platform deps:** `FileSystem`, `Path`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
+
+All four methods below carry the exported [`LockfileInitError`](#lockfileiniterror-union)
+union in their E channels because their first invocation drives the lazy
+init. See [Lockfile Parsing -> Lazy Initialization](../guides/lockfile-parsing.md#lazy-initialization)
+for the full discussion.
 
 ### Methods
 
@@ -356,28 +368,29 @@ correct parser is selected automatically based on the detected package manager.
 Read and parse the workspace lockfile into a normalized `LockfileData`
 structure.
 
-- **Returns:** `Effect<LockfileData>`
+- **Returns:** `Effect<LockfileData, LockfileInitError>`
 
 #### `resolvedVersion(packageName: string)`
 
 Look up the resolved version of a package in the lockfile.
 
-- **Returns:** `Effect<Option<ResolvedPackage>>`
+- **Returns:** `Effect<Option<ResolvedPackage>, LockfileInitError>`
 
 #### `workspaceDependencies()`
 
 Get all workspace-to-workspace dependency links from the lockfile.
 
-- **Returns:** `Effect<ReadonlyArray<WorkspaceDependency>>`
+- **Returns:** `Effect<ReadonlyArray<WorkspaceDependency>, LockfileInitError>`
 
 #### `checkIntegrity()`
 
 Verify lockfile integrity against current `package.json` files. Returns a
 `LockfileIntegrity` report on success. Fails with `LockfileIntegrityError` if
 the check itself cannot complete (integrity mismatches are reported in the
-returned data, not as errors).
+returned data, not as errors). May also fail with any `LockfileInitError`
+variant on first invocation.
 
-- **Returns:** `Effect<LockfileIntegrity, LockfileIntegrityError>`
+- **Returns:** `Effect<LockfileIntegrity, LockfileIntegrityError | LockfileInitError>`
 
 ```typescript
 const reader = yield* LockfileReader;
@@ -385,6 +398,21 @@ const lockfile = yield* reader.readLockfile();
 const react = yield* reader.resolvedVersion("react");
 const integrity = yield* reader.checkIntegrity();
 ```
+
+### LockfileInitError union
+
+```typescript
+import type { LockfileInitError } from "workspaces-effect";
+
+// LockfileInitError =
+//   | WorkspaceRootNotFoundError
+//   | PackageManagerDetectionError
+//   | LockfileReadError
+//   | LockfileParseError
+```
+
+Catch the variants individually with `Effect.catchTag` (each carries its own
+`_tag`) or catch all four together by their union with `Effect.catchTags`.
 
 ---
 

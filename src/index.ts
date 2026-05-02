@@ -126,6 +126,7 @@ export {
 export { PublishTarget } from "./schemas/publish.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
 export { DependencyGraph } from "./services/DependencyGraph.js";
+export type { LockfileInitError } from "./services/LockfileReader.js";
 export { LockfileReader } from "./services/LockfileReader.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";

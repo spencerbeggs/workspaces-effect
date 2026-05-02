@@ -33,6 +33,13 @@ child packages). PublishTarget schema and shared parser utilities fully tested.
 Sync API (`src/sync.ts`): `findWorkspaceRootSync` and
 `getWorkspacePackagesSync` exported for non-Effect contexts (e.g., lint-staged
 handlers); uses `node:fs`/`node:path` directly.
+Lazy layer init (Issue #60): `LockfileReaderLive` and `WorkspaceDiscoveryLive`
+defer all I/O via `Effect.cached`; layer construction is O(1), the
+root-find/PM-detect/lockfile-read/parse/index-build runs once on first method
+call. New exported `LockfileInitError` =
+`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`;
+LockfileReader method signatures include `LockfileInitError` in their E
+channels (breaking: previously construction-time failures only).
 
 ## Design Documents
 
@@ -57,7 +64,7 @@ Load these when working on the corresponding area:
 - `@effect/platform` for FileSystem, Path, Command (no `node:` imports)
 - `Data.TaggedError` with exported Base constants
 - CommandExecutor resolved at layer construction for R=never methods
-- Eager data construction in `Layer.effect`
+- Eager data construction in `Layer.effect` for pure in-memory services (`DependencyGraphLive`, `TopologicalSorterLive`); lazy `Effect.cached` initialization for I/O-bound layers (`LockfileReaderLive`, `WorkspaceDiscoveryLive`) so layer construction stays O(1) and init errors surface from the first method call via `LockfileInitError`
 - Internal service events use `Effect.logDebug` (not `logInfo`); library stays silent under the default logger
 - Request/RequestResolver with per-layer `Request.makeCache` for deduplication
 - `Schema.transformOrFail` + `Schema.compose` for parsing pipelines

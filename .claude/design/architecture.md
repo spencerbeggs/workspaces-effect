@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-04-28
-last-synced: 2026-04-28
+updated: 2026-05-02
+last-synced: 2026-05-02
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -100,6 +100,22 @@ services.
   ensuring platform-correct path separators. This is a breaking change for
   any code that relied on the getter; the field is now required at
   construction.
+- **Lazy layer initialization (Issue #60, 2026-05-02)**: `LockfileReaderLive`
+  and `WorkspaceDiscoveryLive` no longer perform I/O during `Layer.effect`
+  construction. The workspace-root walk, package-manager detection, lockfile
+  read, and lockfile parse are wrapped in `Effect.cached` and paid on the
+  first method call instead. Layer construction is now O(1); consumers that
+  build a layer per call site (Vitest reporters, per-subcommand CLIs, tests
+  that swap layers between cases) no longer pay the eager initialization
+  cost N times. New exported `LockfileInitError` type alias
+  (`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`)
+  describes the deferred failure modes. **Breaking change**: errors that
+  previously failed `Layer.provide(LockfileReaderLive)` now surface from the
+  first invocation of `readLockfile`, `resolvedVersion`,
+  `workspaceDependencies`, or `checkIntegrity`; `WorkspaceDiscoveryLive`
+  similarly defers `WorkspaceDiscoveryError` from the default-root walk to
+  the first method call that omits an explicit `cwd` argument. The Layer E
+  channels for both layers narrow to `never`.
 
 ## Design Goals
 
@@ -426,7 +442,11 @@ All major design decisions have been resolved. See phase-specific docs for
 details. Key decisions:
 
 - **Context.Tag** over GenericTag (deprecated) and Effect.Service (not used)
-- **Eager graph/index construction** in `Layer.effect` for all data services
+- **Eager graph/index construction** in `Layer.effect` for `DependencyGraphLive`
+  and `TopologicalSorterLive` (in-memory data services with no I/O dependency).
+  `LockfileReaderLive` and `WorkspaceDiscoveryLive` defer I/O via `Effect.cached`
+  for O(1) layer construction (Issue #60, 2026-05-02) -- the heavy work runs
+  once on first method call and is memoized for the layer's lifetime.
 - **Native Map/Set** for internal data structures (better perf for string keys)
 - **Request/RequestResolver** for `dependenciesOf`, `dependentsOf`, `resolvedVersion`
 - **Per-layer Request.makeCache** for deduplication without global cache contamination

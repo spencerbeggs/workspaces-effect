@@ -748,6 +748,76 @@ describe("WorkspaceDiscoveryLive", () => {
 		});
 	});
 
+	describe("laziness", () => {
+		it("does not run WorkspaceRoot.find at layer construction", async () => {
+			let findRuns = 0;
+			const layer = WorkspaceDiscoveryLive.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WorkspaceRoot, {
+							find: () =>
+								Effect.sync(() => {
+									findRuns++;
+									return "/projects/monorepo";
+								}),
+						}),
+						mockFs({}),
+						Path.layer,
+						Logger.replace(Logger.defaultLogger, Logger.none),
+					),
+				),
+			);
+
+			// Acquire the service without invoking any of its methods.
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					yield* WorkspaceDiscovery;
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(findRuns).toBe(0);
+		});
+
+		it("memoizes the default-root lookup across method calls", async () => {
+			let findRuns = 0;
+			const root = "/projects/monorepo";
+			const layer = WorkspaceDiscoveryLive.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WorkspaceRoot, {
+							find: () =>
+								Effect.sync(() => {
+									findRuns++;
+									return root;
+								}),
+						}),
+						mockFs({
+							[`${root}/package.json`]: JSON.stringify({
+								name: "my-mono",
+								version: "1.0.0",
+							}),
+						}),
+						Path.layer,
+						Logger.replace(Logger.defaultLogger, Logger.none),
+					),
+				),
+			);
+
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+					yield* discovery.listPackages();
+					yield* discovery.listPackages();
+					yield* discovery.importerMap();
+				}).pipe(Effect.provide(layer)),
+			);
+
+			// Default root resolved once, then reused for every subsequent
+			// method invocation.
+			expect(findRuns).toBe(1);
+		});
+	});
+
 	describe("pnpm-workspace.yaml parsing edge cases", () => {
 		it("handles comments in packages list", async () => {
 			const root = "/projects/monorepo";
