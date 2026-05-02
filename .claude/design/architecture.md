@@ -145,14 +145,19 @@ The library provides 9 services organized into four groups:
 
 WorkspaceDiscovery methods:
 
-- `listPackages()` -- returns all workspace packages **including the root
+- `listPackages(cwd?)` -- returns all workspace packages **including the root
   workspace package** as the first entry (breaking change from Issue #12).
   The root package has `relativePath: "."`. Consumers can filter using
   `isRootWorkspace` getter if they need only non-root packages.
-- `getPackage(name)` -- resolves any package by name (including root).
-- `importerMap()` -- returns `ReadonlyMap<string, WorkspacePackage>` keyed by
-  `relativePath`. Built from `listPackages()` and inherits its caching.
-  Supports lockfile importer-to-package mapping use cases.
+  When `cwd` is provided, the workspace root is resolved fresh from that
+  directory (results cached per resolved root); when omitted, uses the root
+  eagerly resolved from `process.cwd()` at layer construction time.
+- `getPackage(name, cwd?)` -- resolves any package by name (including root).
+  `cwd` semantics match `listPackages`.
+- `importerMap(cwd?)` -- returns `ReadonlyMap<string, WorkspacePackage>` keyed
+  by `relativePath`. Built from `listPackages()` and inherits its caching.
+  Supports lockfile importer-to-package mapping use cases. `cwd` semantics
+  match `listPackages`.
 
 ### Group 2: Package Analysis
 
@@ -293,7 +298,7 @@ Compares all 4 dep types combined. Located in `src/schemas/core.ts`.
 
 ## Error Hierarchy
 
-11 error types using `Data.TaggedError` with exported `*Base` constants for
+12 error types using `Data.TaggedError` with exported `*Base` constants for
 api-extractor DTS bundling. All have computed `message` getters.
 
 | Error | Phase | When Raised |

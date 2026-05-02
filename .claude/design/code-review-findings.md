@@ -157,9 +157,10 @@ non-workspace repos. No guard that the path is actually a workspace root.
   `peerDependencies` and `optionalDependencies` fields. Phase 2 graph
   can now optionally include peer deps.
 
-**Should fix soon**:
+**Tracked in GitHub issues**:
 
-- Issue 3 (`/**` glob) — affects Yarn Berry users
+- Issue 3 (`/**` glob) — affects Yarn Berry users; tracked in
+  [#62](https://github.com/spencerbeggs/workspaces-effect/issues/62)
 
 **Nice to have**:
 
