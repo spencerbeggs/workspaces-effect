@@ -33,7 +33,7 @@ You choose the Effect and platform versions. workspaces-effect requires
 ## Prerequisites
 
 - A monorepo using npm, pnpm, yarn Berry, or Bun workspaces
-- Node.js 22+ or Bun 1.0+
+- Node.js 24+ or Bun 1.0+
 - Effect 3.x
 
 Workspace configuration is recommended but not required:
