@@ -1,35 +1,32 @@
-# Lockfile Parsing
+# Lockfile parsing
 
-workspaces-effect reads and parses lockfiles from all four package managers into
-a unified schema, enabling cross-PM queries for resolved versions, workspace
-dependencies, and integrity checks.
+workspaces-effect parses lockfiles from all four package managers into one schema. Once parsed, you query resolved versions, workspace dependencies and integrity through the same API regardless of which package manager wrote the file.
 
-## Table of Contents
+## Table of contents
 
-- [Supported Formats](#supported-formats)
-- [Reading Lockfile Data](#reading-lockfile-data)
-- [Querying Resolved Versions](#querying-resolved-versions)
-- [Workspace Dependencies](#workspace-dependencies)
-- [Integrity Checking](#integrity-checking)
-- [PM-Specific Extensions](#pm-specific-extensions)
-- [Error Handling](#error-handling)
-- [Lazy Initialization](#lazy-initialization)
+- [Supported formats](#supported-formats)
+- [Reading lockfile data](#reading-lockfile-data)
+- [Querying resolved versions](#querying-resolved-versions)
+- [Workspace dependencies](#workspace-dependencies)
+- [Integrity checking](#integrity-checking)
+- [PM-specific extensions](#pm-specific-extensions)
+- [Error handling](#error-handling)
+- [Lazy initialization](#lazy-initialization)
 
-## Supported Formats
+## Supported formats
 
-| Package Manager | Lockfile | Format |
+| Package manager | Lockfile | Format |
 | --- | --- | --- |
 | pnpm | `pnpm-lock.yaml` | YAML |
 | npm | `package-lock.json` | JSON |
 | yarn Berry | `yarn.lock` | Custom (v2+ format) |
 | bun | `bun.lock` | JSONC |
 
-The correct parser is selected automatically based on the detected package
-manager. You do not need to specify the format.
+The parser is chosen from the detected package manager. You do not pass the format.
 
-## Reading Lockfile Data
+## Reading lockfile data
 
-The `LockfileReader` service provides access to parsed lockfile data:
+The `LockfileReader` service is the entry point. Ask it for the parsed lockfile:
 
 ```typescript
 import { Effect } from "effect";
@@ -41,7 +38,9 @@ const program = Effect.gen(function* () {
   const lockfile = yield* reader.readLockfile();
 
   console.log(`Package manager: ${lockfile.packageManager}`);
+  // example output: Package manager: pnpm
   console.log(`Lockfile version: ${lockfile.lockfileVersion}`);
+  // example output (varies): Lockfile version: 9.0
   console.log(`Total resolved packages: ${lockfile.packages.length}`);
   console.log(`Workspace dep links: ${lockfile.workspaceDependencies.length}`);
 });
@@ -75,7 +74,7 @@ Each `ResolvedPackage` contains:
 | `relativePath` | `string \| undefined` | Workspace-relative path (for workspace packages) |
 | `dependencies` | `Record<string, string>` | This package's own resolved dependencies |
 
-## Querying Resolved Versions
+## Querying resolved versions
 
 Look up the exact version a dependency resolved to:
 
@@ -87,7 +86,7 @@ const react = yield* reader.resolvedVersion("react");
 
 if (Option.isSome(react)) {
   console.log(`react@${react.value.version}`);
-  // "react@19.1.0"
+  // example output: "react@<resolved-version>"
 
   if (react.value.integrity) {
     console.log(`integrity: ${react.value.integrity}`);
@@ -95,18 +94,18 @@ if (Option.isSome(react)) {
 }
 ```
 
-This is useful for auditing exact versions across your monorepo or verifying
-that all packages resolve to the same version of a shared dependency.
+Use this to audit exact versions across a monorepo, or to confirm that every package resolves a shared dependency to the same version.
 
-## Workspace Dependencies
+## Workspace dependencies
 
-Get all workspace-to-workspace dependency links as declared in the lockfile:
+List the workspace-to-workspace dependency links recorded in the lockfile:
 
 ```typescript
 const wsDeps = yield* reader.workspaceDependencies();
 for (const dep of wsDeps) {
   console.log(`${dep.from} -> ${dep.to} (${dep.depType}: ${dep.constraint})`);
 }
+// example output (varies):
 // @myorg/app -> @myorg/ui (dependencies: workspace:*)
 // @myorg/ui -> @myorg/core (dependencies: workspace:^1.0.0)
 ```
@@ -118,13 +117,11 @@ Each `WorkspaceDependency` contains:
 | `from` | `string` | Package that declares the dependency |
 | `to` | `string` | Package that is depended upon |
 | `depType` | `"dependencies" \| "devDependencies" \| "peerDependencies" \| "optionalDependencies"` | Dependency type |
-| `constraint` | `string` | Version constraint (e.g., `"workspace:*"`, `"^1.0.0"`) |
+| `constraint` | `string` | Version constraint (e.g. `"workspace:*"`, `"^1.0.0"`) |
 
-## Integrity Checking
+## Integrity checking
 
-Verify that the lockfile is consistent with current `package.json` files. The
-integrity check compares workspace declarations against what the lockfile
-records:
+Verify that the lockfile is in sync with the current `package.json` files. `checkIntegrity()` compares each workspace's declared dependencies against what the lockfile resolved:
 
 ```typescript
 const integrity = yield* reader.checkIntegrity();
@@ -155,21 +152,17 @@ The `LockfileIntegrity` schema contains:
 | `extraWorkspaces` | `string[]` | Lockfile entries not in any workspace |
 | `unsatisfiedConstraints` | `array` | Dependency constraints not satisfied by resolved versions |
 
-Each unsatisfied constraint has: `workspace`, `dependency`, `constraint`,
-`resolved`, and `depType`.
+Each unsatisfied constraint has: `workspace`, `dependency`, `constraint`, `resolved` and `depType`.
 
-Note the distinction between `LockfileIntegrity` (the data report) and
-`LockfileIntegrityError` (which means the check itself could not run).
-Mismatches are reported in the data, not thrown as errors.
+`LockfileIntegrity` is the report. `LockfileIntegrityError` means the check could not run at all. A mismatch between lockfile and `package.json` is data, not a thrown error.
 
-## PM-Specific Extensions
+## PM-specific extensions
 
-Some lockfile data is specific to a package manager. Access it through the
-`pmSpecific` discriminated union field on `LockfileData`.
+Some lockfile data only exists for one package manager. Read it from `LockfileData.pmSpecific`, a discriminated union on `_tag`.
 
-### pnpm Extensions
+### pnpm extensions
 
-pnpm lockfiles may include catalogs, overrides, and settings:
+pnpm lockfiles may include catalogs, overrides and settings:
 
 ```typescript
 const lockfile = yield* reader.readLockfile();
@@ -203,14 +196,11 @@ if (lockfile.pmSpecific?._tag === "pnpm") {
 }
 ```
 
-The `PnpmExtension.catalogs` value type is a union:
-`string | { specifier: string; version: string }`. Older pnpm versions store
-catalog entries as plain version strings. pnpm v9+ stores them as objects with
-both the specifier (what was declared) and the resolved version.
+The `PnpmExtension.catalogs` value type is `string | { specifier: string; version: string }`. Older pnpm versions store catalog entries as plain version strings. pnpm v9+ stores them as objects holding both the declared specifier and the resolved version.
 
-### bun Extensions
+### bun extensions
 
-Bun lockfiles may include catalogs, overrides, and trusted dependencies:
+Bun lockfiles may include catalogs, overrides and trusted dependencies:
 
 ```typescript
 if (lockfile.pmSpecific?._tag === "bun") {
@@ -233,12 +223,9 @@ if (lockfile.pmSpecific?._tag === "bun") {
 }
 ```
 
-## Error Handling
+## Error handling
 
-Lockfile operations can fail with several error types. Initialization
-failures (root discovery, package-manager detection, lockfile read, lockfile
-parse) surface from the **first** call to any `LockfileReader` method as a
-member of the exported `LockfileInitError` union:
+Lockfile operations fail in two layers. Initialization failures — root discovery, package-manager detection, lockfile read, lockfile parse — surface from the **first** call to any `LockfileReader` method as a member of the exported `LockfileInitError` union:
 
 ```typescript
 import type { LockfileInitError } from "workspaces-effect";
@@ -258,9 +245,7 @@ import type { LockfileInitError } from "workspaces-effect";
 | `LockfileParseError` | Lockfile exists but contains invalid or unparseable content | First method call (member of `LockfileInitError`) |
 | `LockfileIntegrityError` | Integrity check itself cannot complete | `checkIntegrity()` only |
 
-`LockfileReadError` has `lockfilePath` and `reason` fields.
-`LockfileParseError` has `lockfilePath`, `format`, and `cause` fields.
-`LockfileIntegrityError` has `reason` and `cause` fields.
+`LockfileReadError` carries `lockfilePath` and `reason`. `LockfileParseError` carries `lockfilePath`, `format` and `cause`. `LockfileIntegrityError` carries `reason` and `cause`.
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -282,39 +267,19 @@ const program = Effect.gen(function* () {
 );
 ```
 
-`checkIntegrity()` widens the error channel further:
-`LockfileInitError | LockfileIntegrityError`.
+`checkIntegrity()` widens the error channel to `LockfileInitError | LockfileIntegrityError`.
 
-See [Troubleshooting](../troubleshooting.md) for detailed solutions.
+See [Troubleshooting](./09-troubleshooting.md) for solutions to specific failures.
 
-## Lazy Initialization
+## Lazy initialization
 
-`LockfileReaderLive` defers all I/O (workspace-root discovery, package-manager
-detection, lockfile read, and lockfile parse) until the first call to
-`readLockfile`, `resolvedVersion`, `workspaceDependencies`, or
-`checkIntegrity`. The result is memoized for the lifetime of the layer
-instance via `Effect.cached`, so subsequent calls reuse the cached parse.
+`LockfileReaderLive` defers every filesystem operation (workspace-root discovery, package-manager detection, lockfile read and lockfile parse) until the first call to `readLockfile`, `resolvedVersion`, `workspaceDependencies` or `checkIntegrity`. `Effect.cached` memoizes the result for the life of the layer instance, so later calls reuse the parsed data.
 
-The practical implications:
+What this means in practice:
 
-- **Layer construction is O(1).** Building the layer (e.g., via
-  `Effect.provide(WorkspacesLive)`) performs no filesystem work. Programs that
-  compose the layer but never invoke a `LockfileReader` method pay nothing.
-- **Errors surface from the first method call**, not from
-  `Effect.provide(LockfileReaderLive)`. Code that previously relied on
-  construction-time failure (for example, by handling errors in a wrapper
-  around `Layer.provide`) must move its handling to the call site.
-- **Both success and failure are memoized.** If the first call fails because
-  the lockfile cannot be parsed, every subsequent call on the same layer
-  instance fails with the same error. Build a fresh layer instance to retry.
-- **The Layer E channel is `never`.** The error variants previously listed on
-  `LockfileReaderLive` (`LockfileReadError`, `LockfileParseError`, and the
-  others above) now appear on each method's E channel as `LockfileInitError`
-  variants. `WorkspaceDiscoveryLive` similarly defers its default-root walk
-  and now has an E channel of `never`.
+- **Layer construction is O(1).** Building the layer via `Effect.provide(WorkspacesLive)` does no filesystem work. A program that composes the layer but never calls a `LockfileReader` method pays nothing.
+- **Errors surface from the first method call**, as members of the exported `LockfileInitError` union. Each `LockfileReader` method lists `LockfileInitError` in its E channel, so error handling sits at the call site instead of around `Effect.provide`.
+- **Success and failure are both memoized.** If the first call fails because the lockfile cannot be parsed, every later call on the same layer instance fails with the same error. Build a fresh layer instance to retry.
+- **The Layer E channel is `never`.** All four `LockfileInitError` variants (`WorkspaceRootNotFoundError`, `PackageManagerDetectionError`, `LockfileReadError`, `LockfileParseError`) appear on each method's E channel. `WorkspaceDiscoveryLive` defers its default-root walk the same way and has a `never` E channel.
 
-This change exists primarily to benefit consumers that build the layer per
-call site (Vitest reporters with multiple projects, CLIs that compose layers
-per subcommand, tests that swap layers between cases) -- the previous eager
-construction paid the read/parse cost N times for N layer instances. See
-GitHub issue #60 for context.
+Layers built per call site — Vitest reporters with multiple projects, CLIs that compose layers per subcommand, tests that swap layers between cases — pay the read and parse cost once per layer instance rather than once per construction.

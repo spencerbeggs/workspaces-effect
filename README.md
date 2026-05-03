@@ -1,34 +1,35 @@
 # workspaces-effect
 
-[![npm version](https://img.shields.io/npm/v/workspaces-effect)](https://www.npmjs.com/package/workspaces-effect)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
+[![npm](https://img.shields.io/npm/v/workspaces-effect?label=npm&color=cb3837)](https://www.npmjs.com/package/workspaces-effect)
+[![License: MIT](https://img.shields.io/badge/License-MIT-4caf50.svg)](https://opensource.org/licenses/MIT)
 
-An [Effect](https://effect.website) library for monorepo workspace tooling. Discover workspaces, analyze dependency graphs, detect changes, parse lockfiles, and check publishability across npm, pnpm, yarn Berry and Bun through composable Effect services with typed errors and platform independence.
+An [Effect](https://effect.website) library for monorepo tooling. It discovers workspaces, builds dependency graphs, detects changes from git, parses lockfiles and reports which packages are publishable. Supports npm, pnpm, yarn Berry and Bun workspaces, runs on Node.js or Bun.
 
 ## Features
 
-- Workspace discovery across all four major package managers with automatic detection
-- Rich package metadata with computed getters, dependency queries, and a dual-API pattern (instance, static data-first, and pipeable)
-- Dependency graph analysis with topological sorting for correct build ordering
-- Git-based change detection to find affected packages from file changes
-- Lockfile parsing for pnpm, npm, yarn, and bun with integrity verification
-- Platform independent -- runs on Node.js or Bun via `@effect/platform` abstractions
-- Synchronous helpers (`findWorkspaceRootSync`, `getWorkspacePackagesSync`) for non-Effect contexts like lint-staged
+- Workspace discovery for npm, pnpm, yarn Berry and Bun, with package-manager detection done for you
+- Package metadata with computed getters, dependency queries and a dual API (instance methods, static data-first functions, pipeable variants)
+- Dependency graph with topological sort, parallel build levels and cycle detection
+- Git-driven change detection that returns the affected packages for a diff
+- Lockfile parsing for all four package managers, including integrity checks against `package.json` ranges
+- Runs on Node.js or Bun via `@effect/platform` adapters — no `node:` imports leak into your code
+- Synchronous helpers (`findWorkspaceRootSync`, `getWorkspacePackagesSync`) for places Effect cannot reach, like lint-staged hooks
 
-## Installation
+## Install
 
-`effect` and `@effect/platform` are peer dependencies -- install them alongside the platform adapter for your runtime:
+`effect` and `@effect/platform` are peer dependencies. Install them alongside the platform adapter for your runtime.
 
 ```bash
 # For Node.js
 npm install workspaces-effect effect @effect/platform @effect/platform-node
+# or
+pnpm add workspaces-effect effect @effect/platform @effect/platform-node
 
 # For Bun
 bun add workspaces-effect effect @effect/platform @effect/platform-bun
 ```
 
-## Quick Start
+## Quick start
 
 ```typescript
 import { Effect, Option, pipe } from "effect";
@@ -47,11 +48,13 @@ const program = Effect.gen(function* () {
     // Computed getters
     if (pkg.isRootWorkspace) continue; // skip the root package
     console.log(pkg.unscopedName, pkg.isPublic ? "(public)" : "(private)");
+    // example output (varies): "utils (public)"
 
     // Instance method
     if (pkg.hasAnyDependencyOn("effect")) {
       const version = pkg.dependencyVersion("effect");
       console.log("  effect:", Option.getOrElse(version, () => "n/a"));
+      // example output (varies): "  effect: <version>"
     }
   }
 
@@ -69,22 +72,14 @@ Effect.runPromise(
 );
 ```
 
-Two composite layers cover most use cases:
+Two composite layers handle the common wiring:
 
-- **`WorkspacesLive`** -- all services except git-dependent ones (requires
-  `FileSystem` + `Path`)
-- **`WorkspacesFullLive`** -- all services including change detection
-  (additionally requires `CommandExecutor`)
+- **`WorkspacesLive`** — every service except change detection (requires `FileSystem` + `Path`)
+- **`WorkspacesFullLive`** — adds change detection (also requires `CommandExecutor`)
 
 ## Custom publishability detectors
 
-`PublishabilityDetector` is a `Context.Tag` like every other service, so you can
-swap the default implementation with `Layer.succeed` when you need
-non-vanilla publish semantics (e.g. private packages that should still publish
-under specific conditions, registry-aware target expansion, organisation
-conventions). Provide your custom layer instead of `PublishabilityDetectorLive`
--- everything downstream that yields `PublishabilityDetector` picks up the new
-behaviour transparently.
+`PublishabilityDetector` is a `Context.Tag` like every other service. Swap the default with `Layer.succeed` when you need different publish semantics — private packages that should still publish under specific conditions, registry-aware target expansion, organisation conventions. Provide your custom layer instead of `PublishabilityDetectorLive` and every consumer that yields `PublishabilityDetector` gets the new behavior.
 
 ```typescript
 import { Effect, Layer } from "effect";
@@ -97,7 +92,7 @@ import {
 } from "workspaces-effect";
 
 // Always publish to GitHub Packages alongside the package's own publishConfig
-// target -- a common requirement for orgs that mirror to a private registry.
+// target — common for orgs that mirror to a private registry.
 const ORG_REGISTRY = "https://npm.pkg.github.com/";
 
 const OrgMirrorDetector = Layer.succeed(PublishabilityDetector, {
@@ -131,6 +126,7 @@ const program = Effect.gen(function* () {
   for (const pkg of yield* discovery.listPackages()) {
     const targets = yield* detector.detect(pkg, "/path/to/root");
     if (targets.length > 0) console.log(pkg.name, targets.map((t) => t.registry));
+    // example output (varies): "@myorg/ui ['https://registry.npmjs.org/', 'https://npm.pkg.github.com/']"
   }
 });
 
@@ -143,19 +139,13 @@ Effect.runPromise(
 );
 ```
 
-The same pattern applies to any other service in the library -- `WorkspaceRoot`,
-`PackageManagerDetector`, `LockfileReader`, etc. all expose `Context.Tag`s
-that consumers can rebind.
+`WorkspaceRoot`, `PackageManagerDetector`, `LockfileReader` and every other service in the library expose `Context.Tag`s, so the same swap works for any of them.
 
 ## Observability
 
-`workspaces-effect` is silent at the default log level. Internal
-events (workspace root discovery, package manager detection, lockfile
-reads, change detection, etc.) are emitted via Effect's structured
-logger at `Debug` level with annotations like `workspace.root`,
-`workspace.pm`, and `workspace.packages.count`.
+`workspaces-effect` says nothing at the default log level. Internal events — workspace root discovery, package manager detection, lockfile reads, change detection and the rest — go through Effect's structured logger at `Debug` level with annotations like `workspace.root`, `workspace.pm` and `workspace.packages.count`.
 
-To see those events, lower the minimum log level:
+To see them, lower the minimum log level:
 
 ```typescript
 import { Effect, Logger, LogLevel } from "effect";
@@ -169,8 +159,7 @@ Effect.runPromise(
 );
 ```
 
-To route events somewhere other than the console (a collector,
-OpenTelemetry, a test sink, etc.), replace or add a logger:
+To send events somewhere other than the console — a collector, OpenTelemetry, a test sink — replace or add a logger:
 
 ```typescript
 import { Effect, Logger } from "effect";
@@ -188,24 +177,13 @@ Effect.runPromise(
 );
 ```
 
-Errors are still raised through the typed error channel
-(`WorkspaceRootNotFoundError`, `LockfileReadError`, etc.) -- the
-logger only carries informational events.
+Errors still travel through the typed error channel (`WorkspaceRootNotFoundError`, `LockfileReadError` and the rest). The logger only carries informational events.
 
 ## Lazy lockfile and discovery initialization
 
-`LockfileReaderLive` and `WorkspaceDiscoveryLive` defer all I/O (workspace
-root discovery, package-manager detection, lockfile read, and lockfile parse)
-to the first call to a service method. The work is memoized for the lifetime
-of the layer instance via `Effect.cached`, so layer construction itself is
-O(1). This benefits consumers that build the layer per call site -- Vitest
-reporters with multiple projects, CLIs that compose layers per subcommand,
-and tests that swap layers between cases (issue #60).
+`LockfileReaderLive` and `WorkspaceDiscoveryLive` defer every bit of I/O — root discovery, package-manager detection, lockfile read, lockfile parse — until the first service method runs. The work is memoized for the layer's lifetime via `Effect.cached`, so layer construction is O(1). That matters when you build the layer per call site, like a Vitest reporter that spans multiple projects or a CLI that composes layers per subcommand.
 
-The trade-off is that errors which used to fail
-`Effect.provide(LockfileReaderLive)` now surface from each method's E
-channel instead. The four init-time errors are exported as a single union
-type alias for convenient handling:
+Init-time errors surface from each method's E channel as members of an exported union:
 
 ```typescript
 import type { LockfileInitError } from "workspaces-effect";
@@ -217,11 +195,7 @@ import type { LockfileInitError } from "workspaces-effect";
 //   | LockfileParseError
 ```
 
-Every `LockfileReader` method (`readLockfile`, `resolvedVersion`,
-`workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E
-channel; `checkIntegrity` additionally lists `LockfileIntegrityError`. Code
-that previously relied on layer-construction failure should move its handler
-to the call site:
+Every `LockfileReader` method (`readLockfile`, `resolvedVersion`, `workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E channel. `checkIntegrity` adds `LockfileIntegrityError`. Handle them at the call site, not around `Effect.provide`:
 
 ```typescript
 import { Effect } from "effect";
@@ -240,14 +214,20 @@ const program = Effect.gen(function* () {
 );
 ```
 
-See the [Lazy Initialization](./docs/guides/lockfile-parsing.md#lazy-initialization)
-section of the lockfile guide for the full discussion.
+The [Lazy initialization](./docs/05-lockfile-parsing.md#lazy-initialization) section of the lockfile guide goes deeper.
 
 ## Documentation
 
-For architecture details, API reference, and advanced usage, see
-[docs/](./docs).
+- [Getting started](./docs/01-getting-started.md) — installation, first program, layers, platform setup and synchronous utilities
+- [WorkspacePackage API](./docs/02-workspace-package.md) — computed getters, dependency queries, dual-API pattern, diffs, PublishConfig and readPackageJson
+- [Dependency analysis](./docs/03-dependency-analysis.md) — dependency graphs, topological sorting, parallel build levels and cycle detection
+- [Change detection](./docs/04-change-detection.md) — git-based change detection, affected packages and CI pipeline integration
+- [Lockfile parsing](./docs/05-lockfile-parsing.md) — unified lockfile reading, resolved versions, workspace dependencies, integrity checking and PM extensions
+- [Publishability](./docs/06-publishability.md) — detecting publishable packages, publish targets and selective publishing workflows
+- [Architecture overview](./docs/07-architecture-overview.md) — service groups, layer composition, platform independence and error model
+- [Services reference](./docs/08-services-reference.md) — API reference for every service
+- [Troubleshooting](./docs/09-troubleshooting.md) — every error type with causes and solutions
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](LICENSE)

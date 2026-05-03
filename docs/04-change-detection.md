@@ -1,23 +1,19 @@
-# Change Detection
+# Change detection
 
-workspaces-effect provides git-based change detection to find which files
-changed between git refs, which packages those files belong to, and which
-packages are transitively affected.
+Change detection answers three questions about a git diff: which files changed, which packages own those files and which packages depend on the ones that changed.
 
-## Table of Contents
+## Table of contents
 
 - [Setup](#setup)
-- [Three Levels of Analysis](#three-levels-of-analysis)
-- [Configuring Options](#configuring-options)
+- [Three levels of analysis](#three-levels-of-analysis)
+- [Options](#options)
 - [PackageResolver](#packageresolver)
-- [CI Pipeline Example](#ci-pipeline-example)
-- [Error Handling](#error-handling)
+- [CI pipeline example](#ci-pipeline-example)
+- [Error handling](#error-handling)
 
 ## Setup
 
-Change detection requires `WorkspacesFullLive` because it uses git commands
-through `@effect/platform`'s `CommandExecutor`. `WorkspacesLive` does not
-include the git-dependent services.
+Change detection runs git commands through `@effect/platform`'s `CommandExecutor`, so it requires `WorkspacesFullLive`. The smaller `WorkspacesLive` layer omits the git-dependent services.
 
 ```typescript
 import { Effect } from "effect";
@@ -29,14 +25,13 @@ import {
 } from "workspaces-effect";
 ```
 
-## Three Levels of Analysis
+## Three levels of analysis
 
-The `ChangeDetector` service offers three methods with progressively richer
-output:
+The methods on `ChangeDetector` map to those questions in order. Each one builds on the previous: file paths, then the packages that own those paths, then the dependency closure.
 
-### 1. Changed Files
+### 1. Changed files
 
-Raw git diff output -- just file paths relative to the workspace root:
+File paths from `git diff`, relative to the workspace root:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -44,36 +39,33 @@ const program = Effect.gen(function* () {
   const options = new ChangeDetectionOptions({ base: "origin/main" });
   const files = yield* detector.changedFiles(options);
   console.log("Changed files:", files);
-  // ["packages/ui/src/Button.tsx", "packages/core/src/index.ts"]
+  // example output (varies): ["packages/ui/src/Button.tsx", "packages/core/src/index.ts"]
 });
 ```
 
-### 2. Changed Packages
+### 2. Changed packages
 
-Files resolved to their owning workspace packages. Files outside any workspace
-package (e.g., root config files) are silently excluded:
+Each changed file is mapped to the workspace package that owns it. Files outside any workspace (root config files, tooling) drop out of the result:
 
 ```typescript
 const changed = yield* detector.changedPackages(options);
 console.log("Changed packages:", changed.map((p) => p.name));
-// ["@myorg/ui", "@myorg/core"]
+// example output (varies): ["@myorg/ui", "@myorg/core"]
 ```
 
-### 3. Affected Packages
+### 3. Affected packages
 
-Changed packages plus all packages that transitively depend on them. If
-`@myorg/app` depends on `@myorg/ui` and `@myorg/ui` changed, then `@myorg/app`
-is affected even though none of its files changed:
+The changed packages plus every package that transitively depends on them. If `@myorg/app` depends on `@myorg/ui` and `@myorg/ui` changed, `@myorg/app` shows up here even though none of its own files were touched:
 
 ```typescript
 const affected = yield* detector.affectedPackages(options);
 console.log("Affected packages:", affected.map((p) => p.name));
-// ["@myorg/ui", "@myorg/core", "@myorg/app"]
+// example output (varies): ["@myorg/ui", "@myorg/core", "@myorg/app"]
 ```
 
-## Configuring Options
+## Options
 
-`ChangeDetectionOptions` is an Effect `Schema.Class` with these fields:
+`ChangeDetectionOptions` is an Effect `Schema.Class`. Three fields:
 
 | Field | Default | Description |
 | --- | --- | --- |
@@ -103,9 +95,7 @@ const defaults = new ChangeDetectionOptions({});
 
 ## PackageResolver
 
-The `PackageResolver` service is available separately if you need to map file
-paths to packages without running git commands. It uses longest-prefix matching
-on absolute paths:
+`PackageResolver` does the file-to-package mapping on its own, no git involved. Use it when you already have a list of paths from somewhere else: a file watcher, a build tool, a custom diff. Matching is by longest absolute-path prefix:
 
 ```typescript
 import { PackageResolver, WorkspacesFullLive } from "workspaces-effect";
@@ -127,12 +117,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-`PackageResolver` requires `WorkspacesFullLive` because it depends on
-`CommandExecutor`.
+`PackageResolver` depends on `CommandExecutor`, so it also requires `WorkspacesFullLive`.
 
-## CI Pipeline Example
+## CI pipeline example
 
-A typical CI script that only builds and tests affected packages:
+In CI, build and test only the packages affected by the current PR. Get the affected set, sort it topologically, then iterate.
 
 ```typescript
 import { Effect } from "effect";
@@ -159,6 +148,7 @@ const ci = Effect.gen(function* () {
   // Get correct build order for just the affected packages
   const buildOrder = yield* sorter.sortSubset(affected.map((p) => p.name));
   console.log("Build order:", buildOrder);
+  // example output (varies): ["@myorg/utils", "@myorg/core", "@myorg/ui"]
 
   // Build each package in order...
 });
@@ -171,17 +161,17 @@ Effect.runPromise(
 );
 ```
 
-## Error Handling
+## Error handling
 
-Change detection can fail with these error types:
+Change detection raises three tagged errors:
 
 | Error | Cause |
 | --- | --- |
 | `GitNotAvailableError` | Git is not installed or the directory is not a git repository |
-| `ChangeDetectionError` | A specific git command failed (e.g., invalid ref, merge conflicts) |
-| `CyclicDependencyError` | Only from `affectedPackages` -- the dependency graph has a cycle |
+| `ChangeDetectionError` | A specific git command failed (e.g. invalid ref, merge conflicts) |
+| `CyclicDependencyError` | Only from `affectedPackages` — the dependency graph has a cycle |
 
-Handle them with `Effect.catchTag`:
+Catch them with `Effect.catchTag`:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -200,6 +190,4 @@ const program = Effect.gen(function* () {
 );
 ```
 
-The `ChangeDetectionError` includes an `operation` field (e.g., `"diff"`,
-`"merge-base"`) and a `reason` field with a human-readable message. See
-[Troubleshooting](../troubleshooting.md) for detailed solutions.
+`ChangeDetectionError` carries an `operation` field naming the failed command (`"diff"`, `"merge-base"`) and a `reason` field with a human-readable message. See [Troubleshooting](./09-troubleshooting.md) for fixes to specific failures.

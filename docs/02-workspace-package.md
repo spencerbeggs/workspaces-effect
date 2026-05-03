@@ -1,22 +1,18 @@
 # WorkspacePackage API
 
-`WorkspacePackage` is the core data model representing a workspace package.
-It is an Effect `Schema.Class` produced by `WorkspaceDiscovery` for each
-package found in the monorepo. It provides computed getters, dependency query
-methods, diff comparison, and a dual-API pattern for both OOP and functional
-usage.
+`WorkspacePackage` is an Effect `Schema.Class`. `WorkspaceDiscovery` produces one instance per package it finds in the monorepo. Each instance has the parsed `package.json` fields, a handful of derived getters and methods for querying dependencies. Every method is also exported as a standalone dual function — call it on the instance, or use the static form with or without `pipe`.
 
-## Table of Contents
+## Table of contents
 
 - [Fields](#fields)
-- [Computed Getters](#computed-getters)
-- [Dependency Query Methods](#dependency-query-methods)
-- [Dual-API Pattern](#dual-api-pattern)
-- [Dependency Diff](#dependency-diff)
+- [Computed getters](#computed-getters)
+- [Dependency query methods](#dependency-query-methods)
+- [Dual-API pattern](#dual-api-pattern)
+- [Dependency diff](#dependency-diff)
 - [PublishConfig](#publishconfig)
 - [Reading package.json](#reading-packagejson)
-- [Importer Map](#importer-map)
-- [Root Package in listPackages](#root-package-in-listpackages)
+- [Importer map](#importer-map)
+- [Root package in listPackages](#root-package-in-listpackages)
 
 ## Fields
 
@@ -34,17 +30,17 @@ usage.
 | `packageJsonPath` | `string` | required | Absolute path to the package's `package.json` file |
 | `publishConfig` | `PublishConfig \| undefined` | `undefined` | Publishing configuration (see [PublishConfig](#publishconfig)) |
 
-## Computed Getters
+## Computed getters
 
-Every `WorkspacePackage` instance exposes these computed properties:
+Every instance has these getters:
 
 | Getter | Returns | Description |
 | --- | --- | --- |
 | `isRootWorkspace` | `boolean` | `true` when `relativePath === "."` |
 | `isPublic` | `boolean` | `true` when `private` is `false` |
-| `scope` | `Option<string>` | The `@scope` portion (e.g., `Option.some("@myorg")`), or `Option.none()` |
+| `scope` | `Option<string>` | The `@scope` portion (e.g. `Option.some("@myorg")`), or `Option.none()` |
 | `unscopedName` | `string` | Package name without the `@scope/` prefix |
-| `allDependencies` | `Record<string, string>` | Merged map of all 4 dependency types |
+| `allDependencies` | `Record<string, string>` | Merged map of all four dependency types |
 
 ```typescript
 import { Effect, Option } from "effect";
@@ -58,7 +54,7 @@ const program = Effect.gen(function* () {
   console.log(pkg.isRootWorkspace);   // false
   console.log(pkg.isPublic);          // true
   console.log(pkg.unscopedName);      // "utils"
-  console.log(pkg.packageJsonPath);   // "/workspace/packages/utils/package.json" (stored field)
+  console.log(pkg.packageJsonPath);   // example output (varies): "/workspace/packages/utils/package.json"
 
   if (Option.isSome(pkg.scope)) {
     console.log(pkg.scope.value);     // "@myorg"
@@ -67,17 +63,15 @@ const program = Effect.gen(function* () {
   // allDependencies merges dependencies + devDependencies +
   // peerDependencies + optionalDependencies
   console.log(Object.keys(pkg.allDependencies));
+  // example output (varies): ["effect", "@effect/platform", "vitest", ...]
 });
 ```
 
-The `allDependencies` merge order is: `optionalDependencies`,
-`peerDependencies`, `devDependencies`, `dependencies`. Later entries overwrite
-earlier ones, so if the same package appears in multiple maps, `dependencies`
-wins.
+The `allDependencies` merge order is `optionalDependencies`, `peerDependencies`, `devDependencies`, `dependencies`. Later entries overwrite earlier ones, so when a package appears in more than one map the version from `dependencies` wins.
 
-## Dependency Query Methods
+## Dependency query methods
 
-Query whether a package depends on something across any dependency type:
+Ask whether a package depends on something, either in a specific map or across all four:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -95,7 +89,7 @@ const program = Effect.gen(function* () {
 
   // Get the version string (searches all 4 types in order)
   const version = pkg.dependencyVersion("effect");
-  // Option.some("^3.19.0") or Option.none()
+  // Option.some("<version>") or Option.none()
 
   // Glob pattern matching on dependency names
   pkg.matchesDependency("@myorg/*");       // true if any dep matches the glob
@@ -103,14 +97,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-`dependencyVersion` searches `dependencies`, then `devDependencies`, then
-`peerDependencies`, then `optionalDependencies`, returning the first match.
+`dependencyVersion` walks `dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` in that order and returns the first match.
 
-## Dual-API Pattern
+## Dual-API pattern
 
-Every instance method is also available as a standalone dual function. This
-supports three calling styles -- instance, static data-first, and static
-data-last (pipeable):
+Every instance method is also exported as a standalone dual function. Call it as a method on the instance, or call the static form with the package as the first argument, or curry the static form for use inside `pipe`:
 
 ```typescript
 import { pipe } from "effect";
@@ -126,17 +117,19 @@ WorkspacePackage.hasDependency(pkg, "effect");
 pipe(pkg, WorkspacePackage.hasDependency("effect"));
 ```
 
-The standalone functions are also exported directly for use without the class:
+The same functions are exported as bare names too, so you can skip the class:
 
 ```typescript
 import { hasDependency, hasAnyDependencyOn, matchesDependency } from "workspaces-effect";
 
-// Same three calling styles
+// Static data-first
 hasDependency(pkg, "effect");
+
+// Static data-last (pipeable)
 pipe(pkg, hasDependency("effect"));
 ```
 
-The pipeable form is especially useful for filtering arrays of packages:
+The pipeable form drops straight into `Array.filter` and `Array.map`:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -173,12 +166,9 @@ All dual-API functions:
 | `matchesDependency` | `(pattern) => (pkg) => boolean` | `(pkg, pattern) => boolean` |
 | `dependencyDiff` | `(other) => (pkg) => DependencyDiff` | `(pkg, other) => DependencyDiff` |
 
-## Dependency Diff
+## Dependency diff
 
-Compare the dependency snapshots of two `WorkspacePackage` instances to find
-what was added, removed, or changed. The comparison uses `allDependencies`
-(the merged map of all 4 types), so a dependency that moves between types at
-the same version does not appear in the diff.
+`dependencyDiff` reports what differs between two packages: what one has and the other does not, plus version mismatches. The comparison runs against `allDependencies`, so a dependency that switches type but keeps its version (say, moves from `dependencies` to `devDependencies` at `^1.2.3`) is not flagged.
 
 ```typescript
 import { WorkspacePackage } from "workspaces-effect";
@@ -194,6 +184,7 @@ const program = Effect.gen(function* () {
   console.log("Removed:", Object.keys(diff.removed)); // in api but not app
   for (const [name, { from, to }] of Object.entries(diff.changed)) {
     console.log(`${name}: ${from} -> ${to}`);
+    // example output (varies): "react: ^18.0.0 -> ^19.0.0"
   }
 });
 ```
@@ -208,7 +199,7 @@ interface DependencyDiff {
 }
 ```
 
-The diff also works with the static dual-API:
+The static forms work too:
 
 ```typescript
 // Static data-first
@@ -220,20 +211,17 @@ pipe(app, WorkspacePackage.dependencyDiff(api));
 
 ## PublishConfig
 
-`PublishConfig` is an Effect `Schema.Class` representing the `publishConfig`
-field from `package.json`. It captures registry, access control, directory
-override, and additional fields used by package managers:
+`PublishConfig` is the parsed `publishConfig` field from `package.json`, modelled as an Effect `Schema.Class`. It holds the registry, access flag, subdirectory and dist-tag, plus the pnpm `linkDirectory` extension:
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `access` | `"public" \| "restricted" \| undefined` | Scoped package visibility |
 | `registry` | `string \| undefined` | Custom registry URL |
 | `directory` | `string \| undefined` | Subdirectory to publish |
-| `tag` | `string \| undefined` | npm dist-tag for publishing (e.g., `"beta"`, `"latest"`) |
+| `tag` | `string \| undefined` | npm dist-tag for publishing (e.g. `"beta"`, `"latest"`) |
 | `linkDirectory` | `boolean \| undefined` | pnpm `linkDirectory` extension |
 
-Because `PublishConfig` is a `Schema.Class`, you can construct instances
-directly and extend it with `Schema.extend` for downstream use:
+Because it is a `Schema.Class`, you can `new` it up directly or extend it with `Schema.extend`:
 
 ```typescript
 import { Schema } from "effect";
@@ -258,9 +246,7 @@ const CustomPublishConfig = Schema.extend(
 
 ## Reading package.json
 
-The `readPackageJson` utility reads and parses a package's `package.json` from
-disk using `@effect/platform` `FileSystem`. It returns the `PackageJsonType`
-schema fields (name, version, dependencies, workspaces, etc.).
+`readPackageJson` reads and parses a package's `package.json` through `@effect/platform` `FileSystem`. The result is a `PackageJsonType` value with the usual fields: `name`, `version`, the four dependency maps, `workspaces` and so on.
 
 ```typescript
 import { readPackageJson, WorkspacePackage } from "workspaces-effect";
@@ -272,24 +258,20 @@ const program = Effect.gen(function* () {
   // As a standalone function
   const json = yield* readPackageJson(pkg);
   console.log(json.name, json.version, json.workspaces);
+  // example output (varies): "@myorg/utils 1.2.3 undefined"
 
   // Or as a static method
   const json2 = yield* WorkspacePackage.readPackageJson(pkg);
 });
 ```
 
-This requires `FileSystem` in the Effect context, which is already provided by
-`NodeContext.layer` or `BunContext.layer`.
+This needs `FileSystem` in the Effect context. `NodeContext.layer` and `BunContext.layer` both supply it.
 
-Errors: `PackageJsonParseError` if the file cannot be read or contains invalid
-JSON.
+Fails with `PackageJsonParseError` when the file cannot be read or the JSON is malformed.
 
-## Importer Map
+## Importer map
 
-`WorkspaceDiscovery.importerMap()` returns a
-`ReadonlyMap<string, WorkspacePackage>` keyed by `relativePath`. This is useful
-for mapping lockfile importer keys (which use relative paths like
-`packages/utils`) back to their workspace packages:
+`WorkspaceDiscovery.importerMap()` returns a `ReadonlyMap<string, WorkspacePackage>` keyed by `relativePath`. Lockfiles refer to workspaces by relative paths like `packages/utils`, so this map gets you from a lockfile importer key to the matching package without a linear scan:
 
 ```typescript
 const program = Effect.gen(function* () {
@@ -299,7 +281,8 @@ const program = Effect.gen(function* () {
   // Look up a package by its relative path
   const utils = importers.get("packages/utils");
   if (utils) {
-    console.log(utils.name); // "@myorg/utils"
+    console.log(utils.name);
+    // example output (varies): "@myorg/utils"
   }
 
   // The root package is keyed by "."
@@ -307,16 +290,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-The importer map is built from `listPackages()` and inherits its caching, so
-repeated calls are free.
+The map is built from `listPackages()` and shares its cache; repeated calls are free.
 
-## Root Package in listPackages
+## Root package in listPackages
 
-`WorkspaceDiscovery.listPackages()` includes the root workspace package as the
-first entry in the returned array. The root package has `relativePath: "."`.
-
-Use the `isRootWorkspace` getter to filter it out when you only want child
-packages:
+`listPackages()` puts the root workspace at index 0; it is the entry with `relativePath: "."`. When you only want child packages, filter on `isRootWorkspace`:
 
 ```typescript
 const program = Effect.gen(function* () {
