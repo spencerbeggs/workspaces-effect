@@ -183,7 +183,7 @@ if (root) {
 
 Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns `{ name, path }` for every match. Returns `null` if the root directory does not exist.
 
-The Effect-based `listPackages()` includes the root workspace; this function does **not**. It returns only packages matched by workspace patterns.
+Like the Effect-based `listPackages()`, this function includes the root workspace as the first entry in the returned array.
 
 ```typescript
 const root = findWorkspaceRootSync();
@@ -226,7 +226,7 @@ export default {
 | --- | --- | --- |
 | **Import** | services + layers | standalone functions |
 | **Error handling** | typed `TaggedError` values | returns `null` on failure |
-| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` excludes root |
+| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` includes root |
 | **Caching** | per-layer request caching | no caching (re-reads on each call) |
 | **Platform** | `@effect/platform` (Node, Bun) | `node:fs` and `node:path` directly |
 | **Observability** | spans + structured logging | none |
