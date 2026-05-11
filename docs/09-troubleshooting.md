@@ -16,6 +16,7 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 - [LockfileReadError](#lockfilereaderror)
 - [LockfileParseError](#lockfileparseerror)
 - [LockfileIntegrityError](#lockfileintegrityerror)
+- [LockfileInitError union](#lockfileiniterror-union)
 - [Platform layer missing](#platform-layer-missing)
 
 ---
@@ -337,6 +338,33 @@ Effect.catchTag("LockfileIntegrityError", (e) =>
 
 ---
 
+## LockfileInitError union
+
+`LockfileInitError` is a type alias, not a concrete error class. It groups the four errors that can surface from `LockfileReader` methods when lazy initialization runs for the first time:
+
+```typescript
+import type { LockfileInitError } from "workspaces-effect";
+
+// LockfileInitError =
+//   | WorkspaceRootNotFoundError
+//   | PackageManagerDetectionError
+//   | LockfileReadError
+//   | LockfileParseError
+```
+
+All four `LockfileReader` methods — `readLockfile`, `resolvedVersion`, `workspaceDependencies`, `checkIntegrity` — include `LockfileInitError` in their E channel because the workspace-root walk, package-manager detection, lockfile read, and lockfile parse are deferred to the first call. Handle the individual errors at the call site using `Effect.catchTag`:
+
+```typescript
+Effect.catchTag("WorkspaceRootNotFoundError", (e) => ...)
+Effect.catchTag("PackageManagerDetectionError", (e) => ...)
+Effect.catchTag("LockfileReadError", (e) => ...)
+Effect.catchTag("LockfileParseError", (e) => ...)
+```
+
+Each constituent error is documented in its own section above. See [Lazy lockfile and discovery initialization](../README.md#lazy-lockfile-and-discovery-initialization) for the full explanation.
+
+---
+
 ## Platform layer missing
 
 **Symptom:** Type error about a missing `FileSystem`, `Path` or `CommandExecutor` in the Effect context.
@@ -359,7 +387,7 @@ program.pipe(
 );
 ```
 
-1. For change detection, switch to `WorkspacesFullLive`:
+2. For change detection, switch to `WorkspacesFullLive`:
 
 ```typescript
 program.pipe(

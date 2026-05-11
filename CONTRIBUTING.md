@@ -82,7 +82,7 @@ pnpm run test:watch
 pnpm run test:coverage
 
 # Run a specific test file
-pnpm vitest run src/layers/DependencyGraphLive.test.ts
+pnpm vitest run __test__/layers/DependencyGraphLive.test.ts
 ```
 
 ## TypeScript
