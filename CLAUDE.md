@@ -32,7 +32,11 @@ readWorkspacePackage requires version field (no silent "0.0.0" default for
 child packages). PublishTarget schema and shared parser utilities fully tested.
 Sync API (`src/sync.ts`): `findWorkspaceRootSync` and
 `getWorkspacePackagesSync` exported for non-Effect contexts (e.g., lint-staged
-handlers); uses `node:fs`/`node:path` directly.
+handlers); uses `node:fs`/`node:path` directly. `findWorkspaceRootSync` walks
+up checking workspace markers first, then stops at the `.git` project
+boundary -- returns the git-root directory when a `package.json` sits
+alongside `.git` (single-package repo support), throws when it does not, and
+returns `null` only when `cwd` is not inside any git project (Issue #103).
 Lazy layer init (Issue #60): `LockfileReaderLive` and `WorkspaceDiscoveryLive`
 defer all I/O via `Effect.cached`; layer construction is O(1), the
 root-find/PM-detect/lockfile-read/parse/index-build runs once on first method

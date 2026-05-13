@@ -383,7 +383,7 @@ as `findWorkspaceRootSync` and `getWorkspacePackagesSync`.
 
 | Function | Signature | Description |
 | --- | --- | --- |
-| `findWorkspaceRootSync` | `(cwd?: string) => string \| null` | Walk up from `cwd` looking for `pnpm-workspace.yaml` or `package.json` with `workspaces` field |
+| `findWorkspaceRootSync` | `(cwd?: string) => string \| null` | Walk up from `cwd` looking for `pnpm-workspace.yaml` or `package.json` with `workspaces` field; stop ascent at the first `.git` (project boundary) and return that directory when a `package.json` is alongside, else throw. Returns `null` only when `cwd` is not inside any git project. |
 | `getWorkspacePackagesSync` | `(root: string) => ReadonlyArray<{ name: string; path: string }> \| null` | Resolve workspace patterns and return `{ name, path }` for each child package |
 
 ### Design Rationale
@@ -399,6 +399,13 @@ as `findWorkspaceRootSync` and `getWorkspacePackagesSync`.
   `getWorkspacePackagesSync` returns only packages matched by workspace
   patterns (no root package). This avoids confusion in lint-staged contexts
   where root package changes are not meaningful.
+- **Git project boundary (Issue #103)**: `findWorkspaceRootSync` stops the
+  walk at the first `.git` it encounters. If a `package.json` lives
+  alongside `.git` it returns that directory (single-package repo support);
+  if not it throws — a project without a root manifest is an error, not a
+  silent miss. `null` is now reserved for "cwd is not inside any git
+  project", which lets downstream consumers (e.g. vitest-agent-plugin)
+  stop special-casing single-package repos.
 - **Silent error handling**: Parse/read errors are swallowed (returns `null`
   or empty array) rather than thrown. A typo in workspace patterns produces
   an empty result rather than an error, which prevents breaking downstream

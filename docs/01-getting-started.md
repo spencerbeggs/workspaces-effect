@@ -167,7 +167,7 @@ import {
 
 ### findWorkspaceRootSync
 
-Walks upward from a starting directory and stops at the first workspace marker (`pnpm-workspace.yaml`, or a `package.json` with a `workspaces` field). Returns the absolute path to the root, or `null` if it never finds one.
+Walks upward from a starting directory. At each level it checks, in order, for `pnpm-workspace.yaml` and then a `package.json` with a `workspaces` field, and returns the first match. If neither marker turns up before the walk reaches a `.git` directory, ascent stops at that git project boundary and returns the boundary directory — provided it has a `package.json`. A git boundary with no `package.json` throws; a project missing a root manifest is an error. The function returns `null` only when no `.git` is found above `cwd`.
 
 ```typescript
 const root = findWorkspaceRootSync(); // starts from process.cwd()
@@ -178,6 +178,15 @@ if (root) {
   // example output: Workspace root: /workspace
 }
 ```
+
+Behavior matrix:
+
+| Repo shape | Result |
+| ---------- | ------ |
+| Monorepo with `pnpm-workspace.yaml` or `package.json.workspaces` | workspace root |
+| Single-package repo (no workspace markers, `.git` at root) | git root |
+| Git project with no `package.json` at the boundary | throws |
+| Path outside any git project | `null` |
 
 ### getWorkspacePackagesSync
 
