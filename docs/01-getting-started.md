@@ -181,19 +181,15 @@ if (root) {
 
 ### getWorkspacePackagesSync
 
-Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns `{ name, path }` for every match. Returns `null` if the root directory does not exist.
-
-The Effect-based `listPackages()` includes the root workspace; this function does **not**. It returns only packages matched by workspace patterns.
+Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns a `WorkspacePackage` for every match. The root package is always included as the first entry, matching the behavior of `listPackages()`. Throws if the root directory does not exist or if the root `package.json` is missing `name` or `version`.
 
 ```typescript
 const root = findWorkspaceRootSync();
 if (root) {
   const packages = getWorkspacePackagesSync(root);
-  if (packages) {
-    for (const pkg of packages) {
-      console.log(`${pkg.name} at ${pkg.path}`);
-      // example output (varies by repo): "@myorg/utils at /workspace/packages/utils"
-    }
+  for (const pkg of packages) {
+    console.log(`${pkg.name} at ${pkg.path}`);
+    // example output (varies by repo): "@myorg/utils at /workspace/packages/utils"
   }
 }
 ```
@@ -226,7 +222,7 @@ export default {
 | --- | --- | --- |
 | **Import** | services + layers | standalone functions |
 | **Error handling** | typed `TaggedError` values | returns `null` on failure |
-| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` excludes root |
+| **Root package** | included (root is first entry) | included (root is first entry) |
 | **Caching** | per-layer request caching | no caching (re-reads on each call) |
 | **Platform** | `@effect/platform` (Node, Bun) | `node:fs` and `node:path` directly |
 | **Observability** | spans + structured logging | none |
