@@ -145,10 +145,10 @@ Both context layers provide `FileSystem`, `Path` and `CommandExecutor`, so eithe
 
 Some callers cannot run an Effect — lint-staged handlers and synchronous config files are the usual culprits. Two plain functions are exported for those cases:
 
-- `findWorkspaceRootSync(cwd?)` walks up from `cwd` (default `process.cwd()`) and returns the workspace root or `null`.
+- `findWorkspaceRootSync(cwd?)` walks up from `cwd` (default `process.cwd()`). At each level it checks for `pnpm-workspace.yaml`, then `package.json` with a `workspaces` field. Ascent stops at the first `.git` it encounters — if that directory also has a `package.json`, it returns the directory (single-package repo); if not, it throws. The walk returns `null` only when no `.git` is found before the filesystem root, i.e. `cwd` is not inside any git project.
 - `getWorkspacePackagesSync(root)` returns `ReadonlyArray<{ name: string; path: string }>` or `null`.
 
-These use `node:fs` and `node:path` directly, so they are Node-only and bypass the platform abstraction. There is no caching, no logging, and no typed error channel; failures collapse to `null`. See the [Getting started](./01-getting-started.md#synchronous-utilities) guide for examples.
+These use `node:fs` and `node:path` directly, so they are Node-only and bypass the platform abstraction. There is no caching and no logging. See the [Getting started](./01-getting-started.md#synchronous-utilities) guide for examples.
 
 ## Error model
 

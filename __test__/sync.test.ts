@@ -1,5 +1,7 @@
-import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WorkspacePackage } from "../src/schemas/core.js";
 import { findWorkspaceRootSync, getWorkspacePackagesSync } from "../src/sync.js";
 
@@ -51,6 +53,77 @@ describe("findWorkspaceRootSync", () => {
 
 	it("throws for nonexistent directory", () => {
 		expect(() => findWorkspaceRootSync("/nonexistent/path/that/does/not/exist")).toThrow();
+	});
+});
+
+describe("findWorkspaceRootSync — git project boundary", () => {
+	let tmp: string;
+
+	beforeEach(() => {
+		tmp = mkdtempSync(join(tmpdir(), "ws-effect-sync-"));
+	});
+
+	afterEach(() => {
+		rmSync(tmp, { recursive: true, force: true });
+	});
+
+	it("returns git root for single-package repo without workspace markers", () => {
+		mkdirSync(join(tmp, ".git"));
+		writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "x", version: "1.0.0" }));
+		const sub = join(tmp, "src");
+		mkdirSync(sub);
+
+		expect(findWorkspaceRootSync(sub)).toBe(tmp);
+	});
+
+	it("returns git root when invoked at the root itself", () => {
+		mkdirSync(join(tmp, ".git"));
+		writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "x", version: "1.0.0" }));
+
+		expect(findWorkspaceRootSync(tmp)).toBe(tmp);
+	});
+
+	it("recognizes .git as a file (submodule / worktree pointer)", () => {
+		writeFileSync(join(tmp, ".git"), "gitdir: /some/other/path\n");
+		writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "x", version: "1.0.0" }));
+
+		expect(findWorkspaceRootSync(tmp)).toBe(tmp);
+	});
+
+	it("throws when the git boundary has no package.json", () => {
+		mkdirSync(join(tmp, ".git"));
+		const sub = join(tmp, "src");
+		mkdirSync(sub);
+
+		expect(() => findWorkspaceRootSync(sub)).toThrow(/no package\.json/);
+	});
+
+	it("prefers an inner workspace marker over an outer .git boundary", () => {
+		// Outer git project with its own package.json
+		mkdirSync(join(tmp, ".git"));
+		writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "outer", version: "1.0.0" }));
+
+		// Nested pnpm workspace, no .git of its own
+		const inner = join(tmp, "nested");
+		mkdirSync(inner);
+		writeFileSync(join(inner, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+		writeFileSync(join(inner, "package.json"), JSON.stringify({ name: "inner", version: "1.0.0" }));
+
+		expect(findWorkspaceRootSync(inner)).toBe(inner);
+	});
+
+	it("stops at an inner .git (submodule) rather than escaping to the outer project", () => {
+		// Outer project with workspace marker
+		writeFileSync(join(tmp, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+		writeFileSync(join(tmp, "package.json"), JSON.stringify({ name: "outer", version: "1.0.0" }));
+
+		// Inner submodule-style git project
+		const inner = join(tmp, "vendor", "sub");
+		mkdirSync(inner, { recursive: true });
+		mkdirSync(join(inner, ".git"));
+		writeFileSync(join(inner, "package.json"), JSON.stringify({ name: "sub", version: "1.0.0" }));
+
+		expect(findWorkspaceRootSync(inner)).toBe(inner);
 	});
 });
 

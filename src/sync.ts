@@ -14,13 +14,21 @@ import { PublishConfig, WorkspacePackage } from "./schemas/core.js";
 /**
  * Find the workspace root by walking up from `cwd`.
  *
- * Looks for `pnpm-workspace.yaml` first, then `package.json` with a
- * `workspaces` field. Returns the absolute path to the root, or `null`
- * if no workspace root is found.
+ * Resolution order at each level:
+ *
+ * 1. `pnpm-workspace.yaml` — return this directory.
+ * 2. `package.json` with a `workspaces` field — return this directory.
+ * 3. `.git` (project boundary) — stop ascent. If a `package.json` exists
+ *    alongside `.git`, return that directory; otherwise throw, because a
+ *    git project missing a root `package.json` is an error.
+ *
+ * If the walk reaches the filesystem root without seeing any workspace
+ * marker or `.git`, returns `null` — `cwd` is not inside a project.
  *
  * @param cwd - Starting directory (defaults to `process.cwd()`)
- * @returns Absolute path to workspace root, or `null`
- * @throws If the provided path does not exist
+ * @returns Absolute path to workspace root, or `null` when not inside any project
+ * @throws If the provided path does not exist, or if a `.git` boundary is
+ *   reached without a sibling `package.json`
  *
  * @public
  */
@@ -38,17 +46,27 @@ export const findWorkspaceRootSync = (cwd?: string): string | null => {
 			return current;
 		}
 
-		try {
-			const pkgPath = join(current, "package.json");
-			if (existsSync(pkgPath)) {
+		const pkgPath = join(current, "package.json");
+		const hasPkg = existsSync(pkgPath);
+		if (hasPkg) {
+			try {
 				const content = readFileSync(pkgPath, "utf-8");
 				const parsed = JSON.parse(content) as Record<string, unknown>;
 				if ("workspaces" in parsed && parsed.workspaces != null) {
 					return current;
 				}
+			} catch {
+				// Ignore read/parse errors, keep walking
 			}
-		} catch {
-			// Ignore read/parse errors, keep walking
+		}
+
+		if (existsSync(join(current, ".git"))) {
+			if (hasPkg) {
+				return current;
+			}
+			throw new Error(
+				`Found git project boundary at ${current} but no package.json — a project must have a root package.json`,
+			);
 		}
 
 		const parent = dirname(current);
