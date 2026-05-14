@@ -190,7 +190,7 @@ Behavior matrix:
 
 ### getWorkspacePackagesSync
 
-Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns `{ name, path }` for every match. Returns `null` if the root directory does not exist.
+Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns `{ name, path }` for every match. Throws if the root directory does not exist or the root `package.json` is missing a `name` or `version` field.
 
 The Effect-based `listPackages()` includes the root workspace; this function does **not**. It returns only packages matched by workspace patterns.
 
