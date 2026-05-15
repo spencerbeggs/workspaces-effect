@@ -234,7 +234,7 @@ export default {
 | | Effect API | Sync API |
 | --- | --- | --- |
 | **Import** | services + layers | standalone functions |
-| **Error handling** | typed `TaggedError` values | returns `null` on failure |
+| **Error handling** | typed `TaggedError` values | returns `null` or throws, depending on the failure |
 | **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` excludes root |
 | **Caching** | per-layer request caching | no caching (re-reads on each call) |
 | **Platform** | `@effect/platform` (Node, Bun) | `node:fs` and `node:path` directly |

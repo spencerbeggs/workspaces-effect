@@ -174,7 +174,7 @@ if (lockfile.pmSpecific?._tag === "pnpm") {
     for (const [catalogName, entries] of Object.entries(catalogs)) {
       for (const [pkgName, value] of Object.entries(entries)) {
         // value is either a string (version) or { specifier, version }
-        // pnpm v9+ uses the { specifier, version } format
+        // pnpm v10+ uses the { specifier, version } format; v9 uses plain strings
         if (typeof value === "string") {
           console.log(`${catalogName}/${pkgName}: ${value}`);
         } else {
@@ -196,7 +196,7 @@ if (lockfile.pmSpecific?._tag === "pnpm") {
 }
 ```
 
-The `PnpmExtension.catalogs` value type is `string | { specifier: string; version: string }`. Older pnpm versions store catalog entries as plain version strings. pnpm v9+ stores them as objects holding both the declared specifier and the resolved version.
+The `PnpmExtension.catalogs` value type is `string | { specifier: string; version: string }`. pnpm v9 stores catalog entries as plain version strings. pnpm v10+ stores them as objects holding both the declared specifier and the resolved version.
 
 ### bun extensions
 
