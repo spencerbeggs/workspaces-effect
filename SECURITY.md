@@ -6,8 +6,7 @@
 | --- | --- |
 | Latest | Yes |
 
-This package is pre-release (`< 1.0.0`). Only the latest published version
-receives security fixes.
+Only the latest published version receives security fixes.
 
 ## Reporting a Vulnerability
 

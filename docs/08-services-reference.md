@@ -20,7 +20,7 @@ All services are imported from `"workspaces-effect"`. Service methods have `R = 
 
 ## WorkspaceRoot
 
-Walks up from a given path to find the monorepo root. Markers checked at each level: `pnpm-workspace.yaml`, a `package.json` with a `workspaces` field, or a lockfile.
+Walks up from a given path to find the monorepo root. Markers checked at each level: `pnpm-workspace.yaml`, or a `package.json` with a `workspaces` field.
 
 **Layer:** `WorkspaceRootLive`
 **Platform deps:** `FileSystem`, `Path`
