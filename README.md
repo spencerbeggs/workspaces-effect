@@ -60,7 +60,7 @@ const program = Effect.gen(function* () {
 
   // Static data-last (pipeable) style
   const usesReact = packages.filter(
-    pipe(WorkspacePackage.hasAnyDependencyOn("react")),
+    WorkspacePackage.hasAnyDependencyOn("react"),
   );
 });
 
