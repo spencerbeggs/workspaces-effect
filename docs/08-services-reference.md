@@ -122,7 +122,7 @@ const importers = yield* discovery.importerMap();
 
 ## DependencyGraph
 
-A directed graph of inter-workspace dependencies. Edges come from `dependencies`, `devDependencies` and `peerDependencies`; external npm packages are not vertices.
+A directed graph of inter-workspace dependencies. Edges come from `dependencies` and `devDependencies`; external npm packages are not vertices.
 
 The graph is built once at layer construction time from the workspace package list. Every query is an in-memory lookup.
 
