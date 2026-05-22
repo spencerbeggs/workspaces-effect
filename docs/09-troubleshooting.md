@@ -359,7 +359,7 @@ program.pipe(
 );
 ```
 
-1. For change detection, switch to `WorkspacesFullLive`:
+2. For change detection, switch to `WorkspacesFullLive`:
 
 ```typescript
 program.pipe(

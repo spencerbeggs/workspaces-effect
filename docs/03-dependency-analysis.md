@@ -16,7 +16,7 @@ workspaces-effect builds a directed graph of inter-workspace dependencies. You c
 
 The `DependencyGraph` service reads every workspace `package.json` and builds a graph of edges between workspace packages. External npm dependencies are skipped.
 
-Edges come from `dependencies`, `devDependencies` and `peerDependencies`. If package A lists package B in any of those maps and package B is itself a workspace package, the graph holds an edge from A to B.
+Edges come from `dependencies` and `devDependencies`. If package A lists package B in either of those maps and package B is itself a workspace package, the graph holds an edge from A to B. `peerDependencies` and `optionalDependencies` are not included.
 
 ```typescript
 import { Effect } from "effect";
