@@ -190,19 +190,18 @@ Behavior matrix:
 
 ### getWorkspacePackagesSync
 
-Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns `{ name, path }` for every match. Returns `null` if the root directory does not exist.
+Reads workspace patterns from `pnpm-workspace.yaml` or `package.json`, resolves each pattern to a directory, and returns a `WorkspacePackage` for each match. Throws if the root directory does not exist or if the root `package.json` is missing `name` or `version`.
 
-The Effect-based `listPackages()` includes the root workspace; this function does **not**. It returns only packages matched by workspace patterns.
+Like `listPackages()`, it includes the root workspace as the first entry.
 
 ```typescript
 const root = findWorkspaceRootSync();
 if (root) {
   const packages = getWorkspacePackagesSync(root);
-  if (packages) {
-    for (const pkg of packages) {
-      console.log(`${pkg.name} at ${pkg.path}`);
-      // example output (varies by repo): "@myorg/utils at /workspace/packages/utils"
-    }
+  for (const pkg of packages) {
+    if (pkg.isRootWorkspace) continue;
+    console.log(`${pkg.name} at ${pkg.path}`);
+    // example output (varies by repo): "@myorg/utils at /workspace/packages/utils"
   }
 }
 ```
@@ -234,8 +233,8 @@ export default {
 | | Effect API | Sync API |
 | --- | --- | --- |
 | **Import** | services + layers | standalone functions |
-| **Error handling** | typed `TaggedError` values | returns `null` on failure |
-| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` excludes root |
+| **Error handling** | typed `TaggedError` values | throws `Error` on root failures; silently skips unreadable child packages |
+| **Root package** | `listPackages()` includes root | `getWorkspacePackagesSync` includes root as first entry |
 | **Caching** | per-layer request caching | no caching (re-reads on each call) |
 | **Platform** | `@effect/platform` (Node, Bun) | `node:fs` and `node:path` directly |
 | **Observability** | spans + structured logging | none |
