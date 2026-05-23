@@ -101,5 +101,27 @@ export class WorkspaceDiscovery extends Context.Tag("@spencerbeggs/workspaces-ef
 		readonly importerMap: (
 			cwd?: string,
 		) => Effect.Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>;
+
+		/**
+		 * Discard cached discovery results so the next {@link listPackages}
+		 * (and {@link getPackage} / {@link importerMap}, which build on it)
+		 * re-reads every `package.json` from disk.
+		 *
+		 * @remarks
+		 * `listPackages` memoizes its result per resolved workspace root for the
+		 * lifetime of the layer. That cache is correct for a static tree, but a
+		 * process that mutates `package.json` mid-run — for example running
+		 * `changeset version` to bump versions and then reading the new versions
+		 * back — would otherwise observe the pre-mutation snapshot. Call
+		 * `refresh` after such a mutation to force a re-scan.
+		 *
+		 * The resolved workspace root itself is not discarded (the root does not
+		 * move when package contents change), so the next call pays only the
+		 * package re-scan, not the root walk. `refresh` clears the cache for
+		 * every resolved root.
+		 *
+		 * @returns An Effect that clears the cache and succeeds with `void`.
+		 */
+		readonly refresh: () => Effect.Effect<void>;
 	}
 >() {}

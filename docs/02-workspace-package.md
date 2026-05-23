@@ -13,6 +13,7 @@
 - [Reading package.json](#reading-packagejson)
 - [Importer map](#importer-map)
 - [Root package in listPackages](#root-package-in-listpackages)
+- [Refreshing after mutation](#refreshing-after-mutation)
 
 ## Fields
 
@@ -307,3 +308,28 @@ const program = Effect.gen(function* () {
   const childPackages = all.filter((pkg) => !pkg.isRootWorkspace);
 });
 ```
+
+## Refreshing after mutation
+
+`listPackages()` memoizes its result per resolved workspace root for the lifetime of the layer. That cache is correct for a static tree, but a process that mutates `package.json` files mid-run will keep seeing the pre-mutation snapshot. A common case is running `changeset version` to bump versions, then reading the new versions back from the same layer.
+
+`WorkspaceDiscovery.refresh()` discards the cached package list. The next `listPackages()` — and `getPackage()` / `importerMap()`, which build on it — re-reads every `package.json` from disk. The resolved workspace root is preserved, since the root does not move when package contents change, so the next call pays only for the package re-scan, not the root walk:
+
+```typescript
+const program = Effect.gen(function* () {
+  const discovery = yield* WorkspaceDiscovery;
+
+  // Snapshot taken and cached on first call
+  const before = yield* discovery.getPackage("@myorg/app");
+
+  // ...something mutates packages/app/package.json on disk
+  // (for example, `changeset version` bumps it)
+
+  yield* discovery.refresh();
+
+  // Re-read from disk; reflects the new version
+  const after = yield* discovery.getPackage("@myorg/app");
+});
+```
+
+`refresh()` returns `Effect<void>` and never fails; the re-scan itself runs on the next discovery call and surfaces its errors there.

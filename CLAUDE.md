@@ -5,8 +5,9 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-All phases complete plus WorkspacePackage enrichment (Issue #12). 386 tests
-passing (250 unit + 136 integration). Full observability (spans + structured
+All phases complete plus WorkspacePackage enrichment (Issue #12). 432 tests
+passing (290 unit + 142 integration). Full
+observability (spans + structured
 logging at Debug level) across all services -- library is silent under
 Effect's default logger; consumers opt in via
 `Logger.withMinimumLogLevel(LogLevel.Debug)`. See README "Observability"
@@ -20,7 +21,12 @@ computed getters (isRootWorkspace, isPublic, scope, unscopedName,
 allDependencies), instance methods + static
 dual-API functions, DependencyDiff, readPackageJson utility.
 ResolvedPackage has optional relativePath field for workspace-aware resolution.
-WorkspaceDiscovery.importerMap() added. listPackages() now includes root
+WorkspaceDiscovery.importerMap() added. WorkspaceDiscovery.refresh() added
+(branch feat/refresh-api): clears the per-resolved-root package cache so the
+next listPackages/getPackage/importerMap re-reads each package.json from disk;
+the resolved-root memo is preserved. See
+`.claude/design/architecture.md` "Cache invalidation API (2026-05-23)".
+listPackages() now includes root
 workspace (breaking change). PnpmExtension.catalogs accepts union type for
 pnpm v9+ format (catalogs defined in pnpm-workspace.yaml in v10).
 PublishConfig is a Schema.Class with `tag` and `linkDirectory` fields
