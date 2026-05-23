@@ -493,6 +493,14 @@ export const WorkspaceDiscoveryLive: Layer.Layer<
 						attributes: { "workspace.package": name },
 					}),
 				),
+
+			refresh: () =>
+				Effect.sync(() => {
+					// Drop every cached root so the next discovery re-reads each
+					// package.json. The resolved-root memo is intentionally left
+					// intact — the root does not move when package contents change.
+					cache.clear();
+				}).pipe(Effect.withSpan("WorkspaceDiscovery.refresh")),
 		};
 	}),
 );

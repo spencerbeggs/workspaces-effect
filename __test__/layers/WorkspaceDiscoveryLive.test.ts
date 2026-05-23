@@ -965,4 +965,49 @@ describe("WorkspaceDiscoveryLive", () => {
 			expect(result).toHaveLength(2);
 		});
 	});
+
+	describe("refresh", () => {
+		it("re-reads package.json versions after the cache is invalidated", async () => {
+			const root = "/projects/monorepo";
+			const pkgJsonPath = `${root}/packages/pkg-a/package.json`;
+			// Mutable so the test can rewrite a package.json mid-run, the way
+			// `changeset version` rewrites versions between two discovery reads.
+			const files: Record<string, string | true> = {
+				[`${root}/pnpm-workspace.yaml`]: "packages:\n  - 'packages/*'",
+				[`${root}/package.json`]: JSON.stringify({ name: "my-monorepo", version: "0.0.0", private: true }),
+				[pkgJsonPath]: JSON.stringify({ name: "@scope/pkg-a", version: "1.0.0" }),
+			};
+			const layer = testLayer(root, files, { [`${root}/packages`]: ["pkg-a"] });
+
+			const versionOf = (pkgs: ReadonlyArray<{ name: string; version: string }>) =>
+				pkgs.find((p) => p.name === "@scope/pkg-a")?.version;
+
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const discovery = yield* WorkspaceDiscovery;
+
+					const first = versionOf(yield* discovery.listPackages());
+
+					// Bump the version on disk after the first read populated the cache.
+					yield* Effect.sync(() => {
+						files[pkgJsonPath] = JSON.stringify({ name: "@scope/pkg-a", version: "1.0.1" });
+					});
+
+					// Without invalidation, the cached pre-bump snapshot is returned.
+					const cached = versionOf(yield* discovery.listPackages());
+
+					yield* discovery.refresh();
+
+					// After refresh, the next read picks up the on-disk bump.
+					const refreshed = versionOf(yield* discovery.listPackages());
+
+					return { first, cached, refreshed };
+				}).pipe(Effect.provide(layer)),
+			);
+
+			expect(result.first).toBe("1.0.0");
+			expect(result.cached).toBe("1.0.0");
+			expect(result.refreshed).toBe("1.0.1");
+		});
+	});
 });

@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-05-02
-last-synced: 2026-05-02
+updated: 2026-05-23
+last-synced: 2026-05-23
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -42,7 +42,7 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 386 tests passing (250 unit + 136 integration), all
+All phases complete. 432 tests passing (290 unit + 142 integration), all
 typechecking. Full observability (spans + structured logging) across all
 services.
 
@@ -116,6 +116,13 @@ services.
   similarly defers `WorkspaceDiscoveryError` from the default-root walk to
   the first method call that omits an explicit `cwd` argument. The Layer E
   channels for both layers narrow to `never`.
+- **Cache invalidation API (2026-05-23)**: `WorkspaceDiscovery.refresh()`
+  added -- `Effect.Effect<void>` that clears the per-resolved-root package
+  cache in `WorkspaceDiscoveryLive` so the next `listPackages` / `getPackage` /
+  `importerMap` call re-reads each `package.json` from disk. The resolved-root
+  memo (the `Effect.cached` default-root lookup) is left intact. Use after a
+  mid-process mutation of package files (e.g. `changeset version` followed by
+  reading bumped versions), which the layer-lifetime cache would otherwise mask.
 
 ## Design Goals
 
@@ -158,6 +165,14 @@ WorkspaceDiscovery methods:
   by `relativePath`. Built from `listPackages()` and inherits its caching.
   Supports lockfile importer-to-package mapping use cases. `cwd` semantics
   match `listPackages`.
+- `refresh()` -- `Effect.Effect<void>`. Discards the per-root package cache so
+  the next `listPackages` / `getPackage` / `importerMap` call re-reads every
+  `package.json` from disk. The resolved-root memo is intentionally left intact
+  (the root does not move when package contents change), so the next call pays
+  only the package re-scan, not the root walk. Use after mutating package files
+  mid-process -- e.g. running `changeset version` then reading the bumped
+  versions back, which would otherwise return the pre-mutation snapshot from the
+  layer-lifetime cache.
 
 ### Group 2: Package Analysis
 

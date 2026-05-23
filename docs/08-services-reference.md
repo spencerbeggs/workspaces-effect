@@ -111,11 +111,21 @@ Returns a map keyed by workspace-relative directory path. Useful for cross-refer
 
 - **Returns:** `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
 
+#### `refresh()`
+
+Discards the cached package list so the next `listPackages()` (and `getPackage()` / `importerMap()`, which build on it) re-reads every `package.json` from disk. The resolved workspace root is kept — the root does not move when package contents change — so the next call pays only for the package re-scan, not the root walk. Use it after a process mutates `package.json` files mid-run, such as running `changeset version` and then reading the bumped versions back.
+
+- **Returns:** `Effect<void>`
+
 ```typescript
 const discovery = yield* WorkspaceDiscovery;
 const packages = yield* discovery.listPackages();
 const core = yield* discovery.getPackage("@myorg/core");
 const importers = yield* discovery.importerMap();
+
+// After mutating package.json files on disk:
+yield* discovery.refresh();
+const updated = yield* discovery.listPackages(); // re-read from disk
 ```
 
 ---
