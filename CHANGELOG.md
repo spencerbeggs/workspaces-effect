@@ -1,5 +1,11 @@
 # workspaces-effect
 
+## 1.1.0
+
+### Features
+
+* [`a1afdbc`](https://github.com/spencerbeggs/workspaces-effect/commit/a1afdbc25561c3addf9deb1796a880eec5a8d8a6) Add `WorkspaceDiscovery.refresh()` to discard the per-root package cache so the next `listPackages` (and `getPackage` / `importerMap`) re-reads each `package.json` from disk. Use it after mutating package files mid-process — e.g. running `changeset version` and then reading the bumped versions back — which previously returned the pre-mutation snapshot from the layer-lifetime cache.
+
 ## 1.0.0
 
 ### Breaking Changes
