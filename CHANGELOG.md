@@ -1,5 +1,18 @@
 # workspaces-effect
 
+## 1.2.0
+
+### Features
+
+* [`20578cc`](https://github.com/spencerbeggs/workspaces-effect/commit/20578ccddadb390ed10d95e0b00e251794c3513b) Add the `CatalogResolver` service. It assembles a workspace's complete pnpm
+  catalog set — inline `pnpm-workspace.yaml` catalogs, catalogs injected by config
+  dependencies (replayed from their installed pnpmfile `updateConfig` hooks), and
+  lockfile catalogs — without depending on the transient
+  `.pnpm-workspace-state-v1.json` install artifact. It also resolves `catalog:` and
+  `workspace:` specifiers in a manifest to concrete version specifiers, surfacing
+  `CatalogAssemblyError` and `CatalogResolutionError` as typed, catchable failures.
+  The service is wired into `WorkspacesLive` and `WorkspacesFullLive`.
+
 ## 1.1.0
 
 ### Features
