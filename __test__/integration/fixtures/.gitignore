@@ -2,3 +2,11 @@ node_modules/
 .pnpm-store/
 .yarn/
 .pnp.*
+
+# Catalog durability fixture: track only its config-dependency pnpmfiles (under
+# .pnpm-config), since the whole point of that fixture is that catalogs resolve
+# without an install. Every other fixture's node_modules (e.g. bun install
+# artifacts) stays ignored.
+!catalog/injected/node_modules/
+catalog/injected/node_modules/*
+!catalog/injected/node_modules/.pnpm-config/

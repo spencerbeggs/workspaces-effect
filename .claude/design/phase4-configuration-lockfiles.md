@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-04-15
-last-synced: 2026-04-15
+updated: 2026-06-04
+last-synced: 2026-06-04
 authors:
   - C. Spencer Beggs
 tags:
@@ -34,6 +34,7 @@ related:
 - [Error Types](#error-types)
 - [Parsing Strategy](#parsing-strategy)
 - [Layer Composition](#layer-composition)
+- [CatalogResolver Service](#catalogresolver-service)
 - [Testing Strategy](#testing-strategy)
 - [Open Questions (mostly resolved)](#open-questions-mostly-resolved)
 - [Research Needed](#research-needed)
@@ -521,6 +522,11 @@ export const WorkspacesLive = Layer.mergeAll(
     Layer.provide(PackageManagerDetectorLive),
   ),
   PublishabilityDetectorLive, // pure layer, no dependencies
+  CatalogResolverLive.pipe(
+    Layer.provide(WorkspaceRootLive),
+    Layer.provide(LockfileReaderLive.pipe(/* WorkspaceRoot + PackageManagerDetector */)),
+    Layer.provide(WorkspaceDiscoveryLive.pipe(Layer.provide(WorkspaceRootLive))),
+  ),
 )
 
 // Full stack: adds git-dependent services
@@ -537,6 +543,34 @@ export const WorkspacesFullLive = Layer.mergeAll(
 
 See `architecture.md` (Layer Composition) for the canonical description of
 the composite layer shapes.
+
+## CatalogResolver Service
+
+`CatalogResolver` (`src/services/CatalogResolver.ts`, `CatalogResolverLive` in
+`src/layers/CatalogResolverLive.ts`) is the second service in this group. It
+assembles a workspace's complete pnpm catalog set and resolves `catalog:` /
+`workspace:` specifiers in a manifest, depending on `LockfileReader` (for
+lockfile catalog snapshots) and `WorkspaceDiscovery` (for the `workspace:`
+graph). Assembly unions three precedence-ordered sources: lockfile catalogs,
+inline `pnpm-workspace.yaml` catalogs, then catalogs injected by pnpm **config
+dependencies**. The crux is that pnpm never persists config-dependency catalogs
+to a durable file — they live only in the transient
+`.pnpm-workspace-state-v1.json` — so the service replays each plugin-named config
+dependency's installed `pnpmfile` `updateConfig` hook out-of-band to recover them
+without that cache. Helper modules live under `src/layers/catalog/`
+(`workspace-manifest.ts`, `assemble.ts`, `config-dependency-hooks.ts`,
+`resolve.ts`). Failures surface as the typed `CatalogAssemblyError` /
+`CatalogResolutionError`; see `architecture.md` (Group 4) for the full design
+paragraph and the spec at
+`docs/superpowers/specs/2026-06-04-catalog-resolver-design.md`.
+
+This service revisits the "No @pnpm dependency" decision below in a narrow way:
+it reuses the lightweight pnpm catalog primitives
+(`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog
+projection, protocol parsing and single-spec resolution, while still avoiding the
+heavy `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime chain (hook replay
+uses a hand-rolled light loader). The lockfile parsers themselves remain
+@pnpm-free.
 
 ## Testing Strategy
 

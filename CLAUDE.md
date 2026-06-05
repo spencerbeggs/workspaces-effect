@@ -5,8 +5,8 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 
 ## Status
 
-All phases complete plus WorkspacePackage enrichment (Issue #12). 432 tests
-passing (290 unit + 142 integration). Full
+All phases complete plus WorkspacePackage enrichment (Issue #12) and the
+CatalogResolver service. 457 tests passing (313 unit + 144 integration). Full
 observability (spans + structured
 logging at Debug level) across all services -- library is silent under
 Effect's default logger; consumers opt in via
@@ -29,6 +29,7 @@ the resolved-root memo is preserved. See
 listPackages() now includes root
 workspace (breaking change). PnpmExtension.catalogs accepts union type for
 pnpm v9+ format (catalogs defined in pnpm-workspace.yaml in v10).
+CatalogResolver service (Group 4) assembles a workspace's complete pnpm catalog set (inline pnpm-workspace.yaml catalogs, config-dependency-injected catalogs durably replayed from each plugin's installed pnpmfile updateConfig hook NOT the transient .pnpm-workspace-state-v1.json, and lockfile catalogs) and resolves catalog:/workspace: specifiers in a manifest; lazy Effect.cached, typed CatalogAssemblyError/CatalogResolutionError, reuses @pnpm/catalogs.* primitives with a hand-rolled light hook loader (no @pnpm/config.reader), wired into WorkspacesLive (and thus WorkspacesFullLive). See `@.claude/design/architecture.md` Group 4 and `@.claude/design/phase4-configuration-lockfiles.md` "CatalogResolver Service".
 PublishConfig is a Schema.Class with `tag` and `linkDirectory` fields
 (PublishConfigSchema alias removed). DetectedPackageManager has `runtime`
 field ("node" | "bun"). WorkspaceDiscoveryLive has standalone fallback

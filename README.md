@@ -12,6 +12,7 @@ An [Effect](https://effect.website) library for monorepo tooling. It discovers w
 - Dependency graph with topological sort, parallel build levels and cycle detection
 - Git-driven change detection that returns the affected packages for a diff
 - Lockfile parsing for all four package managers, including integrity checks against `package.json` ranges
+- Catalog resolution that rewrites `catalog:` and `workspace:` specifiers to concrete versions, assembling pnpm catalogs from inline, config-dependency and lockfile sources (`workspace:` still resolves on npm, yarn and Bun)
 - Runs on Node.js or Bun via `@effect/platform` adapters — no `node:` imports leak into your code
 - Synchronous helpers (`findWorkspaceRootSync`, `getWorkspacePackagesSync`) for places Effect cannot reach, like lint-staged hooks
 

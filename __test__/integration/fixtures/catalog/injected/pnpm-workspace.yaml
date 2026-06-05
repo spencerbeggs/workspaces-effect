@@ -1,0 +1,6 @@
+packages:
+  - packages/*
+configDependencies:
+  "@scope/pnpm-plugin-a": "1.0.0"
+  "@scope/pnpm-plugin-b": "1.0.0"
+  "@scope/pnpm-plugin-bad": "1.0.0"

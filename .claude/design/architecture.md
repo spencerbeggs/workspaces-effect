@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-05-23
-last-synced: 2026-05-23
+updated: 2026-06-04
+last-synced: 2026-06-04
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -42,7 +42,7 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 432 tests passing (290 unit + 142 integration), all
+All phases complete. 457 tests passing (313 unit + 144 integration), all
 typechecking. Full observability (spans + structured logging) across all
 services.
 
@@ -51,7 +51,8 @@ services.
 - **Phase 2 (Package Analysis)**: DependencyGraphLive, TopologicalSorterLive
 - **Phase 3 (Change Detection)**: PackageResolverLive, ChangeDetectorLive
 - **Phase 4 (Configuration & Lockfiles)**: LockfileReaderLive,
-  PublishabilityDetectorLive, integrity checker, parsers for pnpm/npm/yarn/bun
+  PublishabilityDetectorLive, CatalogResolverLive, integrity checker, parsers
+  for pnpm/npm/yarn/bun
 - **WorkspacePackage Enrichment** (Issue #12): `peerDependencies` and
   `optionalDependencies` fields, computed getters (`isRootWorkspace`,
   `isPublic`, `scope`, `unscopedName`, `allDependencies`),
@@ -140,7 +141,7 @@ services.
 
 ## Service Architecture
 
-The library provides 9 services organized into four groups:
+The library provides 10 services organized into four groups:
 
 ### Group 1: Discovery
 
@@ -197,9 +198,29 @@ and `dependentsOf` with per-layer caching. See `phase2-dependency-graph.md`.
 | --- | --- | --- |
 | `LockfileReader` | Parse lockfile metadata + PM-specific config | FileSystem, Path, WorkspaceRoot, PackageManagerDetector |
 | `PublishabilityDetector` | Detect which workspace packages are publishable | (none -- pure logic) |
+| `CatalogResolver` | Assemble a workspace's complete pnpm catalog set and resolve `catalog:`/`workspace:` specifiers | FileSystem, Path, WorkspaceRoot, LockfileReader, WorkspaceDiscovery |
 
 LockfileReader uses Request/RequestResolver internally for `resolvedVersion`
 with per-layer caching. See `phase4-configuration-lockfiles.md`.
+
+CatalogResolver assembles the complete catalog set by unioning three sources
+(precedence lockfile, then inline `pnpm-workspace.yaml` catalogs, then
+config-dependency-injected catalogs), then resolves `catalog:`/`workspace:`
+specifiers in a manifest. The novel piece is recovering catalogs injected by
+pnpm **config dependencies** (declared under `configDependencies`): pnpm never
+persists those to a durable file (they live only in the transient
+`.pnpm-workspace-state-v1.json`), so CatalogResolver durably replays each
+plugin-named config dependency's installed `pnpmfile` `updateConfig` hook
+out-of-band — the same mechanism pnpm uses at install time, but driven from the
+installed pnpmfile rather than the state cache. It reuses the pnpm catalog
+primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for
+inline-catalog projection, protocol parsing, and single-spec resolution, and the
+workspace graph (`WorkspaceDiscovery`) for `workspace:` resolution. Assembly is
+lazy (`Effect.cached`, first-call) and surfaces `CatalogAssemblyError` /
+`CatalogResolutionError` as typed, `catchTag`-able failures. Hook replay uses a
+hand-rolled light loader (no `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile`
+runtime dependency); see the spec at
+`docs/superpowers/specs/2026-06-04-catalog-resolver-design.md`.
 
 PublishabilityDetector checks `private` field and `publishConfig.access`.
 Users can provide custom layers to override detection strategy.

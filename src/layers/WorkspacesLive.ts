@@ -12,6 +12,7 @@
  */
 
 import { Layer } from "effect";
+import { CatalogResolverLive } from "./CatalogResolverLive.js";
 import { ChangeDetectorLive } from "./ChangeDetectorLive.js";
 import { DependencyGraphLive } from "./DependencyGraphLive.js";
 import { LockfileReaderLive } from "./LockfileReaderLive.js";
@@ -26,7 +27,8 @@ import { WorkspaceRootLive } from "./WorkspaceRootLive.js";
  * Composite layer providing all services except git-dependent ones.
  *
  * Provides: `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`,
- * `DependencyGraph`, `TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`.
+ * `DependencyGraph`, `TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`,
+ * `CatalogResolver`.
  *
  * @remarks
  * Requires `FileSystem` and `Path` from `@effect/platform`. Provide these
@@ -65,6 +67,11 @@ export const WorkspacesLive = Layer.mergeAll(
 	),
 	LockfileReaderLive.pipe(Layer.provide(WorkspaceRootLive), Layer.provide(PackageManagerDetectorLive)),
 	PublishabilityDetectorLive, // pure layer, no dependencies
+	CatalogResolverLive.pipe(
+		Layer.provide(WorkspaceRootLive),
+		Layer.provide(LockfileReaderLive.pipe(Layer.provide(WorkspaceRootLive), Layer.provide(PackageManagerDetectorLive))),
+		Layer.provide(WorkspaceDiscoveryLive.pipe(Layer.provide(WorkspaceRootLive))),
+	),
 );
 
 /**
