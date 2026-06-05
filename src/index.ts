@@ -70,7 +70,10 @@
  * @packageDocumentation
  */
 
+export type { Catalog, Catalogs } from "@pnpm/catalogs.types";
 // ── Errors ───────────────────────────────────────────────────────────
+export { CatalogAssemblyError, CatalogAssemblyErrorBase } from "./errors/CatalogAssemblyError.js";
+export { CatalogResolutionError, CatalogResolutionErrorBase } from "./errors/CatalogResolutionError.js";
 export { ChangeDetectionError, ChangeDetectionErrorBase } from "./errors/ChangeDetectionError.js";
 export { CyclicDependencyError, CyclicDependencyErrorBase } from "./errors/CyclicDependencyError.js";
 export { DependencyResolutionError, DependencyResolutionErrorBase } from "./errors/DependencyResolutionError.js";
@@ -86,7 +89,10 @@ export {
 export { PackageNotFoundError, PackageNotFoundErrorBase } from "./errors/PackageNotFoundError.js";
 export { WorkspaceDiscoveryError, WorkspaceDiscoveryErrorBase } from "./errors/WorkspaceDiscoveryError.js";
 export { WorkspaceRootNotFoundError, WorkspaceRootNotFoundErrorBase } from "./errors/WorkspaceRootNotFoundError.js";
+export type { CatalogResolverLiveLayer } from "./layers/CatalogResolverLive.js";
+export { CatalogResolverLive } from "./layers/CatalogResolverLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
+export type { ManifestLike } from "./layers/catalog/resolve.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
@@ -125,6 +131,8 @@ export {
 	WorkspaceDependency,
 } from "./schemas/lockfile.js";
 export { PublishTarget } from "./schemas/publish.js";
+export type { CatalogResolverError } from "./services/CatalogResolver.js";
+export { CatalogResolver } from "./services/CatalogResolver.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
 export { DependencyGraph } from "./services/DependencyGraph.js";
 export type { LockfileInitError } from "./services/LockfileReader.js";
