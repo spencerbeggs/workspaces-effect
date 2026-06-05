@@ -104,4 +104,21 @@ describe("CatalogResolverLive", () => {
 		expect(tag).toBe("CatalogResolutionError");
 		rmSync(dir, { recursive: true, force: true });
 	});
+
+	it("resolveSpecifier fails with CatalogResolutionError for an unresolvable workspace ref (consistent with resolve)", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "crl-"));
+		writeFileSync(join(dir, "pnpm-workspace.yaml"), ["catalog:", "  left-pad: ^1.3.0"].join("\n"));
+		const tag = await run(
+			dir,
+			Effect.gen(function* () {
+				const cr = yield* CatalogResolver;
+				return yield* cr.resolveSpecifier("not-in-workspace", "workspace:*").pipe(
+					Effect.map(() => "no-error" as const),
+					Effect.catchTag("CatalogResolutionError", (e) => Effect.succeed(e._tag)),
+				);
+			}),
+		);
+		expect(tag).toBe("CatalogResolutionError");
+		rmSync(dir, { recursive: true, force: true });
+	});
 });

@@ -22,7 +22,7 @@ import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { assembleCatalogs, inlineCatalogs } from "./catalog/assemble.js";
 import { loadConfigDependencyHooks, runUpdateConfigHooks } from "./catalog/config-dependency-hooks.js";
 import type { ManifestLike } from "./catalog/resolve.js";
-import { resolveManifest, resolveWorkspaceProtocol } from "./catalog/resolve.js";
+import { resolveManifest } from "./catalog/resolve.js";
 import { readWorkspaceManifest } from "./catalog/workspace-manifest.js";
 
 /**
@@ -158,33 +158,34 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 
 			resolveSpecifier: (dependency: string, specifier: string) =>
 				Effect.gen(function* () {
-					const catalogs = yield* assembled;
-					if (specifier.startsWith("catalog:")) {
-						return yield* Effect.try({
-							try: () => {
-								const resolved = resolveManifest(
-									catalogs,
-									{},
-									{
-										name: "_",
-										version: "0",
-										dependencies: { [dependency]: specifier },
-									},
-								);
-								const spec = resolved.dependencies?.[dependency];
-								return spec !== undefined ? Option.some(spec) : Option.none<string>();
-							},
-							catch: (e) => {
-								if (e instanceof CatalogResolutionError) return e;
-								throw e;
-							},
-						});
+					// Plain specifiers need no rewrite. catalog:/workspace: both route through
+					// resolveManifest so resolveSpecifier and resolve share one resolution path
+					// (and therefore one error behavior — an unresolvable workspace: ref fails
+					// with CatalogResolutionError here too, not a silent None).
+					if (!specifier.startsWith("catalog:") && !specifier.startsWith("workspace:")) {
+						return Option.none<string>();
 					}
+					const catalogs = yield* assembled;
+					const versions: Record<string, string> = {};
 					if (specifier.startsWith("workspace:")) {
 						const v = yield* workspaceVersionFor(dependency);
-						return Option.map(v, (version) => resolveWorkspaceProtocol(specifier, version));
+						if (Option.isSome(v)) versions[dependency] = v.value;
 					}
-					return Option.none<string>();
+					return yield* Effect.try({
+						try: () => {
+							const resolved = resolveManifest(catalogs, versions, {
+								name: "_",
+								version: "0",
+								dependencies: { [dependency]: specifier },
+							});
+							const spec = resolved.dependencies?.[dependency];
+							return spec !== undefined ? Option.some(spec) : Option.none<string>();
+						},
+						catch: (e) => {
+							if (e instanceof CatalogResolutionError) return e;
+							throw e;
+						},
+					});
 				}),
 		});
 	}),
