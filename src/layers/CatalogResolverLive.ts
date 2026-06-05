@@ -13,7 +13,7 @@
 import { FileSystem, Path } from "@effect/platform";
 import type { Catalogs } from "@pnpm/catalogs.types";
 import { Effect, Layer, Option } from "effect";
-import type { CatalogResolutionError } from "../errors/CatalogResolutionError.js";
+import { CatalogResolutionError } from "../errors/CatalogResolutionError.js";
 import type { CatalogResolverError } from "../services/CatalogResolver.js";
 import { CatalogResolver } from "../services/CatalogResolver.js";
 import { LockfileReader } from "../services/LockfileReader.js";
@@ -24,8 +24,6 @@ import { loadConfigDependencyHooks, runUpdateConfigHooks } from "./catalog/confi
 import type { ManifestLike } from "./catalog/resolve.js";
 import { resolveManifest, resolveWorkspaceProtocol } from "./catalog/resolve.js";
 import { readWorkspaceManifest } from "./catalog/workspace-manifest.js";
-
-const WORKSPACE_CWD = process.cwd();
 
 /**
  * Convenience type alias for the {@link CatalogResolverLive} layer signature.
@@ -67,7 +65,7 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 		// memoized for the lifetime of the layer — same idiom as LockfileReaderLive).
 		const assembled: Effect.Effect<Catalogs, CatalogResolverError> = yield* Effect.cached(
 			Effect.gen(function* () {
-				const root = yield* workspaceRoot.find(WORKSPACE_CWD);
+				const root = yield* workspaceRoot.find(process.cwd());
 				const manifest = yield* readWorkspaceManifest(root);
 				const seed = inlineCatalogs(manifest);
 				const hooks = yield* loadConfigDependencyHooks(root, manifest.configDependencies);
@@ -100,10 +98,12 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 					Effect.orElseSucceed(() => undefined),
 				);
 
-				return yield* assembleCatalogs({ workspaceRoot: root, lockfileCatalogs, injectedCatalogs: injected }).pipe(
-					Effect.provideService(FileSystem.FileSystem, fs),
-					Effect.provideService(Path.Path, path),
-				);
+				return yield* assembleCatalogs({
+					workspaceRoot: root,
+					inlineCatalogs: seed,
+					lockfileCatalogs,
+					injectedCatalogs: injected,
+				});
 			}).pipe(
 				Effect.provideService(FileSystem.FileSystem, fs),
 				Effect.provideService(Path.Path, path),
@@ -116,9 +116,8 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 		// convert to Option so call sites can branch gracefully.
 		const workspaceVersionFor = (name: string): Effect.Effect<Option.Option<string>> =>
 			discovery.getPackage(name).pipe(
-				Effect.map((pkg) => Option.some(pkg.version)),
+				Effect.map((pkg) => pkg.version),
 				Effect.option,
-				Effect.map((opt) => Option.flatten(opt)),
 			);
 
 		const resolve = (
@@ -145,7 +144,10 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 				// can Effect.catchTag("CatalogResolutionError", …).
 				return yield* Effect.try({
 					try: () => resolveManifest(catalogs, versions, manifest),
-					catch: (e) => e as CatalogResolutionError,
+					catch: (e) => {
+						if (e instanceof CatalogResolutionError) return e;
+						throw e;
+					},
 				});
 			}).pipe(Effect.withSpan("CatalogResolver.resolve"));
 
@@ -172,7 +174,10 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 								const spec = resolved.dependencies?.[dependency];
 								return spec !== undefined ? Option.some(spec) : Option.none<string>();
 							},
-							catch: (e) => e as CatalogResolutionError,
+							catch: (e) => {
+								if (e instanceof CatalogResolutionError) return e;
+								throw e;
+							},
 						});
 					}
 					if (specifier.startsWith("workspace:")) {

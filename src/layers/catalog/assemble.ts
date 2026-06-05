@@ -34,6 +34,12 @@ export interface AssembleOptions {
 	 * The layer computes these via the hook-replay loader; tests inject directly.
 	 */
 	readonly injectedCatalogs?: Catalogs | undefined;
+	/**
+	 * Pre-computed inline catalogs (from `pnpm-workspace.yaml`). When provided,
+	 * assembly skips re-reading and re-parsing the workspace manifest — the layer
+	 * already reads it once to extract `configDependencies`.
+	 */
+	readonly inlineCatalogs?: Catalogs | undefined;
 }
 
 /** Assemble the complete catalog set with precedence lockfile, then inline, then config-dependency-injected. */
@@ -41,8 +47,10 @@ export const assembleCatalogs = (
 	options: AssembleOptions,
 ): Effect.Effect<Catalogs, CatalogAssemblyError, FileSystem.FileSystem | Path.Path> =>
 	Effect.gen(function* () {
-		const manifest = yield* readWorkspaceManifest(options.workspaceRoot);
-		const inline = inlineCatalogs(manifest);
+		let inline = options.inlineCatalogs;
+		if (inline === undefined) {
+			inline = inlineCatalogs(yield* readWorkspaceManifest(options.workspaceRoot));
+		}
 		const assembled = mergeCatalogs(options.lockfileCatalogs, inline, options.injectedCatalogs);
 		yield* Effect.logDebug("assembled catalogs").pipe(
 			Effect.annotateLogs({ catalogs: Object.keys(assembled).join(",") }),
