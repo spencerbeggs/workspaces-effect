@@ -46,7 +46,7 @@ describe("non-pnpm workspace graceful path", () => {
 				Effect.provide(CatalogResolverLive.pipe(Layer.provide(deps))),
 				Effect.provide(deps),
 				Effect.provide(NodeContext.layer),
-			) as Effect.Effect<{ dependencies?: Record<string, string> }, never, never>,
+			) as unknown as Effect.Effect<{ dependencies?: Record<string, string> }, never, never>,
 		);
 		expect(out.dependencies).toEqual({ "@x/lib": "^9.9.9" });
 		rmSync(dir, { recursive: true, force: true });

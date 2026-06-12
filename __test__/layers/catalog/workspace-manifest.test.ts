@@ -1,13 +1,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { FileSystem, Path } from "@effect/platform";
 import { NodeContext } from "@effect/platform-node";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { readWorkspaceManifest } from "../../../src/layers/catalog/workspace-manifest.js";
 
-const run = <A, E>(e: Effect.Effect<A, E, never>) =>
-	Effect.runPromise(e.pipe(Effect.provide(NodeContext.layer)) as Effect.Effect<A, E, never>);
+const run = <A, E>(e: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>) =>
+	Effect.runPromise(e.pipe(Effect.provide(NodeContext.layer)));
 
 describe("readWorkspaceManifest", () => {
 	it("parses catalog, catalogs, and configDependencies", async () => {

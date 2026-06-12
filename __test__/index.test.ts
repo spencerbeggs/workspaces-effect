@@ -388,6 +388,7 @@ describe("Service tags", () => {
 			listPackages: () => Effect.succeed([]),
 			getPackage: (name: string) => Effect.fail(new PackageNotFoundError({ name, available: [] })),
 			importerMap: () => Effect.succeed(new Map() as ReadonlyMap<string, WorkspacePackage>),
+			refresh: () => Effect.void,
 		});
 
 		const testLayer = Layer.mergeAll(testRoot, testDetector, testDiscovery);

@@ -100,6 +100,7 @@ const testLayer = (pm: "pnpm" | "npm" | "yarn" | "bun", lockfileContent: string)
 						Effect.succeed({
 							type: pm,
 							version: undefined,
+							runtime: pm === "bun" ? "bun" : "node",
 						}),
 				}),
 				FileSystem.layerNoop({
@@ -219,6 +220,7 @@ describe("LockfileReaderLive", () => {
 							Effect.succeed({
 								type: "pnpm" as const,
 								version: undefined,
+								runtime: "node" as const,
 							}),
 					}),
 					FileSystem.layerNoop({
@@ -282,7 +284,7 @@ describe("LockfileReaderLive", () => {
 							detect: () =>
 								Effect.sync(() => {
 									detectRuns++;
-									return { type: "pnpm" as const, version: undefined };
+									return { type: "pnpm" as const, version: undefined, runtime: "node" as const };
 								}),
 						}),
 						FileSystem.layerNoop({
@@ -329,7 +331,7 @@ describe("LockfileReaderLive", () => {
 							detect: () =>
 								Effect.sync(() => {
 									detectRuns++;
-									return { type: "pnpm" as const, version: undefined };
+									return { type: "pnpm" as const, version: undefined, runtime: "node" as const };
 								}),
 						}),
 						FileSystem.layerNoop({

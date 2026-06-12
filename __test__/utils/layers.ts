@@ -23,7 +23,7 @@ export const makeLockfileLayer = (pm: PackageManagerType, fixturePath: string) =
 			Layer.mergeAll(
 				Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(fixturePath) }),
 				Layer.succeed(PackageManagerDetector, {
-					detect: () => Effect.succeed({ type: pm, version: undefined }),
+					detect: () => Effect.succeed({ type: pm, version: undefined, runtime: pm === "bun" ? "bun" : "node" }),
 				}),
 				platformLayer,
 			),

@@ -22,6 +22,7 @@ const mockDiscovery = (packages: WorkspacePackage[]) =>
 		},
 		importerMap: () =>
 			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
+		refresh: () => Effect.void,
 	});
 
 /** Helper to create a WorkspacePackage. */

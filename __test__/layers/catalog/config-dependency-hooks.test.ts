@@ -1,3 +1,4 @@
+import type { Catalogs } from "@pnpm/catalogs.types";
 import { describe, expect, it } from "vitest";
 import {
 	isPluginName,
@@ -29,8 +30,8 @@ describe("orderedPluginNames", () => {
 describe("runUpdateConfigHooks", () => {
 	it("threads config through sync + async hooks and returns merged catalogs", async () => {
 		const hooks = [
-			(c: { catalogs: Record<string, unknown> }) => ({ ...c, catalogs: { ...c.catalogs, a: { x: "^1" } } }),
-			async (c: { catalogs: Record<string, unknown> }) => ({ ...c, catalogs: { ...c.catalogs, b: { y: "^2" } } }),
+			(c: { catalogs: Catalogs }) => ({ ...c, catalogs: { ...c.catalogs, a: { x: "^1" } } }),
+			async (c: { catalogs: Catalogs }) => ({ ...c, catalogs: { ...c.catalogs, b: { y: "^2" } } }),
 		];
 		const out = await runUpdateConfigHooks(hooks, { default: { seed: "^0" } });
 		expect(out).toEqual({ default: { seed: "^0" }, a: { x: "^1" }, b: { y: "^2" } });
@@ -38,18 +39,18 @@ describe("runUpdateConfigHooks", () => {
 
 	it("skips a throwing hook and keeps prior config", async () => {
 		const hooks = [
-			(c: { catalogs: Record<string, unknown> }) => ({ ...c, catalogs: { ...c.catalogs, a: { x: "^1" } } }),
+			(c: { catalogs: Catalogs }) => ({ ...c, catalogs: { ...c.catalogs, a: { x: "^1" } } }),
 			() => {
 				throw new Error("boom");
 			},
-			(c: { catalogs: Record<string, unknown> }) => ({ ...c, catalogs: { ...c.catalogs, c: { z: "^3" } } }),
+			(c: { catalogs: Catalogs }) => ({ ...c, catalogs: { ...c.catalogs, c: { z: "^3" } } }),
 		];
 		const out = await runUpdateConfigHooks(hooks, {});
 		expect(out).toEqual({ a: { x: "^1" }, c: { z: "^3" } });
 	});
 
 	it("skips a hook returning undefined/non-object", async () => {
-		const hooks = [() => undefined as unknown as { catalogs: Record<string, unknown> }];
+		const hooks = [() => undefined as unknown as { catalogs: Catalogs }];
 		const out = await runUpdateConfigHooks(hooks, { default: { x: "^1" } });
 		expect(out).toEqual({ default: { x: "^1" } });
 	});

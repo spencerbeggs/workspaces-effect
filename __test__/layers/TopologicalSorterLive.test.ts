@@ -34,6 +34,7 @@ const testLayer = (packages: WorkspacePackage[]) => {
 		},
 		importerMap: () =>
 			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
+		refresh: () => Effect.void,
 	});
 
 	return TopologicalSorterLive.pipe(Layer.provide(DependencyGraphLive), Layer.provide(mockDiscovery));

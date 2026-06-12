@@ -34,6 +34,7 @@ const mockDiscovery = (packages: ReadonlyArray<WorkspacePackage>) =>
 		},
 		importerMap: () =>
 			Effect.succeed(new Map(packages.map((p) => [p.relativePath, p])) as ReadonlyMap<string, WorkspacePackage>),
+		refresh: () => Effect.void,
 	});
 
 /** Build test layer with mock discovery. */
