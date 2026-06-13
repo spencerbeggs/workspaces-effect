@@ -1,64 +1,36 @@
 ---
-title: "Phase 2: Dependency Graph Design"
+title: "Dependency graph design"
 module: core
 category: architecture
 status: current
 completeness: 90
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
   - dependency-graph
   - topological-sort
-  - phase-2
 related:
   - architecture.md
   - phase3-change-detection.md
   - effect-patterns-core.md
 ---
 
-## Phase 2: Dependency Graph Design
+## Dependency graph design
 
-<!-- TOC -->
-
-- [Overview](#overview)
-- [Design Decisions](#design-decisions)
-- [Service Interfaces](#service-interfaces)
-- [Graph Data Structure](#graph-data-structure)
-- [Topological Sort Algorithm](#topological-sort-algorithm)
-- [Error Types](#error-types)
-- [Layer Implementations](#layer-implementations)
-- [Testing Strategy](#testing-strategy)
-- [Open Questions](#open-questions)
-
-<!-- /TOC -->
+The `DependencyGraph` and `TopologicalSorter` services build the inter-package dependency graph and order packages for builds and affected-package analysis. They consume `WorkspaceDiscovery.listPackages()` output. See `src/services/DependencyGraph.ts`, `src/services/TopologicalSorter.ts` and their `*Live` layers.
 
 ## Overview
 
-Phase 2 adds dependency graph construction and topological sorting to
-support build ordering and affected-package analysis. These services
-build on the Phase 1 WorkspaceDiscovery output.
+`DependencyGraph` exposes the directed graph of inter-workspace dependencies (`dependenciesOf`, `dependentsOf`, `packages`, `hasCycle`, `adjacencyMap`). `TopologicalSorter` orders packages dependencies-first (`sort`, `sortSubset`, `levels`). Both build on `WorkspaceDiscovery`.
 
 ## Design Decisions
 
-### PackageJsonReader — merge into WorkspaceDiscovery
+### Package.json reading lives in WorkspaceDiscovery
 
-The original architecture planned a separate `PackageJsonReader` service.
-However, `WorkspaceDiscoveryLive` already reads and parses package.json
-for every workspace package. Adding a separate reader would:
-
-- Duplicate filesystem reads
-- Add an unnecessary service boundary
-- Complicate the dependency chain
-
-**Decision**: Enrich the existing `WorkspacePackage` schema to include
-all fields needed for graph construction. The `DependencyGraph` service
-will consume `WorkspaceDiscovery.listPackages()` directly.
-
-If a standalone package.json reading service is needed later (e.g., for
-reading package.json files outside workspaces), it can be added then.
+`WorkspaceDiscoveryLive` already reads and parses `package.json` for every workspace package, so there is no separate package-json-reading service: a dedicated reader would duplicate filesystem reads and add a service boundary with no consumer. The `WorkspacePackage` schema carries all fields graph construction needs, and `DependencyGraph` consumes `WorkspaceDiscovery.listPackages()` directly.
 
 ### Graph representation — adjacency map
 
@@ -101,7 +73,7 @@ Default: include `dependencies` and `devDependencies`, exclude
 
 ```typescript
 class DependencyGraph extends Context.Tag(
-  "workspaces-effect/DependencyGraph"
+  "@spencerbeggs/workspaces-effect/DependencyGraph"
 )<
   DependencyGraph,
   {
@@ -133,7 +105,7 @@ class DependencyGraph extends Context.Tag(
 
 ```typescript
 class TopologicalSorter extends Context.Tag(
-  "workspaces-effect/TopologicalSorter"
+  "@spencerbeggs/workspaces-effect/TopologicalSorter"
 )<
   TopologicalSorter,
   {
@@ -247,7 +219,7 @@ This enables maximal parallelism in build systems.
 
 ## Error Types
 
-### New errors for Phase 2
+The graph services raise `CyclicDependencyError` and `DependencyResolutionError` (see `src/errors/`):
 
 ```typescript
 class CyclicDependencyError extends Data.TaggedError(
@@ -307,10 +279,7 @@ appropriate because:
 - Graph construction is fast (O(packages * deps))
 - All queries benefit from the precomputed reverse edges
 
-**Note (2026-03-14):** `dependenciesOf` and `dependentsOf` now use
-`Effect.request` with per-layer `Request.makeCache` internally for
-deduplication of repeated lookups. See the Request/RequestResolver
-open question resolution below.
+`dependenciesOf` and `dependentsOf` use `Effect.request` with a per-layer `Request.makeCache` internally to deduplicate repeated lookups. See `effect-patterns-core.md` for the Request/RequestResolver pattern.
 
 ### TopologicalSorterLive
 
@@ -347,8 +316,7 @@ const TopologicalSorterLive = Layer.effect(
 
 ### Test approach
 
-All tests use `Layer.succeed(WorkspaceDiscovery, {...})` with mock
-data — no filesystem needed for Phase 2 tests.
+All tests use `Layer.succeed(WorkspaceDiscovery, {...})` with mock data — the graph services need no filesystem.
 
 ```typescript
 const testDiscovery = (packages: WorkspacePackage[]) =>
@@ -363,34 +331,8 @@ const testDiscovery = (packages: WorkspacePackage[]) =>
   });
 ```
 
-## Resolved Questions
+## Design notes
 
-1. **Eager vs lazy graph construction**: Resolved as eager. Graph is built
-   at layer construction time. Appropriate for CLI tools where workspace
-   list is fixed per run and all queries benefit from precomputed
-   forward + reverse edges.
-
-2. **peerDependencies**: Excluded by default. Only `dependencies` and
-   `devDependencies` contribute edges. Can be revisited if needed.
-
-3. **Optional dependencies**: Excluded from graph. Optional by definition
-   means they should not affect build ordering.
-
-4. **Reverse dependency lookup**: `dependentsOf` works as designed for
-   Phase 3 change detection ("what packages are affected by a change
-   in X?").
-
-## Open Questions
-
-1. **peerDependencies configurability**: Should there be a
-   `DependencyGraphOptions` config to optionally include peerDeps?
-   Deferred until a concrete use case arises.
-
-2. **Graph caching across runs**: For watch-mode or daemon scenarios,
-   should the graph be incrementally updated rather than rebuilt?
-   Not needed for CLI usage; revisit if daemon mode is added.
-
-3. **Request/RequestResolver for batch lookups**: RESOLVED. DependencyGraph's
-   `dependenciesOf` and `dependentsOf` now use `Effect.request` with per-layer
-   `Request.makeCache` for deduplication. Reference equality proves caching is
-   active. Implemented 2026-03-14.
+- **Eager construction**: the graph is built at layer construction time. This suits CLI tools where the workspace list is fixed per run and every query benefits from precomputed forward and reverse edges.
+- **Edge selection**: only `dependencies` and `devDependencies` contribute edges. `peerDependencies` and `optionalDependencies` are excluded — optional deps should not affect build ordering, and peers are excluded until a concrete use case justifies a `DependencyGraphOptions` flag.
+- **Reverse lookups**: `dependentsOf` answers "what is affected by a change in X?" and is consumed by the change-detection services (see `phase3-change-detection.md`).

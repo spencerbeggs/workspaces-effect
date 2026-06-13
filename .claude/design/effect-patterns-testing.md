@@ -5,8 +5,8 @@ category: patterns
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-29
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
@@ -23,10 +23,7 @@ related:
 
 ## Effect Patterns: Testing
 
-Testing patterns for Effect-TS services in workspaces-effect. Covers mock
-layers, filesystem mocking, command execution testing, and graph
-construction. Split from the original effect-best-practices.md for focused
-context loading.
+Testing patterns for Effect-TS services in workspaces-effect. Covers mock layers, filesystem mocking, command execution testing and graph construction.
 
 ## Layer.succeed for test mocks
 

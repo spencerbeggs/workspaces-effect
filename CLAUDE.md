@@ -25,7 +25,7 @@ WorkspaceDiscovery.importerMap() added. WorkspaceDiscovery.refresh() added
 (branch feat/refresh-api): clears the per-resolved-root package cache so the
 next listPackages/getPackage/importerMap re-reads each package.json from disk;
 the resolved-root memo is preserved. See
-`.claude/design/architecture.md` "Cache invalidation API (2026-05-23)".
+`.claude/design/architecture.md` "Group 1: Discovery".
 listPackages() now includes root
 workspace (breaking change). PnpmExtension.catalogs accepts union type for
 pnpm v9+ format (catalogs defined in pnpm-workspace.yaml in v10).
@@ -62,11 +62,11 @@ Load these when working on the corresponding area:
 - `.claude/design/effect-patterns-testing.md` — testing, mocking, command patterns
 - `.claude/design/phase2-dependency-graph.md` — dependency graph design
 - `.claude/design/phase3-change-detection.md` — git change detection design
-- `.claude/design/phase4-configuration-lockfiles.md` — lockfile parsing design
-- `.claude/design/lockfile-reader-service.md` — LockfileReader service interface
+- `.claude/design/phase4-configuration-lockfiles.md` — configuration and lockfiles design (parsing, catalogs, CatalogResolver)
+- `.claude/design/lockfile-reader-service.md` — LockfileReader and PublishabilityDetector service interfaces
 - `.claude/design/lockfile-schemas.md` — all 4 lockfile format schemas
 - `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference
-- `.claude/design/code-review-findings.md` — known issues (6/10 fixed)
+- `.claude/design/code-review-findings.md` — known limitations (recursive `/**` glob #62, PM-detector root-validation caveat)
 - `.claude/design/research-notes.md` — patterns from sibling repos
 
 ## Key Conventions
