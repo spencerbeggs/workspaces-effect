@@ -5,8 +5,8 @@ category: patterns
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-05-02
-last-synced: 2026-05-02
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
@@ -23,9 +23,7 @@ related:
 
 ## Effect Patterns: Core Services & Layers
 
-Patterns for service definition, error handling, layer composition, and
-platform abstraction in workspaces-effect. Split from the original
-effect-best-practices.md for focused context loading.
+Patterns for service definition, error handling, layer composition and platform abstraction in workspaces-effect.
 
 ## Service Definition
 
@@ -36,7 +34,7 @@ Rslib + api-extractor DTS bundling:
 
 ```typescript
 export class WorkspaceRoot extends Context.Tag(
-  "workspaces-effect/WorkspaceRoot"
+  "@spencerbeggs/workspaces-effect/WorkspaceRoot"
 )<
   WorkspaceRoot,
   {
@@ -66,7 +64,7 @@ readonly find: (cwd: string) => Effect.Effect<string, WorkspaceRootNotFoundError
 Prefix tags with the package name to avoid collisions:
 
 ```typescript
-Context.Tag("workspaces-effect/WorkspaceRoot")
+Context.Tag("@spencerbeggs/workspaces-effect/WorkspaceRoot")
 ```
 
 ## Error Handling
@@ -274,8 +272,8 @@ export type LockfileInitError =
 layer is composed per call site (Vitest reporters, per-subcommand CLIs,
 test suites that swap layers between cases) and the I/O cost would otherwise
 multiply with N layer constructions. Used in `LockfileReaderLive` and
-`WorkspaceDiscoveryLive` (Issue #60). For pure in-memory data services with
-no I/O dependency (e.g., `DependencyGraphLive` building a graph from
+`WorkspaceDiscoveryLive`. For pure in-memory data services with no I/O
+dependency (e.g., `DependencyGraphLive` building a graph from
 already-discovered packages), keep the eager pattern.
 
 ### Layer.succeed for static implementations

@@ -1,26 +1,27 @@
 ---
-title: "Phase 3: Change Detection Design"
+title: "Change detection design"
 module: core
 category: architecture
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
   - change-detection
   - git
   - command
-  - phase3
 related:
   - architecture.md
   - phase2-dependency-graph.md
   - effect-patterns-core.md
 ---
 
-## Phase 3: Change Detection Design
+## Change detection design
+
+Git-based change detection. Given a base reference (commit, branch, tag) and an optional head, `ChangeDetector` determines which files changed, maps them to workspace packages via `PackageResolver`, and optionally computes the transitive "affected" set using `DependencyGraph`. See `src/layers/ChangeDetectorLive.ts` and `src/layers/PackageResolverLive.ts`.
 
 <!-- TOC -->
 
@@ -34,20 +35,12 @@ related:
 - [Layer Composition](#layer-composition)
 - [Testing Strategy](#testing-strategy)
 - [Decisions](#decisions)
-- [Open Questions (all resolved)](#open-questions-all-resolved)
 
 <!-- /TOC -->
 
 ## Overview
 
-Phase 3 adds git-based change detection to the library. Given a base
-reference (commit, branch, tag) and an optional head reference, the
-ChangeDetector determines which files changed, maps them to workspace
-packages, and optionally computes the transitive "affected" set using
-the DependencyGraph from Phase 2.
-
-This phase introduces two new services (PackageResolver, ChangeDetector)
-and two new error types (GitNotAvailableError, ChangeDetectionError).
+`ChangeDetector` and `PackageResolver` are the change-detection services. `PackageResolver` maps file paths to their owning workspace package; `ChangeDetector` composes it with git operations to produce changed files, changed packages and affected packages. The two error types are `GitNotAvailableError` and `ChangeDetectionError`.
 
 ## Service Decomposition
 
@@ -69,7 +62,7 @@ Maps file paths to their owning workspace package.
 
 ```typescript
 class PackageResolver extends Context.Tag(
-  "workspaces-effect/PackageResolver"
+  "@spencerbeggs/workspaces-effect/PackageResolver"
 )<
   PackageResolver,
   {
@@ -114,7 +107,7 @@ Git-based change detection with affected package computation.
 
 ```typescript
 class ChangeDetector extends Context.Tag(
-  "workspaces-effect/ChangeDetector"
+  "@spencerbeggs/workspaces-effect/ChangeDetector"
 )<
   ChangeDetector,
   {
@@ -185,21 +178,9 @@ The service uses `@effect/platform` Command service for git operations:
 The "affected" concept: if package A depends on package B, and B changed,
 then A is affected (it may need rebuilding/retesting).
 
-## GlobResolver Decision
+## GlobResolver decision
 
-**Decision: Defer GlobResolver as a separate service.**
-
-The current glob resolution logic in WorkspaceDiscoveryLive handles the
-workspace pattern use case (e.g., `packages/*`, `apps/**`). Extracting
-it into a separate service would:
-
-- Add a service boundary with no current external consumer
-- Complicate the layer graph for minimal benefit
-- Risk over-engineering before we know what glob API users need
-
-If a future phase (e.g., Phase 4 config filtering) needs general-purpose
-glob resolution, we can extract it then. The implementation in
-WorkspaceDiscoveryLive is well-structured for extraction.
+There is no standalone glob-resolver service. The glob resolution in `WorkspaceDiscoveryLive` handles the workspace-pattern use case (`packages/*`, `apps/**`). Extracting it would add a service boundary with no external consumer; the logic stays inline and is structured for extraction if a general-purpose glob API is ever needed.
 
 ## Error Types
 
@@ -239,17 +220,7 @@ class ChangeDetectionError extends Data.TaggedError(
 
 ## Command Service Usage
 
-### Pattern from sibling repos (github-action-effects)
-
-The `github-action-effects` repo uses a **CommandRunner service** that
-wraps shell execution behind a testable interface with methods like
-`exec`, `execCapture`, `execLines`, and `execJson`. The test layer
-(`CommandRunnerTest`) uses a `Map<string, CommandResponse>` of recorded
-responses keyed by `"command args..."`.
-
-Key insight: the CommandRunner Live layer in github-action-effects uses
-`@actions/exec` (GitHub Actions specific). For our library, we should
-use `@effect/platform` Command directly since we target Node.js and Bun.
+Git is run through the `@effect/platform` `Command` service rather than `node:child_process` directly, keeping the library platform-independent across Node.js and Bun.
 
 ### @effect/platform Command API
 
@@ -373,23 +344,7 @@ requirements, so consumers must provide it via `NodeContext.layer` or
 
 ### Composite layer
 
-**Note (2026-03-14):** The Phase 3 services (PackageResolver, ChangeDetector)
-are now provided via the `WorkspacesFullLive` composite layer, which wires all
-discovery, graph, and change detection services together. The standalone
-`ChangeDetectionLive` composite shown below is superseded but retained for
-reference:
-
-```typescript
-// Historical: standalone Phase 3 composite (now part of WorkspacesFullLive)
-const ChangeDetectionLive: Layer.Layer<
-  PackageResolver | ChangeDetector,
-  never,
-  WorkspaceDiscovery | DependencyGraph | CommandExecutor.CommandExecutor
-> = Layer.mergeAll(
-  PackageResolverLive,
-  ChangeDetectorLive.pipe(Layer.provide(PackageResolverLive)),
-)
-```
+`PackageResolver` and `ChangeDetector` are wired into the `WorkspacesFullLive` composite alongside the discovery and graph services. See `architecture.md` (Layer Composition) and `src/layers/WorkspacesLive.ts`.
 
 ## Testing Strategy
 
@@ -410,27 +365,7 @@ and for testing the Live layer, mock at the service boundary level:
    mock CommandExecutor that returns pre-recorded git output
 2. **Integration tests**: Use a real temp git repo fixture
 
-**Mock CommandExecutor pattern** (from github-action-effects):
-
-```typescript
-// Record expected git responses
-const mockResponses = new Map([
-  ["git rev-parse --git-dir", { exitCode: 0, stdout: ".git\n", stderr: "" }],
-  ["git diff --name-only base...head", {
-    exitCode: 0,
-    stdout: "packages/pkg-a/src/index.ts\npackages/pkg-b/README.md\n",
-    stderr: "",
-  }],
-])
-
-// TODO: Research how to mock @effect/platform CommandExecutor
-// May need to provide a custom CommandExecutor layer that intercepts
-// Command.make calls and returns recorded responses
-```
-
-**Alternative**: If CommandExecutor mocking is complex, test the internal
-`runGit`/`runGitLines` helpers separately, and test ChangeDetectorLive
-by mocking at the ChangeDetector service level for consumers.
+For Live-layer tests, mock `CommandExecutor` via `CommandExecutor.makeExecutor(start)` with a response map keyed by `"command args..."`. See the CommandExecutor mocking pattern in `effect-patterns-testing.md`.
 
 ### Test cases
 
@@ -448,35 +383,16 @@ by mocking at the ChangeDetector service level for consumers.
 
 | Decision | Rationale |
 | -------- | --------- |
-| Defer GlobResolver | No external consumer yet; extract when needed |
+| No standalone GlobResolver | No external consumer; glob logic stays in WorkspaceDiscoveryLive |
 | PackageResolver as separate service | Independently useful for file-to-package mapping |
 | Eager path index in PackageResolver | Same pattern as DependencyGraph; O(1) lookups |
 | Command service for git | Platform-independent; consistent with library design |
 | Three-method ChangeDetector | Progressive disclosure: files → packages → affected |
 | ChangeDetectionOptions as Schema.Class | Runtime validation, sensible defaults |
+| No separate GitClient service | ChangeDetector is the only git consumer; internal helpers suffice |
+| No caching for ChangeDetector | Git state changes between calls, unlike static workspace structure |
 
-## Open Questions (all resolved)
+## Design notes
 
-1. **CommandExecutor mocking**: RESOLVED. Used `CommandExecutor.makeExecutor(start)`
-   with a mock `start` returning `Effect.succeed(mockProcess)`. The mock Process
-   needs `toJSON` and cast through `unknown`. Command args extracted via
-   `Command.flatten(command)[0].args`. 12 tests validate the approach.
-
-2. **Working tree changes**: RESOLVED. `includeUncommitted: true` includes
-   untracked files via `git ls-files --others --exclude-standard`. Implemented
-   and tested.
-
-3. **Merge base**: DEFERRED. Current implementation uses user-provided refs
-   directly (`base...head`). Auto merge-base computation can be added later
-   if needed.
-
-4. **Command dependency type**: RESOLVED. `Command.string` puts
-   `CommandExecutor.CommandExecutor` in R. Solved by yielding executor at
-   layer construction and calling `executor.string(command)` with
-   `Effect.scoped()` wrapper.
-
-5. **Resolved**: No caching for ChangeDetector — git state changes
-   between calls, unlike static workspace structure.
-
-6. **Resolved**: No separate GitClient service — ChangeDetector is the
-   only git consumer. Internal helpers suffice.
+- `includeUncommitted: true` additionally pulls in untracked files via `git ls-files --others --exclude-standard`.
+- Comparison uses the user-provided refs directly (`base...head`); there is no automatic merge-base computation.

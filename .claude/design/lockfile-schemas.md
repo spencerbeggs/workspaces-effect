@@ -5,8 +5,8 @@ category: reference
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-03-29
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 related:
   - architecture.md
   - phase4-configuration-lockfiles.md
@@ -18,7 +18,6 @@ tags:
   - lockfile
   - schema
   - reference
-  - phase4
 ---
 
 ## Lockfile Schema Definitions
@@ -26,7 +25,6 @@ tags:
 <!-- TOC -->
 
 - [Overview](#overview)
-- [Current State](#current-state)
 - [pnpm-lock.yaml v9 Schema](#pnpm-lockyaml-v9-schema)
 - [package-lock.json v3 Schema](#package-lockjson-v3-schema)
 - [yarn.lock Berry Schema](#yarnlock-berry-schema)
@@ -39,11 +37,7 @@ tags:
 
 ## Overview
 
-This document defines the complete Effect Schema definitions for all four
-lockfile formats supported by `workspaces-effect`. These schemas serve as
-implementation blueprints for the Phase 4 `LockfileReader` service. Each
-lockfile format has a "raw" schema for parsing the on-disk format, plus a
-transformation function to the unified `LockfileData` model.
+This document describes the Effect Schema definitions for the four lockfile formats `LockfileReader` reads. Each format has a raw schema matching its on-disk shape plus a transformation to the unified `LockfileData` model. The implementations live in `src/schemas/lockfile.ts` (unified model) and `src/layers/parsers/` (raw schemas and transforms); this doc explains the structure and the per-format quirks that drive parsing.
 
 The four formats are:
 
@@ -51,12 +45,6 @@ The four formats are:
 2. **package-lock.json** v3 -- JSON format with flat packages map
 3. **yarn.lock** (Berry) -- YAML format with package identifier keys
 4. **bun.lock** -- JSONC format with workspace map and tuple-encoded packages
-
-## Current State
-
-Schema definitions drafted 2026-03-12. Based on research from
-`phase4-configuration-lockfiles.md`, `bun-lockfile.md`, sibling repo findings,
-and official lockfile format documentation. Ready for implementation review.
 
 ## pnpm-lock.yaml v9 Schema
 
@@ -970,8 +958,7 @@ provides a PM-agnostic view of the resolved dependency state.
 
 ### Unified schemas
 
-These schemas are defined in `architecture.md` and `phase4-configuration-lockfiles.md`.
-Reproduced here for completeness:
+These schemas are defined in `src/schemas/lockfile.ts`. Shown here for completeness:
 
 ```typescript
 import { Schema } from "effect"
@@ -1222,11 +1209,7 @@ const npmToLockfileData = (raw: NpmLockfileRaw): LockfileData => {
 
 ### Transformation: yarn Berry -> LockfileData
 
-**Implementation note (2026-03-29):** The actual implementation decodes
-each YAML entry once into a `Map<string, DecodedEntry>` (single decode
-pass), then iterates over the map twice: first to collect workspace names,
-second to build packages. This avoids double-decoding entries via
-`Schema.decodeUnknown` which was the original two-pass approach.
+The parser decodes each YAML entry once into a `Map<string, DecodedEntry>`, then iterates the map twice — first to collect workspace names, then to build packages — avoiding a double `Schema.decodeUnknown` pass. The illustrative version below shows the same logic over a plain record:
 
 ```typescript
 const yarnBerryToLockfileData = (

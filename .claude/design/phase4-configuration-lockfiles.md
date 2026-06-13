@@ -1,32 +1,33 @@
 ---
-title: "Phase 4: Configuration & Lockfiles Design"
+title: "Configuration and lockfiles design"
 module: core
 category: architecture
 status: current
-completeness: 95
+completeness: 90
 created: 2026-03-12
-updated: 2026-06-04
-last-synced: 2026-06-04
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
   - configuration
   - lockfiles
-  - phase4
 related:
   - architecture.md
   - bun-lockfile.md
   - lockfile-schemas.md
+  - lockfile-reader-service.md
   - effect-patterns-parsing.md
   - research-notes.md
 ---
 
-## Phase 4: Configuration & Lockfiles Design
+## Configuration and lockfiles design
+
+The lockfiles and configuration service group (Group 4) lets consumers read the resolved dependency state of a monorepo without running `install` — for dependency audits, version-consistency checks, change-impact analysis and integrity checks. It comprises `LockfileReader` and `CatalogResolver` (plus the pure `PublishabilityDetector`, documented in `lockfile-reader-service.md`). This doc covers the lockfile-reading and catalog design; the schema definitions live in `lockfile-schemas.md`.
 
 <!-- TOC -->
 
 - [Overview](#overview)
-- [Goals](#goals)
 - [Service Decomposition](#service-decomposition)
 - [LockfileReader Service](#lockfilereader-service)
 - [Lockfile Format Coverage](#lockfile-format-coverage)
@@ -36,113 +37,20 @@ related:
 - [Layer Composition](#layer-composition)
 - [CatalogResolver Service](#catalogresolver-service)
 - [Testing Strategy](#testing-strategy)
-- [Open Questions (mostly resolved)](#open-questions-mostly-resolved)
-- [Research Needed](#research-needed)
 
 <!-- /TOC -->
 
 ## Overview
 
-Phase 4 adds lockfile reading and PM-specific configuration parsing to
-the library. This enables consumers to understand the resolved dependency
-state of a monorepo without running `install`, which is valuable for:
-
-- CI/CD pipelines that need to know exact versions
-- Dependency audit tools
-- Change impact analysis that considers version constraints
-- Workspace-aware dependency deduplication analysis
-
-## Goals
-
-1. **Read lockfiles** from all 4 supported PMs (pnpm, npm, yarn, bun)
-2. **Provide a unified interface** for common lockfile queries
-3. **Support PM-specific features** where valuable (pnpm catalogs, etc.)
-4. **Parse YAML/JSON/JSONC** using Effect Schema for validation
-5. **Keep it lightweight** — parse only what consumers need
-
-## Use Cases
-
-1. **Dependency audit** — "What exact versions are installed across the
-   monorepo?" Enables security scanning and license compliance.
-2. **Version consistency** — "Are all workspace packages using the same
-   version of react?" Catches version skew.
-3. **Change impact analysis** — "Which packages are affected by this
-   lockfile change?" Complements Phase 3 ChangeDetector.
-4. **Integrity checking** — "Is the lockfile in sync with package.json?"
-   Detects stale lockfiles.
-5. **Workspace dependency resolution** — "What resolved version does
-   package A see for its dependency on package B?" Useful for build
-   ordering and compatibility analysis.
+`LockfileReader` reads the lockfile for the detected package manager, parses it into the unified `LockfileData` model, and answers version (`resolvedVersion`), workspace-dependency (`workspaceDependencies`) and integrity (`checkIntegrity`) queries against the parsed result, with `readLockfile` exposing the full data. PM-specific config (catalogs, overrides, trusted deps) is accessible via an optional `pmSpecific` extension on `LockfileData`. `CatalogResolver` builds on it to resolve pnpm `catalog:` / `workspace:` specifiers.
 
 ## Service Decomposition
 
-The original architecture proposed two services:
-
-| Service | Purpose | Dependencies |
-| ------- | ------- | ------------ |
-| `WorkspaceConfigReader` | Read PM-specific workspace config | FileSystem, Path |
-| `LockfileReader` | Parse lockfile metadata | FileSystem, Path |
-
-### Decision: One service (LockfileReader)
-
-`WorkspaceConfigReader` overlaps significantly with existing services:
-
-- WorkspaceDiscoveryLive already reads `pnpm-workspace.yaml` and
-  `package.json` workspaces field
-- PackageManagerDetectorLive already reads `packageManager` field
-- The remaining config (pnpm catalogs, overrides, etc.) is lockfile-adjacent
-
-**Decision**: Merge `WorkspaceConfigReader` into `LockfileReader`. PM-specific
-config (catalogs, overrides, trusted deps) is accessible via an optional
-`pmSpecific` extension field on `LockfileData`.
+There is no separate workspace-config-reader service. Workspace config is already read elsewhere — `WorkspaceDiscoveryLive` reads `pnpm-workspace.yaml` and the `package.json` `workspaces` field, and `PackageManagerDetectorLive` reads `packageManager`. The remaining config (catalogs, overrides, trusted deps) is lockfile-adjacent, so it lives on `LockfileReader` via the `pmSpecific` extension rather than a service of its own.
 
 ## LockfileReader Service
 
-### Interface (draft)
-
-```typescript
-class LockfileReader extends Context.Tag(
-  "workspaces-effect/LockfileReader"
-)<
-  LockfileReader,
-  {
-    /** Read and parse the lockfile for the detected package manager. */
-    readonly readLockfile: () => Effect.Effect<
-      LockfileData,
-      LockfileReadError | LockfileParseError
-    >
-
-    /** Get the resolved version of a specific package. */
-    readonly resolvedVersion: (
-      packageName: string,
-    ) => Effect.Effect<
-      Option.Option<ResolvedPackage>,
-      LockfileReadError | LockfileParseError
-    >
-
-    /** Get all workspace inter-dependencies from the lockfile. */
-    readonly workspaceDependencies: () => Effect.Effect<
-      ReadonlyArray<WorkspaceDependency>,
-      LockfileReadError | LockfileParseError
-    >
-
-    /** Check lockfile integrity (does it match current package.json state?). */
-    readonly checkIntegrity: () => Effect.Effect<
-      LockfileIntegrity,
-      LockfileReadError | LockfileParseError
-    >
-  }
->() {}
-```
-
-### Progressive disclosure
-
-Similar to ChangeDetector, the service provides progressive levels:
-
-1. `readLockfile()` — full parsed lockfile data
-2. `resolvedVersion(name)` — single package lookup
-3. `workspaceDependencies()` — workspace-specific view
-4. `checkIntegrity()` — health check
+The service tag lives in `src/services/LockfileReader.ts`. Its methods are `readLockfile`, `resolvedVersion`, `workspaceDependencies` and `checkIntegrity` — progressive levels from full parsed data down to a single-package lookup and a health check. Initialization (root walk, PM detection, lockfile read/parse) is deferred to the first method call via `Effect.cached`, so the init failure modes surface from each method's `E` channel as the exported `LockfileInitError` union rather than from `Layer.provide`. See `lockfile-reader-service.md` for the full interface and `effect-patterns-core.md` for the lazy-init pattern.
 
 ## Lockfile Format Coverage
 
@@ -195,159 +103,9 @@ needed, add it as a separate parser later.
 
 ## Schema Design
 
-### Unified lockfile data model (draft)
+The unified `LockfileData` model (`ResolvedPackage`, `WorkspaceDependency`, plus the PM-specific `PnpmExtension` / `BunExtension` extensions accessible via `pmSpecific`) and the raw per-PM schemas are defined in `src/schemas/lockfile.ts` and documented in `lockfile-schemas.md`. Each format has a raw schema matching its on-disk shape and a transformation to the unified model.
 
-```typescript
-class ResolvedPackage extends Schema.Class<ResolvedPackage>(
-  "ResolvedPackage"
-)({
-  /** Package name */
-  name: Schema.NonEmptyString,
-  /** Resolved version */
-  version: Schema.String,
-  /** Integrity hash (SRI format) */
-  integrity: Schema.optional(Schema.String),
-  /** Whether this is a workspace package */
-  isWorkspace: Schema.Boolean,
-  /**
-   * Relative path from workspace root (workspace packages only).
-   * Used by integrity checking to locate package.json on disk.
-   * Set by each parser from its native path representation.
-   */
-  relativePath: Schema.optional(Schema.String),
-  /** Direct dependencies (name -> version constraint) */
-  dependencies: Schema.optionalWith(
-    Schema.Record({ key: Schema.String, value: Schema.String }),
-    { default: () => ({}) },
-  ),
-}) {}
-
-class WorkspaceDependency extends Schema.Class<WorkspaceDependency>(
-  "WorkspaceDependency"
-)({
-  /** Source workspace package name */
-  from: Schema.NonEmptyString,
-  /** Target workspace package name */
-  to: Schema.NonEmptyString,
-  /** Dependency type */
-  depType: Schema.Literal(
-    "dependencies",
-    "devDependencies",
-    "peerDependencies",
-    "optionalDependencies",
-  ),
-  /** Version constraint */
-  constraint: Schema.String,
-}) {}
-
-class LockfileData extends Schema.Class<LockfileData>(
-  "LockfileData"
-)({
-  /** Package manager that owns this lockfile */
-  packageManager: PackageManager,
-  /** Lockfile format version */
-  lockfileVersion: Schema.String,
-  /** All resolved packages */
-  packages: Schema.Array(ResolvedPackage),
-  /** Workspace inter-dependencies */
-  workspaceDependencies: Schema.Array(WorkspaceDependency),
-  /** PM-specific extension data (catalogs, overrides, etc.) */
-  pmSpecific: Schema.optional(Schema.Union(
-    PnpmExtension,
-    BunExtension,
-  )),
-}) {}
-
-/** pnpm-specific data not captured in the unified model. */
-class PnpmExtension extends Schema.Class<PnpmExtension>(
-  "PnpmExtension"
-)({
-  _tag: Schema.Literal("pnpm"),
-  /**
-   * pnpm catalog definitions for centralized version management.
-   * Values are a union: either a plain version string (pnpm v9 format)
-   * or a `{ specifier, version }` object (pnpm v10 format where catalogs
-   * are defined in pnpm-workspace.yaml rather than package.json).
-   */
-  catalogs: Schema.optional(Schema.Record({
-    key: Schema.String,
-    value: Schema.Record({
-      key: Schema.String,
-      value: Schema.Union(
-        Schema.String,
-        Schema.Struct({
-          specifier: Schema.String,
-          version: Schema.String,
-        }),
-      ),
-    }),
-  })),
-  /** Dependency overrides from pnpm-lock.yaml. */
-  overrides: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String }),
-  ),
-  /** pnpm settings (autoInstallPeers, excludeLinksFromLockfile). */
-  settings: Schema.optional(Schema.Struct({
-    autoInstallPeers: Schema.optional(Schema.Boolean),
-    excludeLinksFromLockfile: Schema.optional(Schema.Boolean),
-  })),
-}) {}
-
-/** Bun-specific data not captured in the unified model. */
-class BunExtension extends Schema.Class<BunExtension>(
-  "BunExtension"
-)({
-  _tag: Schema.Literal("bun"),
-  /** Bun catalog entries. */
-  catalog: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-  ),
-  /** Named catalogs. */
-  catalogs: Schema.optional(Schema.Record({
-    key: Schema.String,
-    value: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-  })),
-  /** Dependency overrides. */
-  overrides: Schema.optional(
-    Schema.Record({ key: Schema.String, value: Schema.String }),
-  ),
-  /** Trusted dependencies allowed to run lifecycle scripts. */
-  trustedDependencies: Schema.optional(Schema.Array(Schema.String)),
-}) {}
-```
-
-### PM-specific schemas
-
-Each lockfile format needs its own raw schema for parsing, then a
-transformation to the unified `LockfileData` model:
-
-```typescript
-// Raw pnpm lockfile schema
-const PnpmLockfileRaw = Schema.Struct({
-  lockfileVersion: Schema.String,
-  settings: Schema.optional(Schema.Struct({
-    autoInstallPeers: Schema.optional(Schema.Boolean),
-    excludeLinksFromLockfile: Schema.optional(Schema.Boolean),
-  })),
-  importers: Schema.Record({
-    key: Schema.String,
-    value: Schema.Struct({
-      dependencies: Schema.optional(/* ... */),
-      devDependencies: Schema.optional(/* ... */),
-    }),
-  }),
-  packages: Schema.optional(Schema.Record({
-    key: Schema.String,
-    value: Schema.Struct({
-      resolution: Schema.Struct({ integrity: Schema.optional(Schema.String) }),
-      // ...
-    }),
-  })),
-})
-
-// Transform raw -> unified
-const pnpmToLockfileData = (raw: PnpmLockfileRaw): LockfileData => { ... }
-```
+One pnpm-specific shape is worth flagging: `PnpmExtension.catalogs` values are a union of a plain version string (pnpm v9) or a `{ specifier, version }` object (pnpm v10, where catalogs live in `pnpm-workspace.yaml`), so the schema accepts both.
 
 ## Error Types
 
@@ -378,62 +136,13 @@ class LockfileParseError extends Data.TaggedError(
 
 ## Parsing Strategy
 
-### YAML parsing challenge
+Each format is parsed to a JS object, validated against its raw schema, then transformed to the unified model. The format parsers come from pure-Effect sibling packages so the pipeline stays Effect-native with typed errors and no impedance mismatch:
 
-Effect has no built-in YAML parser. Options:
+- **YAML** (`pnpm-lock.yaml`, `yarn.lock`): `yaml-effect` — see `src/layers/parsers/pnpm.ts` and `src/layers/parsers/yarn.ts`.
+- **JSONC** (`bun.lock`): `jsonc-effect`, which handles comments and trailing commas that `JSON.parse` rejects — see `src/layers/parsers/bun.ts`.
+- **JSON** (`package-lock.json`): standard `JSON.parse` via `Schema.parseJson` — see `src/layers/parsers/npm.ts`.
 
-1. **js-yaml** — mature, widely used, MIT license
-2. **yaml** — newer, better YAML 1.2 support, ISC license
-3. **Manual line parser** — like current pnpm-workspace.yaml parser in
-   WorkspaceDiscoveryLive (very limited, only handles simple arrays)
-4. **Effect Schema.transformOrFail** — wrap any parser in Schema pipeline
-
-**Recommendation**: Use `yaml` package for full YAML support. Wrap in
-`Effect.try` for error handling and `Schema.decodeUnknown` for validation.
-
-### JSONC parsing for bun.lock
-
-**Decision**: Use `jsonc-effect` v0.1.0 (npm) / `@spencerbeggs/jsonc-effect` (GitHub).
-**Status**: Library complete and published.
-
-A pure Effect-TS JSONC parser — no dependency on Microsoft's `jsonc-parser`.
-Scanner, parser, AST, formatter all implemented natively in Effect.
-
-Key API for bun.lock parsing:
-
-```typescript
-import { makeJsoncSchema } from "jsonc-effect"
-
-// Composes JSONC parsing + Schema validation in one step
-const BunLockfileFromJsonc = makeJsoncSchema(BunLockfileRaw)
-
-// Usage: JSONC string → validated BunLockfileRaw
-const parsed = yield* Schema.decodeUnknown(BunLockfileFromJsonc)(content)
-```
-
-Full API: `parse`, `parseTree`, `stripComments`, `createScanner`,
-`makeJsoncSchema`, `findNode`, `visit` (Stream), `format`, `modify`.
-Typed errors: `JsoncParseError`, `JsoncNodeNotFoundError`, `JsoncModificationError`.
-
-Rationale:
-
-- Pure Effect — zero impedance mismatch, no wrapper overhead
-- Only runtime dependency is `effect`
-- Full JSONC support: comments (line + block), trailing commas
-- Effect-native: typed errors, Schema integration, Stream visitor
-- Reusable across repos (tsconfig.json, biome.jsonc, VS Code settings)
-
-### YAML parsing for pnpm-lock.yaml and yarn.lock
-
-**Decision**: Use `yaml` v2.x package as direct production dependency, wrapped
-in Effect.try + Schema.decodeUnknown.
-
-`yaml` is currently only a transitive devDependency (via `@effect/cli`, `vite`).
-Must be added to `dependencies` for the published package.
-
-Future consideration: `yaml-effect` sister package with typed errors,
-`makeYamlSchema()`, Stream-based multi-document iteration. Deferred because
-YAML 1.2 is significantly more complex than JSONC to reimplement from scratch.
+See `effect-patterns-parsing.md` for the `Schema.transformOrFail` / `Schema.compose` pipeline patterns these parsers use.
 
 ### Parsing pipeline pattern
 
@@ -470,31 +179,14 @@ const parseLockfile = (content: string, format: LockfileFormat) =>
 ```typescript
 const LockfileReaderLive: Layer.Layer<
   LockfileReader,
-  LockfileReadError | LockfileParseError,
+  never,
   WorkspaceRoot | PackageManagerDetector | FileSystem | Path
 >
 ```
 
-Dependencies:
+Dependencies: `WorkspaceRoot` (find the monorepo root), `PackageManagerDetector` (pick the lockfile format), and `FileSystem` / `Path` from `@effect/platform`.
 
-- **WorkspaceRoot**: to find the monorepo root where lockfiles live
-- **PackageManagerDetector**: to know which lockfile format to read
-- **FileSystem**: to read the lockfile
-- **Path**: for path resolution
-
-**Note on error channel**: Unlike most layers in this library (which have
-`E = never`), `LockfileReaderLive` propagates errors in the E channel
-because lockfile parsing can fail at layer construction time. This is
-intentional — consumers must handle the possibility that the lockfile
-doesn't exist or can't be parsed. Use `Layer.unwrapEffect` or
-`Effect.provide` with error handling.
-
-Alternatively, we could make the layer construction never-fail by reading
-the lockfile lazily on first method call. This trades API ergonomics
-(errors in method calls instead of layer construction) for consistency
-with other layers. **Decision**: Keep errors in layer E channel for now.
-This matches the reality that lockfile availability is an environmental
-concern, not a per-query concern.
+The layer's `E` channel is `never`: initialization (root walk, PM detection, lockfile read/parse) is deferred to the first method call via `Effect.cached`, so those failure modes surface from each method's `E` channel as the `LockfileInitError` union rather than from `Layer.provide`. See `lockfile-reader-service.md` and `effect-patterns-core.md`.
 
 ### Composite layer
 
@@ -559,18 +251,9 @@ to a durable file — they live only in the transient
 dependency's installed `pnpmfile` `updateConfig` hook out-of-band to recover them
 without that cache. Helper modules live under `src/layers/catalog/`
 (`workspace-manifest.ts`, `assemble.ts`, `config-dependency-hooks.ts`,
-`resolve.ts`). Failures surface as the typed `CatalogAssemblyError` /
-`CatalogResolutionError`; see `architecture.md` (Group 4) for the full design
-paragraph and the spec at
-`docs/superpowers/specs/2026-06-04-catalog-resolver-design.md`.
+`resolve.ts`). The service interface (`catalogs`, `resolve`, `resolveSpecifier`) and its `CatalogResolverError` type live in `src/services/CatalogResolver.ts`. Failures surface as the typed `CatalogAssemblyError` / `CatalogResolutionError`; see `architecture.md` (Group 4) for the full design paragraph.
 
-This service revisits the "No @pnpm dependency" decision below in a narrow way:
-it reuses the lightweight pnpm catalog primitives
-(`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog
-projection, protocol parsing and single-spec resolution, while still avoiding the
-heavy `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime chain (hook replay
-uses a hand-rolled light loader). The lockfile parsers themselves remain
-@pnpm-free.
+It narrowly reuses the lightweight pnpm catalog primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog projection, protocol parsing and single-spec resolution, while avoiding the heavy `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime chain (hook replay uses a hand-rolled light loader). The lockfile parsers themselves take no `@pnpm` dependency — they parse `pnpm-lock.yaml` directly through the YAML pipeline, keeping the core platform-independent.
 
 ## Testing Strategy
 
@@ -642,98 +325,9 @@ and package.json files for each package manager. Shared test utilities
 | all | missing lockfile | LockfileReadError |
 | all | malformed lockfile | LockfileParseError |
 
-## Open Questions (mostly resolved)
+## Design notes
 
-1. **One service vs two**: RESOLVED. Single `LockfileReader` service.
-   PM-specific config accessible via `pmSpecific` extension field.
-
-2. **YAML parser dependency**: RESOLVED. Use `yaml` package (`yaml@2.8.2`
-   already in transitive deps via `@effect/cli`). Zero additional download.
-
-3. **Lockfile version support**: RESOLVED. Current versions only:
-   pnpm v9.0+, npm v3, yarn Berry, bun.lock text. Older versions deferred.
-
-4. **Parse depth**: RESOLVED. Eager full parse at layer construction.
-   Consistent with DependencyGraphLive/TopologicalSorterLive patterns.
-   Lazy option deferred to future optimization pass if needed.
-
-5. **Integrity checking**: Partially resolved. Start with medium depth:
-   - Does lockfile exist and parse? (basic)
-   - Do workspace entries match package.json? (medium)
-   - Deep constraint satisfaction checking deferred.
-   - **Implementation note (2026-03-29):** Integrity checking filters on
-     `p.isWorkspace && p.relativePath !== undefined` to skip workspace
-     packages without a known filesystem path. Uses `pkg.relativePath`
-     (not `pkg.name`) to construct the package.json path, since package
-     names do not reliably correspond to filesystem paths.
-
-6. **pnpm catalogs**: RESOLVED. Yes, parse catalogs from lockfile. Available
-   via `PnpmExtension.catalogs` on `LockfileData.pmSpecific`. The lockfile
-   already contains resolved catalog snapshots.
-   - **pnpm v10 note (2026-03-29):** In pnpm v10, catalogs are defined in
-     `pnpm-workspace.yaml` rather than `package.json`. The lockfile catalog
-     entries use a `{ specifier, version }` object format instead of plain
-     version strings. The `PnpmExtension.catalogs` value type is now a union
-     of `string | { specifier: string; version: string }` to handle both.
-
-## Sibling Repo Findings
-
-### pnpm-config-dependency-action lockfile service
-
-The `pnpm-config-dependency-action` repo provides a real-world example of
-pnpm lockfile reading with Effect:
-
-**Dependencies used**:
-
-- `@pnpm/lockfile.fs` (v1001.1.29) — reads pnpm-lock.yaml
-- `@pnpm/lockfile.types` (v1002.0.9) — TypeScript types
-- `workspace-tools` — for workspace package discovery
-
-**Key API**: `readWantedLockfile(root, { ignoreIncompatible: true })`
-returns `LockfileObject | null`.
-
-**LockfileObject structure** (from @pnpm/lockfile.types):
-
-- `importers` — workspace packages keyed by relative path (`.`, `packages/ui`)
-- `catalogs` — catalog snapshots for centralized version management
-- `packages` — resolved dependency map
-- `specifiers` — version specifiers from package.json
-
-**Key insight: specifier vs version**:
-
-- `specifier` = what's in package.json (e.g., `^19.0.0`, `catalog:`)
-- `version` = resolved version (e.g., `19.0.0`)
-
-**Catalog detection**: Check if specifier starts with `catalog:` or
-`catalog:<name>` to identify catalog-managed dependencies.
-
-**Platform dependency**: `@pnpm/lockfile.fs` uses Node.js APIs internally.
-For our platform-independent library, we should parse YAML ourselves.
-
-### Design decision: No @pnpm dependency
-
-Using `@pnpm/lockfile.fs` would:
-
-- Tie us to Node.js (breaks platform independence)
-- Add a heavy dependency chain
-- Limit Bun compatibility
-
-Instead, parse pnpm-lock.yaml ourselves using a YAML parser + Schema
-validation. The pnpm lockfile structure is well-documented and stable.
-
-## Research Needed
-
-- [x] pnpm-lock.yaml v9 full schema → see `lockfile-schemas.md`
-- [x] package-lock.json v3 schema → see `lockfile-schemas.md`
-- [x] yarn.lock Berry format → implemented
-- [x] YAML parser options → decided: `yaml` package (already transitive dep)
-- [x] JSONC parsing approach → decided: `jsonc-effect` (v0.1.0, published)
-- [x] How sibling repos handle lockfile reading (pnpm-config-dependency-action)
-- [x] Effect Stream patterns for lazy lockfile parsing → deferred (eager first)
-- [x] pnpm catalogs format and use cases
-- [x] Effect Schema.transformOrFail patterns → implemented
-- [x] Validate schemas against real lockfile data → test fixtures cover all 4 formats
-- [x] Prototype YAML parsing pipeline (pnpm, yarn Berry) → implemented
-- [x] Prototype JSONC parsing pipeline (bun.lock via jsonc-effect) → implemented via jsonc-effect
-- [x] Add `yaml` as direct production dependency → added
-- [x] Add `jsonc-effect` as direct production dependency → added
+- **Supported versions**: pnpm v9.0+, npm v3, yarn Berry, bun.lock text format. Older formats are not parsed.
+- **Integrity checking**: `checkIntegrity` verifies that workspace entries in `package.json` are reflected in the lockfile (medium depth); deep constraint-satisfaction checking is out of scope. It filters on `isWorkspace && relativePath !== undefined` and locates each `package.json` via `relativePath`, not `name`, because package names do not reliably map to filesystem paths.
+- **pnpm catalogs**: catalogs are read from the lockfile snapshot and exposed via `PnpmExtension.catalogs`. In pnpm v10 catalogs are defined in `pnpm-workspace.yaml` and the lockfile stores entries as `{ specifier, version }` objects, so the schema value type is a union of `string | { specifier, version }`.
+- **No `@pnpm` dependency in the parsers**: the lockfile parsers parse `pnpm-lock.yaml` through the YAML pipeline rather than pulling in `@pnpm/lockfile.fs` (which is Node-only), preserving platform independence. `CatalogResolver` is the sole narrow exception (see above).

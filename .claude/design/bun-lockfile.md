@@ -5,8 +5,8 @@ category: reference
 status: current
 completeness: 90
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 related:
   - architecture.md
   - phase4-configuration-lockfiles.md
@@ -24,7 +24,6 @@ tags:
 <!-- TOC -->
 
 - [Overview](#overview)
-- [Current State](#current-state)
 - [Top-Level Schema](#top-level-schema)
 - [Workspaces Map](#workspaces-map)
 - [Packages Map Tuple Format](#packages-map-tuple-format)
@@ -37,16 +36,7 @@ tags:
 
 ## Overview
 
-Starting with Bun v1.2, Bun uses a text-based `bun.lock` file in JSONC
-format (JSON with trailing commas and comments). It replaced the binary
-`bun.lockb` format. This document captures the schema and parsing
-strategy for `workspaces-effect`.
-
-## Current State
-
-Research completed 2026-03-12. Sources: Bun official docs, Bun blog,
-`Bun.BunLockFile` TypeScript type reference, Turborepo bun.lock support
-PR, and bun.lock.zig source.
+Starting with Bun v1.2, Bun uses a text-based `bun.lock` file in JSONC format (JSON with trailing commas and comments), replacing the binary `bun.lockb`. This document captures the on-disk schema and parsing strategy that `src/layers/parsers/bun.ts` implements. Sources: Bun's official docs, the `Bun.BunLockFile` TypeScript type and the `bun.lock.zig` source.
 
 ## Top-Level Schema
 
@@ -257,6 +247,4 @@ const BunLockfileSchema = Schema.Struct({
 ### Why the workspaces map is sufficient for discovery
 
 For `workspaces-effect`, the `workspaces` map provides everything needed
-for workspace discovery: package names, versions, relative paths, and
-inter-workspace dependency relationships. The `packages` map is only
-needed for full dependency resolution (Phase 4+).
+for workspace discovery: package names, versions, relative paths and inter-workspace dependency relationships. The `packages` map is only needed for full dependency resolution.

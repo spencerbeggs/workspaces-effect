@@ -5,12 +5,14 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-06-04
-last-synced: 2026-06-04
+updated: 2026-06-13
+last-synced: 2026-06-13
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
   - phase4-configuration-lockfiles.md
+  - lockfile-reader-service.md
+  - lockfile-schemas.md
   - effect-patterns-core.md
   - effect-patterns-parsing.md
   - effect-patterns-testing.md
@@ -42,88 +44,11 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-All phases complete. 457 tests passing (313 unit + 144 integration), all
-typechecking. Full observability (spans + structured logging) across all
-services.
+The library exposes ten services across four groups, two composite layers (`WorkspacesLive` without git, `WorkspacesFullLive` with git), and a synchronous escape-hatch API. Observability is wired across every service via `Effect.withSpan` plus structured logging at Debug/Trace level only, so the library is silent under Effect's default logger; consumers opt in with `Logger.withMinimumLogLevel(LogLevel.Debug)`. See the README "Observability" section for subscription examples.
 
-- **Phase 1 (Discovery)**: WorkspaceRootLive, PackageManagerDetectorLive,
-  WorkspaceDiscoveryLive
-- **Phase 2 (Package Analysis)**: DependencyGraphLive, TopologicalSorterLive
-- **Phase 3 (Change Detection)**: PackageResolverLive, ChangeDetectorLive
-- **Phase 4 (Configuration & Lockfiles)**: LockfileReaderLive,
-  PublishabilityDetectorLive, CatalogResolverLive, integrity checker, parsers
-  for pnpm/npm/yarn/bun
-- **WorkspacePackage Enrichment** (Issue #12): `peerDependencies` and
-  `optionalDependencies` fields, computed getters (`isRootWorkspace`,
-  `isPublic`, `scope`, `unscopedName`, `allDependencies`),
-  instance methods (`hasDependency`, `hasDevDependency`, `hasPeerDependency`,
-  `hasOptionalDependency`, `hasAnyDependencyOn`, `dependencyVersion`,
-  `matchesDependency`, `dependencyDiff`), `DependencyDiff` interface, static
-  dual-API functions in `src/utils/workspace-package.ts`, `readPackageJson`
-  utility, `WorkspaceDiscovery.importerMap()`, root package inclusion in
-  `listPackages()` (breaking change)
-- **Composite layers**: WorkspacesLive (no git), WorkspacesFullLive (with git)
-- **Internal patterns**: Request/RequestResolver with per-layer caching for
-  DependencyGraph and LockfileReader lookups
-- **Observability**: Effect.withSpan on all service methods and layer
-  construction; structured logging at Debug/Trace levels only -- the library
-  is silent under Effect's default logger. Consumers opt in via
-  `Logger.withMinimumLogLevel(LogLevel.Debug)` (or lower) or by attaching a
-  custom logger. Log annotations (`workspace.root`, `workspace.pm`,
-  `workspace.packages.count`, etc.) are unchanged. See the README
-  "Observability" section for subscription examples.
-- **Test organization**: Tests in top-level `__test__/` directory (not
-  co-located in `src/`), following the `@savvy-web/vitest` discovery
-  convention. Shared test utilities in `__test__/utils/`. Integration tests
-  with real lockfile fixtures in `__test__/integration/fixtures/`.
-- **Schema updates (2026-03-29)**: `ResolvedPackage` has optional
-  `relativePath` field for workspace packages (used by integrity checker
-  to locate package.json). `PnpmExtension.catalogs` accepts union type
-  `string | { specifier, version }` for pnpm v9/v10 compatibility.
-- **Schema updates (2026-04-15)**: `PublishConfig` converted to
-  `Schema.Class` with expanded fields (`tag`, `linkDirectory`).
-  `DetectedPackageManager` interface gained `runtime: "node" | "bun"` field.
-  `PublishTarget` schema added for resolved publish target metadata.
-  `WorkspaceDiscoveryLive` improvements: standalone fallback (empty patterns
-  produce root-only workspace), `resolvePattern` errors on missing base
-  directory, `readWorkspacePackage` requires both `name` and `version` fields.
-- **Sync API (2026-04-15)**: `findWorkspaceRootSync` and
-  `getWorkspacePackagesSync` added in `src/sync.ts` and exported from
-  `src/index.ts`. Synchronous, non-Effect utilities for consumers that
-  cannot use Effect pipelines (lint-staged, Vitest config). Uses direct
-  `node:fs`/`node:path` imports (intentional exception to platform
-  abstraction rule). Root package excluded from sync results (unlike
-  Effect `listPackages()`).
-- **Path internals (Issue #34)**: `WorkspacePackage.packageJsonPath` converted
-  from a computed getter (template literal `${this.path}/package.json`) to a
-  stored `Schema.NonEmptyString` field. The value is computed at construction
-  time in `WorkspaceDiscoveryLive` using `@effect/platform` `Path.join`,
-  ensuring platform-correct path separators. This is a breaking change for
-  any code that relied on the getter; the field is now required at
-  construction.
-- **Lazy layer initialization (Issue #60, 2026-05-02)**: `LockfileReaderLive`
-  and `WorkspaceDiscoveryLive` no longer perform I/O during `Layer.effect`
-  construction. The workspace-root walk, package-manager detection, lockfile
-  read, and lockfile parse are wrapped in `Effect.cached` and paid on the
-  first method call instead. Layer construction is now O(1); consumers that
-  build a layer per call site (Vitest reporters, per-subcommand CLIs, tests
-  that swap layers between cases) no longer pay the eager initialization
-  cost N times. New exported `LockfileInitError` type alias
-  (`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`)
-  describes the deferred failure modes. **Breaking change**: errors that
-  previously failed `Layer.provide(LockfileReaderLive)` now surface from the
-  first invocation of `readLockfile`, `resolvedVersion`,
-  `workspaceDependencies`, or `checkIntegrity`; `WorkspaceDiscoveryLive`
-  similarly defers `WorkspaceDiscoveryError` from the default-root walk to
-  the first method call that omits an explicit `cwd` argument. The Layer E
-  channels for both layers narrow to `never`.
-- **Cache invalidation API (2026-05-23)**: `WorkspaceDiscovery.refresh()`
-  added -- `Effect.Effect<void>` that clears the per-resolved-root package
-  cache in `WorkspaceDiscoveryLive` so the next `listPackages` / `getPackage` /
-  `importerMap` call re-reads each `package.json` from disk. The resolved-root
-  memo (the `Effect.cached` default-root lookup) is left intact. Use after a
-  mid-process mutation of package files (e.g. `changeset version` followed by
-  reading bumped versions), which the layer-lifetime cache would otherwise mask.
+Two layers defer their I/O to first method call: `LockfileReaderLive` and `WorkspaceDiscoveryLive` wrap their initialization (root walk, PM detection, lockfile read/parse, package scan) in `Effect.cached`, keeping layer construction O(1) and paying the cost once per layer instance. The pure in-memory data services (`DependencyGraphLive`, `TopologicalSorterLive`) build their structures eagerly in `Layer.effect`. Lazy init means initialization failures surface from the first method call rather than from `Layer.provide`; see the lazy-init decision below and `effect-patterns-core.md`.
+
+Tests live in a top-level `__test__/` directory following the `@savvy-web/vitest` discovery convention, with shared utilities in `__test__/utils/` and real lockfile fixtures in `__test__/integration/fixtures/`. See `effect-patterns-testing.md`.
 
 ## Design Goals
 
@@ -151,29 +76,10 @@ The library provides 10 services organized into four groups:
 | `PackageManagerDetector` | Detect PM type and version | FileSystem, Path |
 | `WorkspaceDiscovery` | List workspace packages, importer map | FileSystem, Path, WorkspaceRoot |
 
-WorkspaceDiscovery methods:
+`WorkspaceDiscovery` (see `src/services/WorkspaceDiscovery.ts`) lists packages, resolves a package by name, exposes an importer map keyed by `relativePath`, and refreshes its cache. Two behaviors are load-bearing for consumers:
 
-- `listPackages(cwd?)` -- returns all workspace packages **including the root
-  workspace package** as the first entry (breaking change from Issue #12).
-  The root package has `relativePath: "."`. Consumers can filter using
-  `isRootWorkspace` getter if they need only non-root packages.
-  When `cwd` is provided, the workspace root is resolved fresh from that
-  directory (results cached per resolved root); when omitted, uses the root
-  eagerly resolved from `process.cwd()` at layer construction time.
-- `getPackage(name, cwd?)` -- resolves any package by name (including root).
-  `cwd` semantics match `listPackages`.
-- `importerMap(cwd?)` -- returns `ReadonlyMap<string, WorkspacePackage>` keyed
-  by `relativePath`. Built from `listPackages()` and inherits its caching.
-  Supports lockfile importer-to-package mapping use cases. `cwd` semantics
-  match `listPackages`.
-- `refresh()` -- `Effect.Effect<void>`. Discards the per-root package cache so
-  the next `listPackages` / `getPackage` / `importerMap` call re-reads every
-  `package.json` from disk. The resolved-root memo is intentionally left intact
-  (the root does not move when package contents change), so the next call pays
-  only the package re-scan, not the root walk. Use after mutating package files
-  mid-process -- e.g. running `changeset version` then reading the bumped
-  versions back, which would otherwise return the pre-mutation snapshot from the
-  layer-lifetime cache.
+- `listPackages` includes the **root workspace package** as the first entry (its `relativePath` is `"."`); filter on the `isRootWorkspace` getter when only child packages are wanted.
+- Methods accept an optional `cwd`. When provided, the workspace root is resolved fresh from that directory and results are cached per resolved root; when omitted, the root resolved from `process.cwd()` on first call is reused. `refresh()` discards the per-root package cache (forcing the next call to re-read every `package.json`) while preserving the resolved-root memo, for cases where package files mutate mid-process such as running `changeset version` then reading the bumped versions back.
 
 ### Group 2: Package Analysis
 
@@ -219,8 +125,8 @@ workspace graph (`WorkspaceDiscovery`) for `workspace:` resolution. Assembly is
 lazy (`Effect.cached`, first-call) and surfaces `CatalogAssemblyError` /
 `CatalogResolutionError` as typed, `catchTag`-able failures. Hook replay uses a
 hand-rolled light loader (no `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile`
-runtime dependency); see the spec at
-`docs/superpowers/specs/2026-06-04-catalog-resolver-design.md`.
+runtime dependency). The implementation lives in `src/layers/CatalogResolverLive.ts`
+with helpers under `src/layers/catalog/`.
 
 PublishabilityDetector checks `private` field and `publishConfig.access`.
 Users can provide custom layers to override detection strategy.
@@ -235,16 +141,17 @@ Class-based `Context.Tag` pattern (GenericTag deprecated):
 
 ```typescript
 class LockfileReader extends Context.Tag(
-  "workspaces-effect/LockfileReader"
+  "@spencerbeggs/workspaces-effect/LockfileReader"
 )<
   LockfileReader,
   {
-    readonly readLockfile: () => Effect.Effect<LockfileData>
+    readonly readLockfile: () => Effect.Effect<LockfileData, LockfileInitError>
     readonly resolvedVersion: (
       packageName: string,
-    ) => Effect.Effect<Option.Option<ResolvedPackage>>
+    ) => Effect.Effect<Option.Option<ResolvedPackage>, LockfileInitError>
     readonly workspaceDependencies: () => Effect.Effect<
-      ReadonlyArray<WorkspaceDependency>
+      ReadonlyArray<WorkspaceDependency>,
+      LockfileInitError
     >
   }
 >() {}
@@ -253,104 +160,33 @@ class LockfileReader extends Context.Tag(
 Key principles:
 
 - Service methods have `R = never` (dependencies resolved at layer construction)
-- Tag identifiers use `workspaces-effect/ServiceName` namespace
+- Tag identifiers use the `@spencerbeggs/workspaces-effect/ServiceName` namespace
 - `_base` symbols from Context.Tag are correctly inlined by api-extractor DTS bundling
 
-## WorkspacePackage Data Model
+## WorkspacePackage data model
 
-`WorkspacePackage` is a `Schema.Class` in `src/schemas/core.ts` representing a
-workspace package with its metadata and dependencies.
+`WorkspacePackage` is a `Schema.Class` in `src/schemas/core.ts` representing a workspace package with its metadata and dependencies. It carries the four dependency maps, an optional `publishConfig` (the `PublishConfig` `Schema.Class`), and the `path` / `packageJsonPath` / `relativePath` location fields. `packageJsonPath` is a stored field computed at construction in `WorkspaceDiscoveryLive` via `@effect/platform` `Path.join` (not a getter), so separators are platform-correct.
 
-### Schema Fields
-
-| Field | Type | Default |
-| --- | --- | --- |
-| `name` | `string` | (required) |
-| `version` | `string` | (required) |
-| `path` | `string` | (required) |
-| `packageJsonPath` | `string` | (required) |
-| `relativePath` | `string` | (required) |
-| `private` | `boolean` | `true` |
-| `dependencies` | `Record<string, string>` | `{}` |
-| `devDependencies` | `Record<string, string>` | `{}` |
-| `peerDependencies` | `Record<string, string>` | `{}` |
-| `optionalDependencies` | `Record<string, string>` | `{}` |
-| `publishConfig` | `PublishConfig` | (optional) |
-
-### Computed Getters
-
-| Getter | Returns | Derivation |
-| --- | --- | --- |
-| `isRootWorkspace` | `boolean` | `this.relativePath === "."` |
-| `isPublic` | `boolean` | `!this.private` |
-| `scope` | `Option<string>` | Extract `@scope` from name, or `Option.none()` |
-| `unscopedName` | `string` | Strip `@scope/` prefix if present |
-| `allDependencies` | `Record<string, string>` | Merged map of all 4 dep types |
-
-### Instance Methods
-
-| Method | Signature | Description |
-| --- | --- | --- |
-| `hasDependency` | `(name: string) => boolean` | Checks `dependencies` |
-| `hasDevDependency` | `(name: string) => boolean` | Checks `devDependencies` |
-| `hasPeerDependency` | `(name: string) => boolean` | Checks `peerDependencies` |
-| `hasOptionalDependency` | `(name: string) => boolean` | Checks `optionalDependencies` |
-| `hasAnyDependencyOn` | `(name: string) => boolean` | Checks all 4 dep types |
-| `dependencyVersion` | `(name: string) => Option<string>` | Version across all dep types |
-| `matchesDependency` | `(pattern: string) => boolean` | Glob match on dep names |
-| `dependencyDiff` | `(other: WorkspacePackage) => DependencyDiff` | Compare dep snapshots |
-
-### Static Dual-API Functions
-
-Each instance method also exists as a standalone `Function.dual()` function in
-`src/utils/workspace-package.ts` for pipeable/curried use. These are wired as
-static methods on the `WorkspacePackage` class in `src/index.ts`, following
-the pattern from `semver-effect`:
+Computed getters (`isRootWorkspace`, `isPublic`, `scope`, `unscopedName`, `allDependencies`) and dependency-query instance methods (`hasDependency`, `dependencyVersion`, `dependencyDiff` and friends) are defined on the class. Each instance method also exists as a standalone `Function.dual()` in `src/utils/workspace-package.ts`, wired as a static method on the class in `src/index.ts` (the `semver-effect` pattern), so callers get instance, data-first and data-last styles:
 
 ```typescript
-// Instance
-pkg.hasDependency("effect")
-// Static data-first
-WorkspacePackage.hasDependency(pkg, "effect")
-// Static data-last (pipeable)
-pipe(pkg, WorkspacePackage.hasDependency("effect"))
+pkg.hasDependency("effect")               // instance
+WorkspacePackage.hasDependency(pkg, "x")  // static data-first
+pipe(pkg, WorkspacePackage.hasDependency("x")) // static data-last
 ```
 
-Additionally, `readPackageJson` is a standalone effectful utility (not dual)
-that reads and decodes a package's `package.json` via `@effect/platform`
-FileSystem. Also wired as a static method.
+`readPackageJson` is a related standalone effectful utility (not dual) that reads and decodes a package's `package.json`, also wired as a static method. `DependencyDiff` (the result type of `dependencyDiff`) is defined in `src/schemas/core.ts`.
 
-### DependencyDiff Interface
+## Error hierarchy
 
-```typescript
-interface DependencyDiff {
-  readonly added: Record<string, string>
-  readonly removed: Record<string, string>
-  readonly changed: Record<string, { readonly from: string; readonly to: string }>
-}
-```
+All errors use `Data.TaggedError` with exported `*Base` constants for api-extractor DTS bundling and computed `message` getters. The full set lives under `src/errors/` and is exported from the barrel; group them by where they arise:
 
-Compares all 4 dep types combined. Located in `src/schemas/core.ts`.
+- Discovery: `WorkspaceRootNotFoundError`, `PackageManagerDetectionError`, `WorkspaceDiscoveryError`, `PackageJsonParseError`
+- Analysis: `PackageNotFoundError`, `CyclicDependencyError`, `DependencyResolutionError`
+- Change detection: `GitNotAvailableError`, `ChangeDetectionError`
+- Lockfiles and catalogs: `LockfileReadError`, `LockfileParseError`, `LockfileIntegrityError`, `CatalogAssemblyError`, `CatalogResolutionError`
 
-## Error Hierarchy
-
-12 error types using `Data.TaggedError` with exported `*Base` constants for
-api-extractor DTS bundling. All have computed `message` getters.
-
-| Error | Phase | When Raised |
-| --- | --- | --- |
-| `WorkspaceRootNotFoundError` | Discovery | No workspace root found from search path |
-| `PackageManagerDetectionError` | Discovery | Cannot determine PM type |
-| `WorkspaceDiscoveryError` | Discovery | Package discovery fails |
-| `PackageJsonParseError` | Discovery | Malformed package.json |
-| `PackageNotFoundError` | Analysis | Named package not in workspace |
-| `CyclicDependencyError` | Analysis | Cycle detected in dependency graph |
-| `DependencyResolutionError` | Analysis | Dependency cannot be resolved |
-| `GitNotAvailableError` | Change Detection | Git not installed or not a git repo |
-| `ChangeDetectionError` | Change Detection | Git operation fails |
-| `LockfileReadError` | Lockfiles | Lockfile cannot be read from disk |
-| `LockfileParseError` | Lockfiles | Lockfile cannot be parsed |
-| `LockfileIntegrityError` | Lockfiles | Integrity check fails |
+`LockfileInitError` is an exported union (`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`) describing the deferred failure modes of the lazily-initialized lockfile/discovery layers; see the lazy-init decision below.
 
 ## Layer Composition
 
@@ -435,13 +271,7 @@ as `findWorkspaceRootSync` and `getWorkspacePackagesSync`.
   `getWorkspacePackagesSync` returns only packages matched by workspace
   patterns (no root package). This avoids confusion in lint-staged contexts
   where root package changes are not meaningful.
-- **Git project boundary (Issue #103)**: `findWorkspaceRootSync` stops the
-  walk at the first `.git` it encounters. If a `package.json` lives
-  alongside `.git` it returns that directory (single-package repo support);
-  if not it throws — a project without a root manifest is an error, not a
-  silent miss. `null` is now reserved for "cwd is not inside any git
-  project", which lets downstream consumers (e.g. vitest-agent-plugin)
-  stop special-casing single-package repos.
+- **Git project boundary**: `findWorkspaceRootSync` stops the walk at the first `.git` it encounters. If a `package.json` lives alongside `.git` it returns that directory (single-package repo support); if not it throws — a project without a root manifest is an error, not a silent miss. `null` is reserved for "cwd is not inside any git project", which lets downstream consumers stop special-casing single-package repos.
 - **Silent error handling**: Parse/read errors are swallowed (returns `null`
   or empty array) rather than thrown. A typo in workspace patterns produces
   an empty result rather than an error, which prevents breaking downstream
@@ -484,35 +314,17 @@ the correct platform context (NodeContext vs BunContext).
 | yarn | `package.json` | `workspaces: ["packages/*"]` or `workspaces.packages` |
 | bun | `package.json` | `workspaces: ["packages/*"]` |
 
-## Resolved Design Decisions
-
-All major design decisions have been resolved. See phase-specific docs for
-details. Key decisions:
+## Key design decisions
 
 - **Context.Tag** over GenericTag (deprecated) and Effect.Service (not used)
-- **Eager graph/index construction** in `Layer.effect` for `DependencyGraphLive`
-  and `TopologicalSorterLive` (in-memory data services with no I/O dependency).
-  `LockfileReaderLive` and `WorkspaceDiscoveryLive` defer I/O via `Effect.cached`
-  for O(1) layer construction (Issue #60, 2026-05-02) -- the heavy work runs
-  once on first method call and is memoized for the layer's lifetime.
+- **Eager graph/index construction** in `Layer.effect` for the pure in-memory data services (`DependencyGraphLive`, `TopologicalSorterLive`); **lazy `Effect.cached` initialization** for the I/O-bound layers (`LockfileReaderLive`, `WorkspaceDiscoveryLive`) so layer construction stays O(1) and the heavy work runs once on first method call. See the lazy-init pattern in `effect-patterns-core.md`.
 - **Native Map/Set** for internal data structures (better perf for string keys)
-- **Request/RequestResolver** for `dependenciesOf`, `dependentsOf`, `resolvedVersion`
-- **Per-layer Request.makeCache** for deduplication without global cache contamination
+- **Request/RequestResolver** with per-layer `Request.makeCache` for `dependenciesOf`, `dependentsOf` and `resolvedVersion`, giving deduplication without a global cache
 - **CommandExecutor resolved at layer construction** for R=never service methods
-- **WorkspacesLive / WorkspacesFullLive** as composite layers (replaces old
-  DiscoveryLive, ConfigurationLive, FullConfigLive, ChangeDetectionLive)
-- **PublishabilityDetector** as separate composable service (not embedded in LockfileReader)
-- **Unified LockfileReader** (merged WorkspaceConfigReader)
-- **GlobResolver** deferred (WorkspaceDiscoveryLive handles workspace patterns)
-- **Static method wiring** in `src/index.ts` following `semver-effect` pattern
-  (avoids circular imports between schema classes and utility functions)
-- **`src/utils/` directory** for standalone dual-API functions that wrap
-  instance methods; keeps `Schema.Class` definitions clean
-- **Root package in listPackages()** (Issue #12 breaking change) -- root
-  workspace always included as first entry; `isRootWorkspace` getter for
-  filtering
-- **Sync API as escape hatch** -- `src/sync.ts` uses `node:` imports
-  directly; this is an intentional exception to the platform abstraction
-  rule because synchronous callers (lint-staged, Vitest config) cannot
-  boot an Effect runtime. The sync API does not participate in caching,
-  observability, or typed errors.
+- **`WorkspacesLive` / `WorkspacesFullLive`** as the two composite layers; individual `*Live` layers stay available for fine-grained composition
+- **PublishabilityDetector** as a separate composable service, not embedded in LockfileReader
+- **Unified LockfileReader** rather than per-PM services or a separate workspace-config reader
+- **Workspace patterns handled in `WorkspaceDiscoveryLive`** rather than a separate glob-resolver service
+- **Static method wiring** in `src/index.ts` following the `semver-effect` pattern, avoiding circular imports between schema classes and the dual-API functions in `src/utils/`
+- **Root package included in `listPackages()`** as the first entry; filter on the `isRootWorkspace` getter when not wanted
+- **Sync API as escape hatch** — `src/sync.ts` uses `node:` imports directly, an intentional exception to the platform-abstraction rule because synchronous callers (lint-staged, Vitest config) cannot boot an Effect runtime. The sync API does not participate in caching, observability or typed errors.

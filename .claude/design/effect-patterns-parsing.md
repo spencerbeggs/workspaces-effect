@@ -5,8 +5,8 @@ category: patterns
 status: current
 completeness: 95
 created: 2026-03-12
-updated: 2026-03-14
-last-synced: 2026-04-15
+updated: 2026-06-13
+last-synced: 2026-06-13
 authors:
   - C. Spencer Beggs
 tags:
@@ -25,10 +25,7 @@ related:
 
 ## Effect Patterns: Schema & Parsing
 
-Patterns for Schema definition, parsing pipelines, and error formatting in
-workspaces-effect. Covers YAML, JSONC, and JSON parsing through the Effect
-Schema pipeline. Split from the original effect-best-practices.md for
-focused context loading.
+Patterns for Schema definition, parsing pipelines and error formatting in workspaces-effect. Covers YAML, JSONC and JSON parsing through the Effect Schema pipeline.
 
 ## Schema Patterns
 
