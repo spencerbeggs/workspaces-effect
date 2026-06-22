@@ -74,8 +74,8 @@
 	"devDependencies": {
 		"@effect/platform": "catalog:silk",
 		"@effect/platform-node": "catalog:silk",
-		"@savvy-web/bundler": "^0.6.0",
-		"@savvy-web/silk": "^1.1.2",
+		"@savvy-web/bundler": "^0.8.0",
+		"@savvy-web/silk": "^1.2.0",
 		"@savvy-web/vitest": "^1.5.1",
 		"effect": "catalog:silk"
 	},
@@ -96,7 +96,7 @@
 		"runtime": [
 			{
 				"name": "node",
-				"version": "26.3.0",
+				"version": "26.3.1",
 				"onFail": "ignore"
 			}
 		]
