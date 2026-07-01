@@ -1,5 +1,31 @@
 # workspaces-effect
 
+## 1.3.0
+
+### Documentation
+
+* [`23842fe`](https://github.com/spencerbeggs/workspaces-effect/commit/23842fe38c2cbc5c1c80ed5a22b63e82778630ee) Finalizes `@public` release tags across previously untagged or `@internal`-marked exports, resolving every TSDoc/API Extractor release-tag and unresolved-link diagnostic in the package.
+
+- Tagged `@public`: the `Data.TaggedError` base constants across all error modules, the dual-API dependency-inspection utilities (`hasDependency`, `hasDevDependency`, `hasPeerDependency`, `hasOptionalDependency`, `hasAnyDependencyOn`, `dependencyVersion`, `matchesDependency`, `dependencyDiff`, `readPackageJson`), `ManifestLike`, `CatalogResolverError`, and `PublishConfigType`
+- Fixed an unresolved `{@link levels}` reference in `TopologicalSorter`'s TSDoc
+
+### Build System
+
+* [`23842fe`](https://github.com/spencerbeggs/workspaces-effect/commit/23842fe38c2cbc5c1c80ed5a22b63e82778630ee) Migrated `savvy.build.ts` to the `build()` API from `@savvy-web/bundler`, replacing the previous `defineBuild`/`runBuild` pattern.
+
+### Dependencies
+
+* [`23842fe`](https://github.com/spencerbeggs/workspaces-effect/commit/23842fe38c2cbc5c1c80ed5a22b63e82778630ee) | Dependency | Type | Action | From | To |
+  \| -------------------------- | ------------- | ------- | ------ | -------------------- |
+  \| jsonc-effect | dependency | updated | ^0.2.1 | ^0.3.0 |
+  \| semver-effect | dependency | updated | ^0.2.1 | ^0.3.0 |
+  \| yaml-effect | dependency | updated | ^0.6.0 | ^0.7.0 |
+  \| @savvy-web/bundler | devDependency | updated | ^1.0.1 | ^1.1.0 |
+  \| @vitest-agent/plugin | devDependency | updated | ^1.1.2 | ^1.1.3 |
+  \| @types/node | devDependency | added | — | 26.0.1 |
+  \| @typescript/native-preview | devDependency | added | — | 7.0.0-dev.20260701.1 |
+  \| typescript | devDependency | added | — | 6.0.3 |
+
 ## 1.2.0
 
 ### Features
