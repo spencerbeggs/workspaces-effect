@@ -157,6 +157,11 @@ export class PublishConfig extends Schema.Class<PublishConfig>("PublishConfig")(
 	linkDirectory: Schema.optional(Schema.Boolean),
 }) {}
 
+/**
+ * Type alias for the decoded shape of {@link PublishConfig}.
+ *
+ * @public
+ */
 export type PublishConfigType = PublishConfig;
 
 /**

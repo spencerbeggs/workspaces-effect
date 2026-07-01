@@ -7,7 +7,11 @@ import type { CatalogResolutionError } from "../errors/CatalogResolutionError.js
 import type { ManifestLike } from "../layers/catalog/resolve.js";
 import type { LockfileInitError } from "./LockfileReader.js";
 
-/** Errors surfaced by CatalogResolver methods (assembly defers I/O to first call). */
+/**
+ * Errors surfaced by {@link CatalogResolver} methods (assembly defers I/O to first call).
+ *
+ * @public
+ */
 export type CatalogResolverError = CatalogAssemblyError | LockfileInitError;
 
 /**

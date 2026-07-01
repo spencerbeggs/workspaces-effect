@@ -5,6 +5,12 @@ import { CatalogResolutionError } from "../../errors/CatalogResolutionError.js";
 
 const DEP_FIELDS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
 
+/**
+ * Minimal shape of a `package.json` manifest needed to resolve catalog and
+ * workspace specifiers.
+ *
+ * @public
+ */
 export interface ManifestLike {
 	readonly name: string;
 	readonly version: string;
