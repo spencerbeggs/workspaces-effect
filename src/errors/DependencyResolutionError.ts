@@ -3,11 +3,14 @@ import { Data } from "effect";
 /**
  * Base constant for {@link DependencyResolutionError}.
  *
- * @privateRemarks
+ * @remarks
  * Exported for api-extractor DTS bundling — the `_base` symbol from
- * `Data.TaggedError` must be visible in the generated .d.ts file.
+ * `Data.TaggedError` must be visible in the generated .d.ts file. Tagged
+ * `@public` because it appears in the `extends` clause of a `@public`
+ * subclass; consumers should construct and catch the subclass, not this
+ * base directly.
  *
- * @internal
+ * @public
  */
 export const DependencyResolutionErrorBase = Data.TaggedError("DependencyResolutionError");
 

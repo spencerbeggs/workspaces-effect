@@ -14,49 +14,81 @@ import { PackageJsonParseError } from "../errors/PackageJsonParseError.js";
 import type { DependencyDiff, WorkspacePackage } from "../schemas/core.js";
 import { PackageJsonSchema } from "../schemas/core.js";
 
-/** Check if a package has a production dependency. Dual API. */
+/**
+ * Check if a package has a production dependency. Dual API.
+ *
+ * @public
+ */
 export const hasDependency: {
 	(name: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, name: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): boolean => self.hasDependency(name));
 
-/** Check if a package has a dev dependency. Dual API. */
+/**
+ * Check if a package has a dev dependency. Dual API.
+ *
+ * @public
+ */
 export const hasDevDependency: {
 	(name: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, name: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): boolean => self.hasDevDependency(name));
 
-/** Check if a package has a peer dependency. Dual API. */
+/**
+ * Check if a package has a peer dependency. Dual API.
+ *
+ * @public
+ */
 export const hasPeerDependency: {
 	(name: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, name: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): boolean => self.hasPeerDependency(name));
 
-/** Check if a package has an optional dependency. Dual API. */
+/**
+ * Check if a package has an optional dependency. Dual API.
+ *
+ * @public
+ */
 export const hasOptionalDependency: {
 	(name: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, name: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): boolean => self.hasOptionalDependency(name));
 
-/** Check if a package depends on a name in any dep type. Dual API. */
+/**
+ * Check if a package depends on a name in any dep type. Dual API.
+ *
+ * @public
+ */
 export const hasAnyDependencyOn: {
 	(name: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, name: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): boolean => self.hasAnyDependencyOn(name));
 
-/** Look up version across all dep types. Dual API. */
+/**
+ * Look up version across all dep types. Dual API.
+ *
+ * @public
+ */
 export const dependencyVersion: {
 	(name: string): (self: WorkspacePackage) => Option.Option<string>;
 	(self: WorkspacePackage, name: string): Option.Option<string>;
 } = Fn.dual(2, (self: WorkspacePackage, name: string): Option.Option<string> => self.dependencyVersion(name));
 
-/** Check if any dep name matches a glob pattern. Dual API. */
+/**
+ * Check if any dep name matches a glob pattern. Dual API.
+ *
+ * @public
+ */
 export const matchesDependency: {
 	(pattern: string): (self: WorkspacePackage) => boolean;
 	(self: WorkspacePackage, pattern: string): boolean;
 } = Fn.dual(2, (self: WorkspacePackage, pattern: string): boolean => self.matchesDependency(pattern));
 
-/** Compare two WorkspacePackage dependency snapshots. Dual API. */
+/**
+ * Compare two WorkspacePackage dependency snapshots. Dual API.
+ *
+ * @public
+ */
 export const dependencyDiff: {
 	(other: WorkspacePackage): (self: WorkspacePackage) => DependencyDiff;
 	(self: WorkspacePackage, other: WorkspacePackage): DependencyDiff;
@@ -70,6 +102,8 @@ export const dependencyDiff: {
  *
  * Not a dual function — takes a single WorkspacePackage argument.
  * Pipeable via `pipe(pkg, readPackageJson)`.
+ *
+ * @public
  */
 export const readPackageJson = (
 	self: WorkspacePackage,

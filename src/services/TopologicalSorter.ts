@@ -19,7 +19,7 @@ import type { PackageNotFoundError } from "../errors/PackageNotFoundError.js";
  * @remarks
  * TopologicalSorter is the second service in the Package Analysis group. It
  * consumes the dependency graph built by DependencyGraph and produces ordered
- * sequences suitable for build pipelines. The {@link levels} method groups
+ * sequences suitable for build pipelines. The `levels` method groups
  * packages by execution level, enabling maximum parallelism — packages within
  * the same level can be built concurrently.
  *
