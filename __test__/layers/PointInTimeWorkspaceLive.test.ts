@@ -5,8 +5,13 @@ import { join } from "node:path";
 import { NodeContext } from "@effect/platform-node";
 import { Effect, Layer, Option } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { CatalogAssemblyError } from "../../src/errors/CatalogAssemblyError.js";
+import type { GitReadError } from "../../src/errors/GitReadError.js";
+import type { WorkspaceDiscoveryError } from "../../src/errors/WorkspaceDiscoveryError.js";
+import type { WorkspaceRootNotFoundError } from "../../src/errors/WorkspaceRootNotFoundError.js";
 import { PointInTimeWorkspaceLive } from "../../src/layers/PointInTimeWorkspaceLive.js";
 import { WorkspaceDiscoveryLive } from "../../src/layers/WorkspaceDiscoveryLive.js";
+import type { WorkspaceStateSnapshot } from "../../src/schemas/WorkspaceStateSnapshot.js";
 import { PointInTimeWorkspace } from "../../src/services/PointInTimeWorkspace.js";
 import { WorkspaceRoot } from "../../src/services/WorkspaceRoot.js";
 
@@ -47,7 +52,13 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-const RootStub = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(root) } as never);
+let findArgs: string[] = [];
+const RootStub = Layer.succeed(WorkspaceRoot, {
+	find: (cwd: string) => {
+		findArgs.push(cwd);
+		return Effect.succeed(root);
+	},
+} as never);
 const live = PointInTimeWorkspaceLive.pipe(
 	Layer.provide(Layer.mergeAll(RootStub, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStub)))),
 	Layer.provide(NodeContext.layer),
@@ -60,7 +71,7 @@ describe("PointInTimeWorkspaceLive", () => {
 		const snap = await run(
 			Effect.gen(function* () {
 				const pit = yield* PointInTimeWorkspace;
-				return yield* pit.at(baseSha, root);
+				return yield* pit.at(baseSha, { cwd: root });
 			}),
 		);
 		expect(Option.getOrNull(snap.package("@fixture/a"))?.version).toBe("1.0.0");
@@ -71,7 +82,7 @@ describe("PointInTimeWorkspaceLive", () => {
 		const snap = await run(
 			Effect.gen(function* () {
 				const pit = yield* PointInTimeWorkspace;
-				return yield* pit.worktree(root);
+				return yield* pit.worktree({ cwd: root });
 			}),
 		);
 		expect(Option.getOrNull(snap.package("@fixture/a"))?.version).toBe("1.1.0");
@@ -87,9 +98,54 @@ describe("PointInTimeWorkspaceLive", () => {
 		const snap = await run(
 			Effect.gen(function* () {
 				const pit = yield* PointInTimeWorkspace;
-				return yield* pit.at(baseSha, root);
+				return yield* pit.at(baseSha, { cwd: root });
 			}),
 		);
 		expect(Option.isNone(snap.package("@fixture/b"))).toBe(true);
+	});
+
+	it("at() resolves the workspace root by walking up from options.cwd", async () => {
+		findArgs = [];
+		const nested = join(root, "packages", "a");
+		await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at(baseSha, { cwd: nested });
+			}),
+		);
+		expect(findArgs[0]).toBe(nested);
+	});
+
+	it("worktree() resolves the workspace root by walking up from options.cwd", async () => {
+		findArgs = [];
+		const nested = join(root, "packages", "a");
+		await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.worktree({ cwd: nested });
+			}),
+		);
+		expect(findArgs[0]).toBe(nested);
+	});
+
+	it("narrows error unions per method (type-level)", async () => {
+		await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				// Compile-time contract: worktree's channel has no GitReadError,
+				// at's channel has no WorkspaceDiscoveryError.
+				const _wt: Effect.Effect<
+					WorkspaceStateSnapshot,
+					CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError
+				> = pit.worktree();
+				const _at: Effect.Effect<
+					WorkspaceStateSnapshot,
+					GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError
+				> = pit.at(baseSha);
+				void _wt;
+				void _at;
+				return yield* pit.at(baseSha);
+			}),
+		);
 	});
 });

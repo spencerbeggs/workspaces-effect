@@ -16,6 +16,7 @@ import { parse as parseYaml } from "yaml-effect";
 import type { CatalogAssemblyError } from "../errors/CatalogAssemblyError.js";
 import { CatalogSet } from "../schemas/CatalogSet.js";
 import { PackageStateSnapshot, WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.js";
+import type { PointInTimeOptions } from "../services/PointInTimeWorkspace.js";
 import { PointInTimeWorkspace } from "../services/PointInTimeWorkspace.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
@@ -93,7 +94,7 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 		const reader = makeGitReader(executor);
 		const cache = new Map<string, WorkspaceStateSnapshot>();
 
-		const resolveRoot = (cwd?: string) => (cwd ? Effect.succeed(cwd) : workspaceRoot.find(process.cwd()));
+		const resolveRoot = (cwd?: string) => workspaceRoot.find(cwd ?? process.cwd());
 
 		// Catalogs of a lockfile TEXT (shared by at/worktree). A malformed lockfile
 		// degrades to "no lockfile catalogs" — the inline catalogs still resolve; do
@@ -108,9 +109,9 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 						Effect.orElseSucceed(() => CatalogSet.empty()),
 					);
 
-		const at = (ref: string, cwd?: string) =>
+		const at = (ref: string, options?: PointInTimeOptions) =>
 			Effect.gen(function* () {
-				const root = yield* resolveRoot(cwd);
+				const root = yield* resolveRoot(options?.cwd);
 				const key = `${root}::${ref}`;
 				const hit = cache.get(key);
 				if (hit) return hit;
@@ -165,9 +166,9 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 				return snapshot;
 			}).pipe(Effect.withSpan("PointInTimeWorkspace.at", { attributes: { ref } }));
 
-		const worktree = (cwd?: string) =>
+		const worktree = (options?: PointInTimeOptions) =>
 			Effect.gen(function* () {
-				const root = yield* resolveRoot(cwd);
+				const root = yield* resolveRoot(options?.cwd);
 				const pkgs = yield* discovery.listPackages(root);
 				const packages = pkgs.map(
 					(p) =>

@@ -14,27 +14,55 @@ import type { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFound
 import type { WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.js";
 
 /**
- * The error union surfaced by {@link PointInTimeWorkspace} methods.
+ * The umbrella error union covering both {@link PointInTimeWorkspace}
+ * methods: {@link PointInTimeAtError} (raised by `at`) unioned with
+ * {@link PointInTimeWorktreeError} (raised by `worktree`).
  *
  * @remarks
  * - {@link GitReadError} — a `git show`/`git ls-tree` invocation failed for a
  *   reason other than "path absent at this ref" (absent paths degrade to
- *   `Option.none`, never an error).
+ *   `Option.none`, never an error). `at`-only.
  * - {@link CatalogAssemblyError} — the `pnpm-workspace.yaml` at the ref (or on
  *   disk) is malformed YAML. A malformed *lockfile* never fails; it degrades to
  *   an empty catalog set.
- * - {@link WorkspaceRootNotFoundError} — no `cwd` was passed and the workspace
- *   root could not be located from `process.cwd()`.
+ * - {@link WorkspaceRootNotFoundError} — no `options.cwd` was passed and the
+ *   workspace root could not be located from `process.cwd()`.
  * - {@link WorkspaceDiscoveryError} — `worktree` failed to enumerate the live
- *   packages via `WorkspaceDiscovery`.
+ *   packages via `WorkspaceDiscovery`. `worktree`-only.
  *
  * @public
  */
-export type PointInTimeReadError =
-	| GitReadError
-	| CatalogAssemblyError
-	| WorkspaceRootNotFoundError
-	| WorkspaceDiscoveryError;
+export type PointInTimeReadError = PointInTimeAtError | PointInTimeWorktreeError;
+
+/**
+ * Options accepted by both {@link PointInTimeWorkspace} methods.
+ *
+ * @public
+ */
+export interface PointInTimeOptions {
+	/**
+	 * Starting directory for workspace-root resolution. The root is found by
+	 * walking UP from here (same semantics as `WorkspaceDiscovery`); when
+	 * omitted, resolution starts from `process.cwd()`.
+	 */
+	readonly cwd?: string;
+}
+
+/**
+ * Errors `at` can raise. `at` never enumerates the live filesystem, so
+ * {@link WorkspaceDiscoveryError} cannot occur.
+ *
+ * @public
+ */
+export type PointInTimeAtError = GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError;
+
+/**
+ * Errors `worktree` can raise. `worktree` never invokes git, so
+ * {@link GitReadError} cannot occur.
+ *
+ * @public
+ */
+export type PointInTimeWorktreeError = CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError;
 
 /**
  * Service for reading a monorepo's workspace state at a specific moment: any
@@ -71,23 +99,32 @@ export class PointInTimeWorkspace extends Context.Tag("@spencerbeggs/workspaces-
 		 * the ref are skipped. Cached per `(resolved root, ref)`.
 		 *
 		 * @param ref - Any git ref (SHA, branch, tag) resolvable in the repo.
-		 * @param cwd - Optional starting directory; when omitted the workspace root
-		 *   is resolved from `process.cwd()`.
+		 * @param options - Optional {@link PointInTimeOptions}; `options.cwd` is a
+		 *   starting directory to walk UP from when resolving the workspace root
+		 *   (same semantics as `WorkspaceDiscovery`) — when omitted, resolution
+		 *   starts from `process.cwd()`.
 		 * @returns An Effect that succeeds with the {@link WorkspaceStateSnapshot}
-		 *   at the ref, or fails with {@link PointInTimeReadError}.
+		 *   at the ref, or fails with {@link PointInTimeAtError}.
 		 */
-		readonly at: (ref: string, cwd?: string) => Effect.Effect<WorkspaceStateSnapshot, PointInTimeReadError>;
+		readonly at: (
+			ref: string,
+			options?: PointInTimeOptions,
+		) => Effect.Effect<WorkspaceStateSnapshot, PointInTimeAtError>;
 		/**
 		 * Workspace state of the live working tree (staged + unstaged edits).
 		 *
 		 * Enumerates packages via `WorkspaceDiscovery` and reads catalogs from the
 		 * on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached.
 		 *
-		 * @param cwd - Optional starting directory; when omitted the workspace root
-		 *   is resolved from `process.cwd()`.
+		 * @param options - Optional {@link PointInTimeOptions}; `options.cwd` is a
+		 *   starting directory to walk UP from when resolving the workspace root
+		 *   (same semantics as `WorkspaceDiscovery`) — when omitted, resolution
+		 *   starts from `process.cwd()`.
 		 * @returns An Effect that succeeds with the live {@link WorkspaceStateSnapshot},
-		 *   or fails with {@link PointInTimeReadError}.
+		 *   or fails with {@link PointInTimeWorktreeError}.
 		 */
-		readonly worktree: (cwd?: string) => Effect.Effect<WorkspaceStateSnapshot, PointInTimeReadError>;
+		readonly worktree: (
+			options?: PointInTimeOptions,
+		) => Effect.Effect<WorkspaceStateSnapshot, PointInTimeWorktreeError>;
 	}
 >() {}
