@@ -5,12 +5,13 @@ category: review
 status: current
 completeness: 80
 created: 2026-03-12
-updated: 2026-06-12
-last-synced: 2026-06-12
+updated: 2026-07-02
+last-synced: 2026-07-02
 related:
   - architecture.md
   - phase2-dependency-graph.md
   - phase3-change-detection.md
+  - point-in-time-workspace.md
 authors:
   - C. Spencer Beggs
 tags:
@@ -24,7 +25,7 @@ Tracks behavioral limitations that are known and intentional-for-now, so a contr
 
 ## Recursive glob patterns are treated as single-level
 
-`resolvePattern` in `src/layers/WorkspaceDiscoveryLive.ts` handles `packages/*` and `packages/**` identically — both do a single-level `readDirectory` of the base directory and keep entries that contain a `package.json`. A genuinely recursive `/**` pattern (used by some Yarn Berry and npm setups) therefore silently misses nested packages such as `packages/utils/string`. Fixing it requires recursive traversal for `/**` patterns or an explicit rejection. Tracked in [#62](https://github.com/spencerbeggs/workspaces-effect/issues/62).
+`compileWorkspaceGlobs` in `src/layers/discovery/glob-core.ts` normalizes a trailing `/**` to `/*`, so `packages/*` and `packages/**` are handled identically — a single-level enumeration of the base directory keeping entries that contain a `package.json`. A genuinely recursive `/**` pattern (used by some Yarn Berry and npm setups) therefore silently misses nested packages such as `packages/utils/string`. The limitation lives in that shared core (and so applies identically to live discovery in `WorkspaceDiscoveryLive` and at-ref discovery in `PointInTimeWorkspaceLive.at`); the independent sync-API resolver in `src/sync.ts` has the same single-level behavior. Fixing it requires recursive traversal for `/**` patterns or an explicit rejection. Tracked in [#62](https://github.com/spencerbeggs/workspaces-effect/issues/62).
 
 ## PackageManagerDetector does not validate that a path is a workspace root
 
