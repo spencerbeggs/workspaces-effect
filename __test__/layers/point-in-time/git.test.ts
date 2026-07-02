@@ -82,12 +82,42 @@ describe("makeGitReader", () => {
 			expect(result.cwd).toBe("/repo");
 			expect(result.reason).toContain("not a git repository");
 		});
+
+		it("returns Option.none for an ambiguous 'bad object' stderr shape", async () => {
+			// Load-bearing case: "bad object" could describe the ref itself, but
+			// callers always validate the ref first, so this is treated as
+			// PATH_NOT_AT_REF rather than a hard failure.
+			const executor = mockExecutor({
+				"show deadbeef:package.json": { exitCode: 128, stderr: "fatal: bad object deadbeef" },
+			});
+			const reader = makeGitReader(executor);
+
+			const result = await Effect.runPromise(reader.show("/repo", "deadbeef", "package.json"));
+
+			expect(result).toEqual(Option.none());
+		});
+
+		it("returns Option.none for an ambiguous 'unknown revision or path' stderr shape", async () => {
+			// Load-bearing case: git's own message conflates "bad ref" and
+			// "bad path" here; resolved in favor of Option.none per contract.
+			const executor = mockExecutor({
+				"show HEAD:package.json": {
+					exitCode: 128,
+					stderr: "fatal: unknown revision or path not in the working tree.",
+				},
+			});
+			const reader = makeGitReader(executor);
+
+			const result = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json"));
+
+			expect(result).toEqual(Option.none());
+		});
 	});
 
 	describe("lsTree", () => {
 		it("splits and trims stdout into a name list", async () => {
 			const executor = mockExecutor({
-				"ls-tree --name-only HEAD packages/": { exitCode: 0, stdout: "packages/a\npackages/b\n" },
+				"ls-tree --name-only HEAD packages/": { exitCode: 0, stdout: "packages/a \r\n packages/b\r\n" },
 			});
 			const reader = makeGitReader(executor);
 
@@ -106,6 +136,7 @@ describe("makeGitReader", () => {
 
 			expect(result).toBeInstanceOf(GitReadError);
 			expect(result.reason).toContain("bad object deadbeef");
+			expect(result.command).toBe("git ls-tree --name-only deadbeef packages/");
 		});
 	});
 });

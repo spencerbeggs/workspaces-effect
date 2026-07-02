@@ -93,7 +93,13 @@ export const makeGitReader = (executor: CommandExecutor.CommandExecutor): GitRea
 								.map((line) => line.trim())
 								.filter((line) => line.length > 0),
 						)
-					: Effect.fail(new GitReadError({ command: `git ls-tree ${ref} ${prefix}`, cwd, reason: stderr.trim() })),
+					: Effect.fail(
+							new GitReadError({
+								command: `git ls-tree --name-only ${ref} ${prefix}`,
+								cwd,
+								reason: stderr.trim(),
+							}),
+						),
 			),
 		);
 
