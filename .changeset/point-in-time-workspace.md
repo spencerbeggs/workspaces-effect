@@ -19,7 +19,12 @@ upgrading.
     `CommandExecutor` without checking the ref out. Workspace `!` negation
     patterns are honored identically to live discovery. Snapshots are cached
     per `(resolved root, ref)` in a capacity-bounded cache (64 entries, LRU);
-    failed reads are never cached.
+    failed reads are never cached. This also lands two live-discovery fixes
+    that fall out of the shared glob core: `WorkspaceDiscovery` now expands
+    mid-segment wildcards such as `pkg-*` and `apps/web-?`, which were
+    previously treated as literal paths and matched nothing, and `!`
+    negation patterns no longer require the negated directory to exist on
+    disk — negations match by pattern, not by filesystem probe.
   - `worktree(options?)` — the same shape for the live working tree, via
     `WorkspaceDiscovery`.
 
