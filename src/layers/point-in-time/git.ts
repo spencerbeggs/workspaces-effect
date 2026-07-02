@@ -26,9 +26,13 @@ import { GitReadError } from "../../errors/GitReadError.js";
  * `runGitShow` decision: ambiguity between "bad ref" and "missing path" is
  * resolved in favor of `Option.none` because the ref is never in question
  * by the time `show` runs. As of the `cat-file -e` existence probe, this
- * regex is only consulted as a fallback for probe failures whose exit code
- * is neither 0 (exists) nor 1 (missing) -- the common "missing" case no
- * longer parses stderr prose at all.
+ * regex classifies probe failures whose exit code is neither 0 (exists) nor
+ * 1 (raw nonexistent object hash, a form the probe's `<ref>:<path>` argument
+ * never produces) -- and since git exits 128 with a fatal message for the
+ * realistic "valid ref, path missing" case, it remains the primary
+ * classifier for missing-path-at-valid-ref probe failures. `LC_ALL=C` is
+ * pinned on every command, so this regex -- still that primary classifier --
+ * is locale-stable.
  *
  * @internal
  */
@@ -100,10 +104,14 @@ export const makeGitReader = (
 	const show: GitReader["show"] = (cwd, ref, path) =>
 		run(cwd, ["cat-file", "-e", `${ref}:${path}`]).pipe(
 			Effect.flatMap(({ exitCode, stderr }) => {
-				// Existence probe: exit 0 = object exists, exit 1 = missing. No prose
-				// parsing on the common path. Any other exit falls back to the
-				// NOT_AT_REF stderr classification (ambiguous bad-ref shapes still
-				// resolve to none -- see NOT_AT_REF's @privateRemarks).
+				// Existence probe: exit 0 = object exists. Exit 1 is a defensive
+				// branch -- git only exits 1 for a raw nonexistent object hash, a
+				// form this code's `${ref}:${path}` argument never produces; for
+				// the realistic "valid ref, path missing" case git exits 128 with
+				// a fatal message, which the NOT_AT_REF fallback below classifies
+				// (see NOT_AT_REF's @privateRemarks). The probe's realized value:
+				// a `show` failure after a confirmed-exists probe is a genuine
+				// error, never a skip.
 				if (exitCode === 1) return Effect.succeed(Option.none<string>());
 				if (exitCode !== 0) {
 					if (NOT_AT_REF.test(stderr)) return Effect.succeed(Option.none<string>());
