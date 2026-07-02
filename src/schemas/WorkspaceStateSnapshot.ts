@@ -44,7 +44,7 @@ export class WorkspaceStateSnapshot extends Schema.Class<WorkspaceStateSnapshot>
 	 *
 	 * @remarks
 	 * The returned record is this instance's memo, built once and reused by
-	 * every subsequent {@link WorkspaceStateSnapshot.resolve} call. Treat it as
+	 * every subsequent `resolve` call. Treat it as
 	 * read-only -- mutating it corrupts resolution for the lifetime of this
 	 * snapshot.
 	 */
