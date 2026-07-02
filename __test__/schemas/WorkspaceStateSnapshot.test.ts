@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { CatalogSet } from "../../src/schemas/CatalogSet.js";
 import { PackageStateSnapshot, WorkspaceStateSnapshot } from "../../src/schemas/WorkspaceStateSnapshot.js";
@@ -32,5 +32,37 @@ describe("WorkspaceStateSnapshot", () => {
 	it("package() finds by name", () => {
 		expect(Option.getOrNull(snap.package("@acme/b"))?.version).toBe("2.0.0");
 		expect(Option.isNone(snap.package("nope"))).toBe(true);
+	});
+
+	it("versions returns the same reference on repeated access (memoized)", () => {
+		const snap = new WorkspaceStateSnapshot({
+			packages: [new PackageStateSnapshot({ name: "a", version: "1.0.0", relativePath: "packages/a" })],
+			catalogs: CatalogSet.empty(),
+		});
+		expect(snap.versions).toBe(snap.versions);
+	});
+
+	it("package() lookups stay correct after memoization", () => {
+		const snap = new WorkspaceStateSnapshot({
+			packages: [
+				new PackageStateSnapshot({ name: "a", version: "1.0.0", relativePath: "packages/a" }),
+				new PackageStateSnapshot({ name: "b", version: "2.0.0", relativePath: "packages/b" }),
+			],
+			catalogs: CatalogSet.empty(),
+		});
+		expect(Option.isSome(snap.package("a"))).toBe(true);
+		expect(Option.isSome(snap.package("b"))).toBe(true);
+		expect(Option.isNone(snap.package("missing"))).toBe(true);
+	});
+
+	it("memoization does not interfere with schema encoding", () => {
+		const snap = new WorkspaceStateSnapshot({
+			packages: [new PackageStateSnapshot({ name: "a", version: "1.0.0", relativePath: "packages/a" })],
+			catalogs: CatalogSet.empty(),
+		});
+		void snap.versions; // populate the private memo before encoding
+		void snap.package("a");
+		const encoded = Schema.encodeSync(WorkspaceStateSnapshot)(snap);
+		expect(Object.keys(encoded).sort()).toEqual(["catalogs", "packages"]);
 	});
 });
