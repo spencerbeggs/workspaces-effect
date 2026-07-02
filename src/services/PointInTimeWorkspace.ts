@@ -25,8 +25,8 @@ import type { WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.j
  * - {@link CatalogAssemblyError} — the `pnpm-workspace.yaml` at the ref (or on
  *   disk) is malformed YAML. A malformed *lockfile* never fails; it degrades to
  *   an empty catalog set.
- * - {@link WorkspaceRootNotFoundError} — no `options.cwd` was passed and the
- *   workspace root could not be located from `process.cwd()`.
+ * - {@link WorkspaceRootNotFoundError} — the workspace root could not be
+ *   located walking up from `options.cwd` (or `process.cwd()` when omitted).
  * - {@link WorkspaceDiscoveryError} — `worktree` failed to enumerate the live
  *   packages via `WorkspaceDiscovery`. `worktree`-only.
  *
