@@ -94,6 +94,8 @@ export type { CatalogResolverLiveLayer } from "./layers/CatalogResolverLive.js";
 export { CatalogResolverLive } from "./layers/CatalogResolverLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
 export type { ManifestLike } from "./layers/catalog/resolve.js";
+export type { WorkspaceManifestCatalogs, WorkspaceManifestData } from "./layers/catalog/workspace-manifest.js";
+export { workspaceManifestFromYaml } from "./layers/catalog/workspace-manifest.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
@@ -105,6 +107,8 @@ export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 // ── Layers ──────────────────────────────────────────────────────────
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 export { WorkspacesFullLive, WorkspacesLive } from "./layers/WorkspacesLive.js";
+// ── Schemas ──────────────────────────────────────────────────────────
+export { CatalogSet } from "./schemas/CatalogSet.js";
 export type {
 	DependencyDiff,
 	PackageJsonType,
@@ -113,7 +117,6 @@ export type {
 	PublishConfigType,
 	WorkspacePathType,
 } from "./schemas/core.js";
-// ── Schemas ──────────────────────────────────────────────────────────
 export {
 	PackageJsonSchema,
 	PackageManager,
