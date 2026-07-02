@@ -78,6 +78,7 @@ export { ChangeDetectionError, ChangeDetectionErrorBase } from "./errors/ChangeD
 export { CyclicDependencyError, CyclicDependencyErrorBase } from "./errors/CyclicDependencyError.js";
 export { DependencyResolutionError, DependencyResolutionErrorBase } from "./errors/DependencyResolutionError.js";
 export { GitNotAvailableError, GitNotAvailableErrorBase } from "./errors/GitNotAvailableError.js";
+export { GitReadError, GitReadErrorBase } from "./errors/GitReadError.js";
 export { LockfileIntegrityError, LockfileIntegrityErrorBase } from "./errors/LockfileIntegrityError.js";
 export { LockfileParseError, LockfileParseErrorBase } from "./errors/LockfileParseError.js";
 export { LockfileReadError, LockfileReadErrorBase } from "./errors/LockfileReadError.js";
