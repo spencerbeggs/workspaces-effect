@@ -186,4 +186,34 @@ describe("PointInTimeWorkspaceLive", () => {
 		);
 		expect(Option.isNone(snap.package("@fixture/excluded"))).toBe(true);
 	});
+
+	it("missing-path verdicts are locale-independent (LC_ALL pinned to C)", async () => {
+		const saved = { LANG: process.env.LANG, LC_ALL: process.env.LC_ALL };
+		process.env.LANG = "de_DE.UTF-8";
+		process.env.LC_ALL = "de_DE.UTF-8";
+		try {
+			// Use a fresh layer instance so this test performs a live read rather
+			// than being served from the per-(root, ref) snapshot cache.
+			const freshLive = PointInTimeWorkspaceLive.pipe(
+				Layer.provide(Layer.mergeAll(RootStub, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStub)))),
+				Layer.provide(NodeContext.layer),
+			);
+			const freshRun = <A, E>(effect: Effect.Effect<A, E, PointInTimeWorkspace>) =>
+				Effect.runPromise(effect.pipe(Effect.provide(freshLive)) as Effect.Effect<A, E, never>);
+			const snap = await freshRun(
+				Effect.gen(function* () {
+					const pit = yield* PointInTimeWorkspace;
+					return yield* pit.at(baseSha);
+				}),
+			);
+			// The no-manifest dir resolves to a skip, not an error, regardless of
+			// the parent process locale -- the reader pins LC_ALL=C on the child.
+			expect(snap.packages.map((p) => p.relativePath)).not.toContain("packages/no-manifest");
+		} finally {
+			if (saved.LANG === undefined) delete process.env.LANG;
+			else process.env.LANG = saved.LANG;
+			if (saved.LC_ALL === undefined) delete process.env.LC_ALL;
+			else process.env.LC_ALL = saved.LC_ALL;
+		}
+	});
 });
