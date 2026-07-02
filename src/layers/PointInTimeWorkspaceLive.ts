@@ -11,7 +11,7 @@
  */
 
 import { CommandExecutor, FileSystem, Path } from "@effect/platform";
-import { Effect, Layer, Option } from "effect";
+import { Cache, Data, Duration, Effect, Exit, Layer, Option } from "effect";
 import { parse as parseYaml } from "yaml-effect";
 import { CatalogSet } from "../schemas/CatalogSet.js";
 import { PackageStateSnapshot, WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.js";
@@ -91,6 +91,16 @@ export type PointInTimeWorkspaceLiveLayer = Layer.Layer<
 >;
 
 /**
+ * Capacity of the per-layer at-ref snapshot cache. Refs are immutable, so
+ * entries never expire — capacity is the only knob; least-recently-used
+ * entries evict past it. Bounds memory for long-lived processes (an MCP
+ * server accumulating refs) where the previous unbounded Map grew forever.
+ *
+ * @internal
+ */
+export const AT_CACHE_CAPACITY = 64;
+
+/**
  * Live layer for the {@link PointInTimeWorkspace} service.
  *
  * Resolves `WorkspaceRoot`, `WorkspaceDiscovery`, `CommandExecutor`,
@@ -108,17 +118,11 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
 		const reader = makeGitReader(executor);
-		const cache = new Map<string, WorkspaceStateSnapshot>();
 
 		const resolveRoot = (cwd?: string) => workspaceRoot.find(cwd ?? process.cwd());
 
-		const at = (ref: string, options?: PointInTimeOptions) =>
+		const readAtRef = (root: string, ref: string) =>
 			Effect.gen(function* () {
-				const root = yield* resolveRoot(options?.cwd);
-				const key = `${root}::${ref}`;
-				const hit = cache.get(key);
-				if (hit) return hit;
-
 				const wsYaml = yield* reader.show(root, ref, "pnpm-workspace.yaml");
 				const manifest = Option.isSome(wsYaml)
 					? yield* workspaceManifestFromYaml(wsYaml.value)
@@ -154,12 +158,36 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 					if (snap) packages.push(snap);
 				}
 
-				const snapshot = new WorkspaceStateSnapshot({
+				return new WorkspaceStateSnapshot({
 					packages,
 					catalogs: CatalogSet.merge(lockCatalogs, inline),
 				});
-				cache.set(key, snapshot);
-				return snapshot;
+			});
+
+		// effect Cache gives the capacity bound AND deduplication of concurrent
+		// in-flight lookups for the same (root, ref) — the reason it was chosen
+		// over the repo's Request/RequestResolver pattern, which exists for
+		// request BATCHING (DependencyGraph, LockfileReader), not bounded caching.
+		//
+		// Cache.make applies a single fixed TTL to both success AND failure exits
+		// (verified against the installed effect@3.21.4: internal/cache.js
+		// lookupValueOf calls `this.timeToLive(exit)` unconditionally), so a plain
+		// `Cache.make` with `timeToLive: Duration.infinity` would memoize failures
+		// forever and break retry behavior the old Map never had a problem with
+		// (it only cached on the success path). Using `Cache.makeWith` with an
+		// exit-dependent TTL -- infinity on success, zero on failure -- restores
+		// that: failed lookups are evicted immediately so the next `at()` call
+		// retries instead of replaying a stale error.
+		const cache = yield* Cache.makeWith({
+			capacity: AT_CACHE_CAPACITY,
+			lookup: (key: { readonly root: string; readonly ref: string }) => readAtRef(key.root, key.ref),
+			timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+		});
+
+		const at = (ref: string, options?: PointInTimeOptions) =>
+			Effect.gen(function* () {
+				const root = yield* resolveRoot(options?.cwd);
+				return yield* cache.get(Data.struct({ root, ref }));
 			}).pipe(Effect.withSpan("PointInTimeWorkspace.at", { attributes: { ref } }));
 
 		const worktree = (options?: PointInTimeOptions) =>

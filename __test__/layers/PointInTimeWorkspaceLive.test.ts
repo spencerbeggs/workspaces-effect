@@ -187,6 +187,16 @@ describe("PointInTimeWorkspaceLive", () => {
 		expect(Option.isNone(snap.package("@fixture/excluded"))).toBe(true);
 	});
 
+	it("at(ref) returns the identical cached snapshot instance on repeat calls", async () => {
+		const [first, second] = await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return [yield* pit.at(baseSha), yield* pit.at(baseSha)] as const;
+			}),
+		);
+		expect(second).toBe(first);
+	});
+
 	it("missing-path verdicts are locale-independent (LC_ALL pinned to C)", async () => {
 		const saved = { LANG: process.env.LANG, LC_ALL: process.env.LC_ALL };
 		process.env.LANG = "de_DE.UTF-8";
