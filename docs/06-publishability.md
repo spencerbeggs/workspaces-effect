@@ -15,7 +15,7 @@ The `PublishabilityDetector` service tells you which workspace packages are publ
 The detector reads `package.json` fields. The rules:
 
 - A package is publishable unless it sets `"private": true` without a `publishConfig.access` override.
-- The target's `registry`, `directory` and `access` come straight from `publishConfig`, defaulting to the public npm registry, the package root and `"public"` respectively.
+- The target's `registry`, `directory` and `access` come straight from `publishConfig`. Missing fields get defaults: the public npm registry, the package root and `"public"`.
 - The service is pure. No filesystem, no network. It runs under `WorkspacesLive`.
 - `detect()` never fails. Non-publishable packages return an empty array.
 

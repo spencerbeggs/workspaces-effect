@@ -78,6 +78,7 @@ export { ChangeDetectionError, ChangeDetectionErrorBase } from "./errors/ChangeD
 export { CyclicDependencyError, CyclicDependencyErrorBase } from "./errors/CyclicDependencyError.js";
 export { DependencyResolutionError, DependencyResolutionErrorBase } from "./errors/DependencyResolutionError.js";
 export { GitNotAvailableError, GitNotAvailableErrorBase } from "./errors/GitNotAvailableError.js";
+export { GitReadError, GitReadErrorBase } from "./errors/GitReadError.js";
 export { LockfileIntegrityError, LockfileIntegrityErrorBase } from "./errors/LockfileIntegrityError.js";
 export { LockfileParseError, LockfileParseErrorBase } from "./errors/LockfileParseError.js";
 export { LockfileReadError, LockfileReadErrorBase } from "./errors/LockfileReadError.js";
@@ -93,17 +94,23 @@ export type { CatalogResolverLiveLayer } from "./layers/CatalogResolverLive.js";
 export { CatalogResolverLive } from "./layers/CatalogResolverLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
 export type { ManifestLike } from "./layers/catalog/resolve.js";
+export type { WorkspaceManifestCatalogs, WorkspaceManifestData } from "./layers/catalog/workspace-manifest.js";
+export { workspaceManifestFromYaml } from "./layers/catalog/workspace-manifest.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
 export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
+export type { PointInTimeWorkspaceLiveLayer } from "./layers/PointInTimeWorkspaceLive.js";
+export { PointInTimeWorkspaceLive } from "./layers/PointInTimeWorkspaceLive.js";
 export { PublishabilityDetectorLive } from "./layers/PublishabilityDetectorLive.js";
 export { TopologicalSorterLive } from "./layers/TopologicalSorterLive.js";
 export { WorkspaceDiscoveryLive } from "./layers/WorkspaceDiscoveryLive.js";
 // ── Layers ──────────────────────────────────────────────────────────
 export { WorkspaceRootLive } from "./layers/WorkspaceRootLive.js";
 export { WorkspacesFullLive, WorkspacesLive } from "./layers/WorkspacesLive.js";
+// ── Schemas ──────────────────────────────────────────────────────────
+export { CatalogSet } from "./schemas/CatalogSet.js";
 export type {
 	DependencyDiff,
 	PackageJsonType,
@@ -112,7 +119,6 @@ export type {
 	PublishConfigType,
 	WorkspacePathType,
 } from "./schemas/core.js";
-// ── Schemas ──────────────────────────────────────────────────────────
 export {
 	PackageJsonSchema,
 	PackageManager,
@@ -131,6 +137,7 @@ export {
 	WorkspaceDependency,
 } from "./schemas/lockfile.js";
 export { PublishTarget } from "./schemas/publish.js";
+export { PackageStateSnapshot, WorkspaceStateSnapshot } from "./schemas/WorkspaceStateSnapshot.js";
 export type { CatalogResolverError } from "./services/CatalogResolver.js";
 export { CatalogResolver } from "./services/CatalogResolver.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
@@ -140,6 +147,13 @@ export { LockfileReader } from "./services/LockfileReader.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
 export { PackageResolver } from "./services/PackageResolver.js";
+export type {
+	PointInTimeAtError,
+	PointInTimeOptions,
+	PointInTimeReadError,
+	PointInTimeWorktreeError,
+} from "./services/PointInTimeWorkspace.js";
+export { PointInTimeWorkspace } from "./services/PointInTimeWorkspace.js";
 export { PublishabilityDetector } from "./services/PublishabilityDetector.js";
 export { TopologicalSorter } from "./services/TopologicalSorter.js";
 export { WorkspaceDiscovery } from "./services/WorkspaceDiscovery.js";

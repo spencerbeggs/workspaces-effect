@@ -1,6 +1,6 @@
 # Dependency analysis
 
-workspaces-effect builds a directed graph of inter-workspace dependencies. You can query it, sort packages topologically and group them into levels that build in parallel.
+workspaces-effect builds a directed graph of the dependencies between your workspace packages. Query it directly, or hand it to the topological sorter for a build order — sequential or grouped into levels that run in parallel.
 
 ## Table of contents
 
@@ -14,7 +14,7 @@ workspaces-effect builds a directed graph of inter-workspace dependencies. You c
 
 ## Building the dependency graph
 
-The `DependencyGraph` service reads every workspace `package.json` and builds a graph of edges between workspace packages. External npm dependencies are skipped.
+The `DependencyGraph` service reads every workspace `package.json` and builds the graph from what it finds. External npm dependencies are skipped.
 
 Edges come from `dependencies`, `devDependencies` and `peerDependencies`. If package A lists package B in any of those maps and package B is itself a workspace package, the graph holds an edge from A to B.
 
@@ -118,7 +118,7 @@ Use this in CI to run as much in parallel as the dependency graph allows. Level 
 
 ## Subset sorting
 
-Sort a specific package along with everything it transitively depends on. Use this when you want to build a single package without touching the rest of the workspace.
+Sort a specific package along with everything it transitively depends on. Use this to build a single package without rebuilding the rest of the workspace.
 
 ```typescript
 const subset = yield* sorter.sortSubset(["@myorg/ui"]);
@@ -126,7 +126,7 @@ const subset = yield* sorter.sortSubset(["@myorg/ui"]);
 // example output (varies): ["@myorg/utils", "@myorg/core", "@myorg/ui"]
 ```
 
-`sortSubset` computes the transitive closure for you. You only name the target packages.
+You name the targets; `sortSubset` computes the transitive closure.
 
 ## Cycle detection
 
@@ -156,7 +156,7 @@ const order = yield* sorter.sort().pipe(
 | `PackageNotFoundError` | `dependenciesOf`, `dependentsOf`, `sortSubset` | Named package not in workspace |
 | `CyclicDependencyError` | `sort`, `sortSubset`, `levels` | Graph contains a cycle |
 
-Catch either error with `Effect.catchTag`. See [Troubleshooting](./09-troubleshooting.md) for resolution steps.
+Catch either error with `Effect.catchTag`. See [Troubleshooting](./09-troubleshooting.md) for fixes.
 
 ```typescript
 const program = Effect.gen(function* () {

@@ -13,9 +13,12 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 - [DependencyResolutionError](#dependencyresolutionerror)
 - [GitNotAvailableError](#gitnotavailableerror)
 - [ChangeDetectionError](#changedetectionerror)
+- [GitReadError](#gitreaderror)
 - [LockfileReadError](#lockfilereaderror)
 - [LockfileParseError](#lockfileparseerror)
 - [LockfileIntegrityError](#lockfileintegrityerror)
+- [CatalogAssemblyError](#catalogassemblyerror)
+- [CatalogResolutionError](#catalogresolutionerror)
 - [Platform layer missing](#platform-layer-missing)
 
 ---
@@ -33,7 +36,7 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 
 **Solutions:**
 
-1. Confirm the current working directory sits inside a monorepo
+1. Check that the current working directory is inside a monorepo
 2. For pnpm: check that `pnpm-workspace.yaml` exists at the root
 3. For npm/yarn/bun: check that root `package.json` has a `workspaces` field
 4. Check whether the workspace config was deleted or renamed
@@ -89,8 +92,8 @@ Effect.catchTag("PackageManagerDetectionError", (e) =>
 **Solutions:**
 
 1. Check that workspace patterns are correct (e.g. `["packages/*"]`)
-2. Confirm each pattern's base directory exists on disk
-3. Confirm matched directories contain a `package.json`
+2. Check that each pattern's base directory exists on disk
+3. Check that matched directories contain a `package.json`
 4. Add `name` and `version` to every workspace `package.json`
 5. Fix filesystem permissions so the matched directories are readable
 
@@ -167,10 +170,7 @@ Effect.catchTag("PackageNotFoundError", (e) =>
 **Solutions:**
 
 1. Read the cycle path on the error
-2. Break the cycle by:
-   - Moving shared code into a separate package
-   - Using dynamic imports for optional features
-   - Restructuring around dependency inversion
+2. Break the cycle: move shared code into a separate package, switch optional features to dynamic imports or restructure around dependency inversion
 3. Call `DependencyGraph.hasCycle()` in CI to catch cycles before they merge
 
 ```typescript
@@ -259,6 +259,37 @@ Effect.catchTag("ChangeDetectionError", (e) =>
 
 ---
 
+## GitReadError
+
+**Message:** `git read failed in /path: <command>` — the captured stderr follows on the next line
+
+**Fields:** `command`, `cwd`, `reason`
+
+**Causes:**
+
+- Raised by `PointInTimeWorkspace.at()` when a `git show` or `git ls-tree` invocation fails irrecoverably
+- The ref does not exist: a typo, an unfetched branch or a shallow clone without that history
+- Git is not installed, or the directory is not inside a git repository
+- The command exceeded its 30-second timeout (`reason` contains `timed out`), which usually points to a hung git process or a pathologically large object
+
+A path that does not exist at the ref is never a cause — point-in-time readers treat that as an absent file and skip it.
+
+**Solutions:**
+
+1. Resolve the ref first: `git rev-parse <ref>`
+2. In CI, set `fetch-depth: 0` on the checkout action — or at least enough history to include the requested ref
+3. Install git, or run inside a git repository
+4. For timeouts, check for stuck git processes or credential prompts blocking the command
+5. Read the `command` and `reason` fields on the error; `reason` contains the captured stderr
+
+```typescript
+Effect.catchTag("GitReadError", (e) =>
+  Effect.logError(`Git read failed in ${e.cwd}: ${e.reason}`),
+);
+```
+
+---
+
 ## LockfileReadError
 
 **Message:** `Failed to read lockfile at "/path": <reason>`
@@ -337,6 +368,62 @@ Effect.catchTag("LockfileIntegrityError", (e) =>
 
 ---
 
+## CatalogAssemblyError
+
+**Message:** `Catalog assembly failed (<source>): <reason>`
+
+**Fields:** `source` (`"manifest" | "config-dependency" | "lockfile"`), `reason`
+
+**Causes:**
+
+- `pnpm-workspace.yaml` is unreadable or its YAML is malformed
+- The default catalog is defined twice — both a top-level `catalog:` section and a `catalogs.default:` entry
+- A `pnpm-lock.yaml` exists on disk but cannot be read (permissions, I/O); this fails with `source: "lockfile"`
+- For point-in-time reads, the `pnpm-workspace.yaml` stored at the requested git ref is malformed
+
+Two things that do not raise this error: a failing config-dependency hook is logged and skipped, and a missing or malformed lockfile degrades to an empty lockfile-catalog source.
+
+**Solutions:**
+
+1. Fix the YAML syntax in `pnpm-workspace.yaml` — look for merge conflict markers and bad indentation
+2. Define the default catalog once: either `catalog:` or `catalogs.default:`, not both
+3. For `source: "lockfile"`, check read permissions on `pnpm-lock.yaml`
+4. Read the `source` field to see which input failed
+
+```typescript
+Effect.catchTag("CatalogAssemblyError", (e) =>
+  Effect.logError(`Catalog assembly failed (${e.source}): ${e.reason}`),
+);
+```
+
+---
+
+## CatalogResolutionError
+
+**Message:** `Cannot resolve <field>.<dependency> ("<specifier>"): <reason>`
+
+**Fields:** `field`, `dependency`, `specifier`, `reason`
+
+**Causes:**
+
+- A `catalog:` specifier names a catalog that does not exist in the assembled set
+- The catalog exists but has no entry for the dependency
+- A `workspace:` specifier references a name that matches no workspace package
+
+**Solutions:**
+
+1. Define the missing catalog or catalog entry in `pnpm-workspace.yaml`
+2. Run install so lockfile-recorded catalogs are current
+3. For `workspace:` specifiers, confirm the referenced package exists in the workspace and the name matches exactly (case-sensitive, including scope)
+
+```typescript
+Effect.catchTag("CatalogResolutionError", (e) =>
+  Effect.logError(`${e.field}.${e.dependency} ("${e.specifier}"): ${e.reason}`),
+);
+```
+
+---
+
 ## Platform layer missing
 
 **Symptom:** Type error about a missing `FileSystem`, `Path` or `CommandExecutor` in the Effect context.
@@ -346,7 +433,7 @@ This is a compile-time type error, not a runtime failure. It means a platform la
 **Causes:**
 
 - `NodeContext.layer` or `BunContext.layer` is not provided
-- `ChangeDetector` or `PackageResolver` is wired with `WorkspacesLive` instead of `WorkspacesFullLive`
+- `ChangeDetector`, `PackageResolver` or `PointInTimeWorkspace` is wired with `WorkspacesLive` instead of `WorkspacesFullLive`
 
 **Solutions:**
 

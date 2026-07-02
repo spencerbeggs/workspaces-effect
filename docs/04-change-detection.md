@@ -27,7 +27,7 @@ import {
 
 ## Three levels of analysis
 
-The methods on `ChangeDetector` map to those questions in order. Each one builds on the previous: file paths, then the packages that own those paths, then the dependency closure.
+`ChangeDetector` has one method per question: `changedFiles` returns paths, `changedPackages` maps those paths to the packages that own them and `affectedPackages` adds the dependency closure.
 
 ### 1. Changed files
 
@@ -45,7 +45,7 @@ const program = Effect.gen(function* () {
 
 ### 2. Changed packages
 
-Each changed file is mapped to the workspace package that owns it. Files outside any workspace (root config files, tooling) drop out of the result:
+`changedPackages` maps each changed file to the workspace package that owns it. Files outside any workspace (root config files, tooling) drop out of the result:
 
 ```typescript
 const changed = yield* detector.changedPackages(options);
@@ -163,7 +163,7 @@ Effect.runPromise(
 
 ## Error handling
 
-Change detection raises three tagged errors:
+Change detection can fail with three tagged errors:
 
 | Error | Cause |
 | --- | --- |

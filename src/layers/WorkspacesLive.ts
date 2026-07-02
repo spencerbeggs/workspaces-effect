@@ -18,6 +18,7 @@ import { DependencyGraphLive } from "./DependencyGraphLive.js";
 import { LockfileReaderLive } from "./LockfileReaderLive.js";
 import { PackageManagerDetectorLive } from "./PackageManagerDetectorLive.js";
 import { PackageResolverLive } from "./PackageResolverLive.js";
+import { PointInTimeWorkspaceLive } from "./PointInTimeWorkspaceLive.js";
 import { PublishabilityDetectorLive } from "./PublishabilityDetectorLive.js";
 import { TopologicalSorterLive } from "./TopologicalSorterLive.js";
 import { WorkspaceDiscoveryLive } from "./WorkspaceDiscoveryLive.js";
@@ -69,7 +70,6 @@ export const WorkspacesLive = Layer.mergeAll(
 	PublishabilityDetectorLive, // pure layer, no dependencies
 	CatalogResolverLive.pipe(
 		Layer.provide(WorkspaceRootLive),
-		Layer.provide(LockfileReaderLive.pipe(Layer.provide(WorkspaceRootLive), Layer.provide(PackageManagerDetectorLive))),
 		Layer.provide(WorkspaceDiscoveryLive.pipe(Layer.provide(WorkspaceRootLive))),
 	),
 );
@@ -77,7 +77,8 @@ export const WorkspacesLive = Layer.mergeAll(
 /**
  * Composite layer providing all services including git-dependent ones.
  *
- * Extends {@link WorkspacesLive} with `PackageResolver` and `ChangeDetector`.
+ * Extends {@link WorkspacesLive} with `PackageResolver`, `ChangeDetector`,
+ * and `PointInTimeWorkspace`.
  *
  * @remarks
  * Requires `FileSystem`, `Path`, and `CommandExecutor` from `@effect/platform`.
@@ -107,4 +108,5 @@ export const WorkspacesFullLive = Layer.mergeAll(
 	WorkspacesLive,
 	PackageResolverLive.pipe(Layer.provide(WorkspacesLive)),
 	ChangeDetectorLive.pipe(Layer.provide(PackageResolverLive), Layer.provide(WorkspacesLive)),
+	PointInTimeWorkspaceLive.pipe(Layer.provide(WorkspacesLive)),
 );

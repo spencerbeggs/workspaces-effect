@@ -13,7 +13,9 @@ All services are imported from `"workspaces-effect"`. Service methods have `R = 
 - [TopologicalSorter](#topologicalsorter)
 - [PackageResolver](#packageresolver)
 - [ChangeDetector](#changedetector)
+- [PointInTimeWorkspace](#pointintimeworkspace)
 - [LockfileReader](#lockfilereader)
+- [CatalogResolver](#catalogresolver)
 - [PublishabilityDetector](#publishabilitydetector)
 
 ---
@@ -83,7 +85,7 @@ console.log(pm.type, pm.version, pm.runtime);
 
 ## WorkspaceDiscovery
 
-Resolves the workspace glob patterns and reads each matched `package.json`. The root workspace (with `relativePath: "."`) is the first entry in the returned list. When neither `pnpm-workspace.yaml` nor a `workspaces` field is present, discovery falls back to treating the root as a single-package workspace.
+Resolves the workspace glob patterns and reads each matched `package.json`. The root workspace (with `relativePath: "."`) is the first entry in the returned list. When neither `pnpm-workspace.yaml` nor a `workspaces` field is present, the root itself becomes the single workspace.
 
 **Layer:** `WorkspaceDiscoveryLive` (E channel: `never`; default-root discovery is deferred to the first method call that omits an explicit `cwd` and memoized via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`
@@ -107,7 +109,7 @@ Returns a single workspace package by name.
 
 #### `importerMap()`
 
-Returns a map keyed by workspace-relative directory path. Useful for cross-referencing lockfile importer keys against workspace packages. Derived from `listPackages()` and shares its cache.
+Returns a map keyed by workspace-relative directory path. Use it to cross-reference lockfile importer keys against workspace packages. Derived from `listPackages()` and shares its cache.
 
 - **Returns:** `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
 
@@ -311,9 +313,94 @@ const affected = yield* detector.affectedPackages(options);
 
 ---
 
+## PointInTimeWorkspace
+
+Reads workspace state — packages plus assembled pnpm catalogs — at any git ref or from the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
+
+**Layer:** `PointInTimeWorkspaceLive`
+**Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
+**Platform deps:** `FileSystem`, `Path`, `CommandExecutor`
+**Composite layers:** `WorkspacesFullLive` only
+
+### Methods
+
+Both methods take an optional `PointInTimeOptions` object with one field, `cwd` — a starting directory the workspace root is resolved from by walking up, the same semantics as `WorkspaceDiscovery`. Omit it and the walk starts at `process.cwd()`.
+
+#### `at(ref: string, options?: PointInTimeOptions)`
+
+Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref: the cache holds 64 entries, evicts the least recently used past that and never caches failures, so a failed read retries on the next call. Workspace globs — `!` negations included — go through the same pattern core as live discovery; expansion is one directory level deep at the ref (`packages/**` is treated as `packages/*`).
+
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeAtError>`
+
+#### `worktree(options?: PointInTimeOptions)`
+
+Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible: pnpmfile hook replay is an overlay only the live `CatalogResolver` applies by default, so snapshots see injected catalogs through the lockfile record.
+
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeWorktreeError>`
+
+```typescript
+const pointInTime = yield* PointInTimeWorkspace;
+const atRef = yield* pointInTime.at("origin/main");
+const live = yield* pointInTime.worktree();
+
+const wasThere = atRef.package("@myorg/ui"); // Option<PackageStateSnapshot>
+const range = atRef.resolve("effect", "catalog:default"); // Option<string>
+```
+
+### Per-method error unions
+
+Each method has its own union; `PointInTimeReadError` covers both when you handle them in one place.
+
+```typescript
+import type {
+  PointInTimeAtError,
+  PointInTimeReadError,
+  PointInTimeWorktreeError,
+} from "workspaces-effect";
+
+// PointInTimeAtError       = GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError
+// PointInTimeWorktreeError = CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError
+// PointInTimeReadError     = PointInTimeAtError | PointInTimeWorktreeError
+```
+
+- `GitReadError` — a `git show`/`git ls-tree` invocation failed irrecoverably (git missing, unknown revision, 30-second timeout). `at` only
+- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed, or an on-disk `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile never fails, it degrades to an empty catalog set
+- `WorkspaceRootNotFoundError` — no workspace root was found walking up from `options.cwd` (or `process.cwd()` when omitted)
+- `WorkspaceDiscoveryError` — the live packages could not be enumerated. `worktree` only
+
+### WorkspaceStateSnapshot
+
+The `Schema.Class` value object both methods return, exported directly so you can build your own comparisons.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `packages` | `ReadonlyArray<PackageStateSnapshot>` | Every package at that moment |
+| `catalogs` | `CatalogSet` | Assembled catalogs: lockfile first, then inline `pnpm-workspace.yaml` (inline wins per dependency) |
+| `versions` | `Record<string, string>` | Getter mapping package name to declared version |
+| `package(name)` | `Option<PackageStateSnapshot>` | Find a package snapshot by name |
+| `resolve(dep, spec)` | `Option<string>` | Resolve a `catalog:`/`workspace:` specifier against this snapshot; `Option.none()` for plain or unresolvable specifiers |
+
+`PackageStateSnapshot` has `name`, `version`, `relativePath` and the four dependency records (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`).
+
+### CatalogSet
+
+An immutable catalog collection shared by live and point-in-time resolution, also exported directly.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `CatalogSet.empty()` | `CatalogSet` | An empty catalog set |
+| `CatalogSet.fromCatalogs(catalogs)` | `CatalogSet` | Wrap a pnpm `Catalogs` map |
+| `CatalogSet.fromWorkspaceYaml(text)` | `Effect<CatalogSet, CatalogAssemblyError>` | Parse the `catalog:`/`catalogs:` sections of a `pnpm-workspace.yaml` text |
+| `CatalogSet.fromLockfileCatalogs(raw)` | `CatalogSet` | Normalize a pnpm lockfile `catalogs:` section |
+| `CatalogSet.merge(...sets)` | `CatalogSet` | Merge sets; later sets win per dependency within a catalog |
+| `toCatalogs()` | `Catalogs` | View as the pnpm `Catalogs` shape |
+| `resolveSpecifier(dep, spec)` | `Option<string>` | Resolve a `catalog:` specifier; `Option.none()` for non-catalog or unresolved specifiers |
+
+---
+
 ## LockfileReader
 
-Parses the lockfile of any of the four supported package managers into a unified schema. The parser is selected from `PackageManagerDetector` output.
+Parses the lockfile of any of the four supported package managers into the normalized `LockfileData` shape. The parser is selected from `PackageManagerDetector` output.
 
 **Layer:** `LockfileReaderLive` (E channel: `never`; root discovery, PM detection, lockfile read and lockfile parse are deferred to the first method call and memoized for the layer's lifetime via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
@@ -326,7 +413,7 @@ All four methods carry the exported [`LockfileInitError`](#lockfileiniterror-uni
 
 #### `readLockfile()`
 
-Reads the workspace lockfile and parses it into the normalized `LockfileData` shape.
+Reads the workspace lockfile and parses it into `LockfileData`.
 
 - **Returns:** `Effect<LockfileData, LockfileInitError>`
 
@@ -367,7 +454,64 @@ import type { LockfileInitError } from "workspaces-effect";
 //   | LockfileParseError
 ```
 
-Each variant carries its own `_tag`. Catch them individually with `Effect.catchTag` or all four at once with `Effect.catchTags`.
+Each variant has its own `_tag`. Catch them individually with `Effect.catchTag` or all four at once with `Effect.catchTags`.
+
+---
+
+## CatalogResolver
+
+Assembles the workspace's complete pnpm catalog set and rewrites `catalog:` and `workspace:` specifiers to concrete version constraints. Three sources feed the set, merged with later-wins precedence per dependency: lockfile-recorded catalogs, then inline `catalog:`/`catalogs:` declarations in `pnpm-workspace.yaml`, then catalogs injected by config dependencies (replayed from each plugin's installed pnpmfile `updateConfig` hook). The manifest and lockfile are read through the same working-tree pipeline that feeds `PointInTimeWorkspace.worktree()`; hook replay is the overlay this resolver adds on top. `workspace:` specifiers resolve against live `WorkspaceDiscovery` versions, so they work on npm, yarn and Bun workspaces too.
+
+**Layer:** `CatalogResolverLive` (E channel: `never`; catalog assembly is deferred to the first method call and memoized via `Effect.cached`, the same lazy-init pattern as `LockfileReaderLive`)
+**Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
+**Platform deps:** `FileSystem`, `Path`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
+
+### Methods
+
+All three methods carry the exported [`CatalogResolverError`](#catalogresolvererror-union) union in their E channels because the first call drives the lazy assembly.
+
+#### `catalogs()`
+
+The complete assembled catalog set as a pnpm `Catalogs` map. Assembled once, then cached.
+
+- **Returns:** `Effect<Catalogs, CatalogResolverError>`
+
+#### `resolve(manifest: ManifestLike)`
+
+Rewrites every `catalog:` and `workspace:` specifier across a manifest's four dependency records and returns the rewritten manifest. Plain specifiers pass through untouched. `ManifestLike` is the exported minimal `package.json` shape: `name`, `version` and the optional dependency records.
+
+- **Returns:** `Effect<ManifestLike, CatalogResolverError | CatalogResolutionError>`
+
+#### `resolveSpecifier(dependency: string, specifier: string)`
+
+Resolves a single specifier. `Option.none()` means no rewrite is needed — a plain specifier. An unresolvable `catalog:` or `workspace:` reference fails with `CatalogResolutionError`, the same behavior as `resolve`, not a silent `Option.none()`.
+
+- **Returns:** `Effect<Option<string>, CatalogResolverError | CatalogResolutionError>`
+
+```typescript
+const resolver = yield* CatalogResolver;
+const catalogs = yield* resolver.catalogs();
+const rewritten = yield* resolver.resolve({
+  name: "@myorg/ui",
+  version: "1.0.0",
+  dependencies: { effect: "catalog:default", "@myorg/core": "workspace:^" },
+});
+const one = yield* resolver.resolveSpecifier("effect", "catalog:default"); // Option<string>
+```
+
+### CatalogResolverError union
+
+```typescript
+import type { CatalogResolverError } from "workspaces-effect";
+
+// CatalogResolverError =
+//   | CatalogAssemblyError
+//   | WorkspaceRootNotFoundError
+```
+
+- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, the default catalog is defined twice, or a `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile degrades to empty lockfile catalogs instead
+- `WorkspaceRootNotFoundError` — no workspace root was found from `process.cwd()`
 
 ---
 

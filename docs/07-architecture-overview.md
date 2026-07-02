@@ -1,6 +1,6 @@
 # Architecture overview
 
-workspaces-effect ships nine Effect services across four groups. Each service is a `Context.Tag` paired with a live layer. Every method has `R = never` because inter-service and platform dependencies get wired up at layer construction — callers never thread transitive services through their own signatures. Two services (`LockfileReader` and `WorkspaceDiscovery`) defer I/O until the first method call, and their init errors show up in each method's E channel rather than at `Effect.provide` time. See [Error model](#error-model).
+workspaces-effect ships eleven Effect services across five groups. Each service is a `Context.Tag` paired with a live layer. Every method has `R = never` because inter-service and platform dependencies get wired up at layer construction — callers never thread transitive services through their own signatures. Three services (`LockfileReader`, `WorkspaceDiscovery` and `CatalogResolver`) defer I/O until the first method call, and their init errors show up in each method's E channel rather than at `Effect.provide` time. See [Error model](#error-model).
 
 ## Table of contents
 
@@ -19,7 +19,7 @@ Locate the workspace and identify what runs it.
 | Service | Purpose |
 | --- | --- |
 | `WorkspaceRoot` | Find the monorepo root by walking up from `cwd` |
-| `PackageManagerDetector` | Detect the package manager and runtime in use (npm, pnpm, yarn, bun) |
+| `PackageManagerDetector` | Detect which package manager and runtime the workspace uses (npm, pnpm, yarn, bun) |
 | `WorkspaceDiscovery` | List all workspace packages by resolving glob patterns (standalone fallback if no config) |
 
 ### Group 2: package analysis
@@ -42,12 +42,21 @@ Map files to packages and figure out what a git diff actually affects.
 
 ### Group 4: configuration and lockfiles
 
-Read lockfile metadata and decide which packages can publish where.
+Read lockfile metadata, resolve pnpm catalogs and decide which packages can publish where.
 
 | Service | Purpose |
 | --- | --- |
 | `LockfileReader` | Parse lockfile metadata across all four formats |
 | `PublishabilityDetector` | Detect which packages are publishable and where |
+| `CatalogResolver` | Assemble the workspace's pnpm catalog set and rewrite `catalog:`/`workspace:` specifiers to concrete versions |
+
+### Group 5: point-in-time state
+
+Read workspace state as it existed at a moment, not just now.
+
+| Service | Purpose |
+| --- | --- |
+| `PointInTimeWorkspace` | Snapshot packages and catalogs at any git ref or the live working tree, without checking anything out |
 
 ## Layer composition
 
@@ -55,7 +64,7 @@ Two composite layers cover the common shapes. Reach for individual service layer
 
 ### WorkspacesLive
 
-Everything except the git-backed services (`PackageResolver`, `ChangeDetector`). Requires `FileSystem` and `Path` from `@effect/platform`.
+Everything except the git-backed services (`PackageResolver`, `ChangeDetector`, `PointInTimeWorkspace`). Requires `FileSystem` and `Path` from `@effect/platform`.
 
 ```typescript
 import { Effect } from "effect";
@@ -74,11 +83,11 @@ Effect.runPromise(
 );
 ```
 
-**Included services:** `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`, `DependencyGraph`, `TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`.
+**Included services:** `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`, `DependencyGraph`, `TopologicalSorter`, `LockfileReader`, `PublishabilityDetector`, `CatalogResolver`.
 
 ### WorkspacesFullLive
 
-Every service, including the two that shell out to git. Adds `CommandExecutor` to the platform requirements.
+Every service, including the three that talk to git. Adds `CommandExecutor` to the platform requirements.
 
 ```typescript
 import { Effect } from "effect";
@@ -86,7 +95,8 @@ import { NodeContext } from "@effect/platform-node";
 import { WorkspacesFullLive } from "workspaces-effect";
 
 const program = Effect.gen(function* () {
-  // Use any service here, including ChangeDetector and PackageResolver
+  // Use any service here, including ChangeDetector, PackageResolver
+  // and PointInTimeWorkspace
 });
 
 Effect.runPromise(
@@ -97,7 +107,7 @@ Effect.runPromise(
 );
 ```
 
-**Additional services over `WorkspacesLive`:** `PackageResolver`, `ChangeDetector`.
+**Additional services over `WorkspacesLive`:** `PackageResolver`, `ChangeDetector`, `PointInTimeWorkspace`.
 
 ### Individual layers
 
@@ -125,7 +135,7 @@ The library never imports from `node:` modules in service code. It depends on `@
 | --- | --- |
 | `FileSystem` | Read package.json, workspace configs, lockfiles |
 | `Path` | Cross-platform path operations |
-| `Command` / `CommandExecutor` | Git operations for change detection |
+| `Command` / `CommandExecutor` | Git operations for change detection and point-in-time reads |
 
 The same program runs on Node.js or Bun; swap the platform layer at the edge:
 
@@ -145,7 +155,7 @@ Both context layers provide `FileSystem`, `Path` and `CommandExecutor`, so eithe
 
 Some callers cannot run an Effect — lint-staged handlers and synchronous config files are the usual culprits. Two plain functions are exported for those cases:
 
-- `findWorkspaceRootSync(cwd?)` walks up from `cwd` (default `process.cwd()`). At each level it checks for `pnpm-workspace.yaml`, then `package.json` with a `workspaces` field. Ascent stops at the first `.git` it encounters — if that directory also has a `package.json`, it returns the directory (single-package repo); if not, it throws. The walk returns `null` only when no `.git` is found before the filesystem root, i.e. `cwd` is not inside any git project.
+- `findWorkspaceRootSync(cwd?)` walks up from `cwd` (default `process.cwd()`). At each level it checks for `pnpm-workspace.yaml`, then `package.json` with a `workspaces` field. The walk stops at the first `.git` it encounters — if that directory also has a `package.json`, it returns the directory (single-package repo); if not, it throws. It returns `null` only when no `.git` is found before the filesystem root, i.e. `cwd` is not inside any git project.
 - `getWorkspacePackagesSync(root)` returns `ReadonlyArray<{ name: string; path: string }>` or `null`.
 
 These use `node:fs` and `node:path` directly, so they are Node-only and bypass the platform abstraction. There is no caching and no logging. See the [Getting started](./01-getting-started.md#synchronous-utilities) guide for examples.
@@ -168,6 +178,9 @@ Every error extends `Data.TaggedError`, so `Effect.catchTag` can pattern-match o
 | `LockfileReadError` | LockfileReader | Lockfile cannot be read from disk |
 | `LockfileParseError` | LockfileReader | Lockfile content cannot be parsed |
 | `LockfileIntegrityError` | LockfileReader | Integrity check cannot complete |
+| `CatalogAssemblyError` | CatalogResolver, PointInTimeWorkspace | Catalog assembly fails, usually a malformed `pnpm-workspace.yaml` |
+| `CatalogResolutionError` | CatalogResolver | A `catalog:`/`workspace:` specifier cannot be resolved |
+| `GitReadError` | PointInTimeWorkspace | A git read at a ref fails irrecoverably (`at` only) |
 
 Catch them by tag:
 
@@ -187,7 +200,7 @@ const program = Effect.gen(function* () {
 
 ### LockfileInitError union
 
-`LockfileReader` postpones all of its setup work until the first method call: root discovery, package-manager detection, lockfile read, lockfile parse. The four errors that can come out of that lazy init are re-exported as one type alias so you can catch them in one place:
+`LockfileReader` defers its setup until the first method call: root discovery, package-manager detection, lockfile read, lockfile parse. The four errors that can come out of that lazy init are re-exported as one type alias so you can catch them in one place:
 
 ```typescript
 import type { LockfileInitError } from "workspaces-effect";
@@ -200,5 +213,7 @@ import type { LockfileInitError } from "workspaces-effect";
 ```
 
 Every `LockfileReader` method (`readLockfile`, `resolvedVersion`, `workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E channel; `checkIntegrity` adds `LockfileIntegrityError`. The Layer E channels for `LockfileReaderLive` and `WorkspaceDiscoveryLive` stay `never`, which means you handle init failures at the call site, not around `Effect.provide`. See [Lockfile parsing -> Lazy initialization](./05-lockfile-parsing.md#lazy-initialization).
+
+Two more unions follow the same pattern. `CatalogResolverError` (`CatalogAssemblyError | WorkspaceRootNotFoundError`) appears on every `CatalogResolver` method because catalog assembly is lazy in the same way. `PointInTimeWorkspace` splits its errors per method: `at` fails with `PointInTimeAtError` (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError`), `worktree` with `PointInTimeWorktreeError` (`CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`) and `PointInTimeReadError` is the umbrella over both. The [Services reference](./08-services-reference.md) breaks down each union member by member.
 
 For error fields and recovery suggestions, see [Troubleshooting](./09-troubleshooting.md).
