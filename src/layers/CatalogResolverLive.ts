@@ -14,6 +14,7 @@ import { FileSystem, Path } from "@effect/platform";
 import type { Catalogs } from "@pnpm/catalogs.types";
 import { Effect, Layer, Option } from "effect";
 import { CatalogResolutionError } from "../errors/CatalogResolutionError.js";
+import { CatalogSet } from "../schemas/CatalogSet.js";
 import type { CatalogResolverError } from "../services/CatalogResolver.js";
 import { CatalogResolver } from "../services/CatalogResolver.js";
 import { LockfileReader } from "../services/LockfileReader.js";
@@ -73,27 +74,12 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 
 				// Extract lockfile catalogs for pnpm. The lockfile stores each entry as
 				// either a plain string specifier or a {specifier, version} object;
-				// Catalogs.Catalog requires string|undefined, so we normalise to the
-				// specifier string.
+				// CatalogSet.fromLockfileCatalogs normalises to the specifier string.
 				const lockfileCatalogs: Catalogs | undefined = yield* lockfileReader.readLockfile().pipe(
 					Effect.map((data) => {
 						const pmSpecific = data.pmSpecific;
 						if (pmSpecific?._tag !== "pnpm" || !pmSpecific.catalogs) return undefined;
-						const raw = pmSpecific.catalogs;
-						const result: Record<string, Record<string, string | undefined>> = {};
-						for (const [catalogName, entries] of Object.entries(raw)) {
-							if (!entries) continue;
-							const catalog: Record<string, string | undefined> = {};
-							for (const [dep, value] of Object.entries(entries)) {
-								if (typeof value === "string") {
-									catalog[dep] = value;
-								} else if (value !== null && typeof value === "object" && "specifier" in value) {
-									catalog[dep] = (value as { specifier: string }).specifier;
-								}
-							}
-							result[catalogName] = catalog;
-						}
-						return result as Catalogs;
+						return CatalogSet.fromLockfileCatalogs(pmSpecific.catalogs).toCatalogs();
 					}),
 					Effect.orElseSucceed(() => undefined),
 				);
