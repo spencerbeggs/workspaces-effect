@@ -266,3 +266,57 @@ describe("relativePath producer parity", () => {
 		expect(atPaths).toContain("parity-root=.");
 	});
 });
+
+describe("root-level wildcard parity", () => {
+	let wildcardRoot: string;
+
+	beforeAll(() => {
+		wildcardRoot = mkdtempSync(join(tmpdir(), "pit-root-wildcard-"));
+		writeFileSync(join(wildcardRoot, "package.json"), JSON.stringify({ name: "wildcard-root", version: "0.0.0" }));
+		// Root-level wildcard: compileWorkspaceGlobs produces prefix: "" for a
+		// pattern with no "/", which previously drove
+		// `git ls-tree --name-only <ref> ""` -- fatal ("empty string is not a
+		// valid pathspec"). See src/layers/PointInTimeWorkspaceLive.ts at().
+		writeFileSync(join(wildcardRoot, "pnpm-workspace.yaml"), `packages:\n  - "pkg-*"\n`);
+		mkdirSync(join(wildcardRoot, "pkg-a"), { recursive: true });
+		writeFileSync(
+			join(wildcardRoot, "pkg-a", "package.json"),
+			JSON.stringify({ name: "@wildcard/a", version: "1.0.0" }),
+		);
+		const g = (...args: string[]) => execFileSync("git", args, { cwd: wildcardRoot, encoding: "utf8" });
+		g("init", "-b", "main");
+		g("add", "-A");
+		g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "wildcard base");
+	});
+	afterAll(() => rmSync(wildcardRoot, { recursive: true, force: true }));
+
+	it('at(HEAD) discovers a root-level wildcard pattern (pkg-*) via ls-tree "."', async () => {
+		const RootStubW = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(wildcardRoot) } as never);
+		const liveW = PointInTimeWorkspaceLive.pipe(
+			Layer.provide(Layer.mergeAll(RootStubW, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStubW)))),
+			Layer.provide(NodeContext.layer),
+		);
+		const snap = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at("HEAD");
+			}).pipe(Effect.provide(liveW)) as Effect.Effect<WorkspaceStateSnapshot, unknown, never>,
+		);
+		expect(Option.isSome(snap.package("@wildcard/a"))).toBe(true);
+	});
+
+	it("worktree() discovers the same root-level wildcard pattern (producer parity)", async () => {
+		const RootStubW = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(wildcardRoot) } as never);
+		const liveW = PointInTimeWorkspaceLive.pipe(
+			Layer.provide(Layer.mergeAll(RootStubW, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStubW)))),
+			Layer.provide(NodeContext.layer),
+		);
+		const snap = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.worktree();
+			}).pipe(Effect.provide(liveW)) as Effect.Effect<WorkspaceStateSnapshot, unknown, never>,
+		);
+		expect(Option.isSome(snap.package("@wildcard/a"))).toBe(true);
+	});
+});

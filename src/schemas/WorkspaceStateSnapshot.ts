@@ -39,7 +39,14 @@ export class WorkspaceStateSnapshot extends Schema.Class<WorkspaceStateSnapshot>
 	#versions: Record<string, string> | undefined;
 	#byName: Map<string, PackageStateSnapshot> | undefined;
 
-	/** name → version map for workspace: resolution. Stable reference. */
+	/**
+	 * name → version map for workspace: resolution. Stable reference.
+	 *
+	 * @remarks
+	 * The returned record is this instance's memo, built once and reused by
+	 * every subsequent {@link resolve} call. Treat it as read-only -- mutating
+	 * it corrupts resolution for the lifetime of this snapshot.
+	 */
 	get versions(): Record<string, string> {
 		if (this.#versions === undefined) {
 			const map: Record<string, string> = {};

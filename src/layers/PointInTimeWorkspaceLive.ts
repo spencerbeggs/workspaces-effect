@@ -142,7 +142,13 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 					if (!dirs.includes(literal)) dirs.push(literal);
 				}
 				for (const wildcard of compiled.wildcards) {
-					const entries = yield* reader.lsTree(root, ref, wildcard.prefix);
+					// `git ls-tree --name-only <ref> ""` is fatal ("empty string is not
+					// a valid pathspec"); "." is the git-documented substitute and lists
+					// top-level entries as bare names (e.g. "pkg-a"), which is exactly
+					// the candidate form a prefix-"" wildcard's predicate expects --
+					// matching WorkspaceDiscoveryLive's `fs.readDirectory(root)` behavior
+					// for the same root-level pattern.
+					const entries = yield* reader.lsTree(root, ref, wildcard.prefix === "" ? "." : wildcard.prefix);
 					for (const entry of entries) {
 						if (wildcard.matches(entry) && !dirs.includes(entry)) dirs.push(entry);
 					}
