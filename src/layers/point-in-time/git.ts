@@ -57,11 +57,17 @@ export const makeGitReader = (executor: CommandExecutor.CommandExecutor): GitRea
 		Effect.scoped(
 			Effect.gen(function* () {
 				const process = yield* executor.start(Command.make("git", ...args).pipe(Command.workingDirectory(cwd)));
-				const [exitCode, stdoutChunks, stderrChunks] = yield* Effect.all([
-					process.exitCode,
-					Stream.runCollect(process.stdout.pipe(Stream.decodeText())),
-					Stream.runCollect(process.stderr.pipe(Stream.decodeText())),
-				]);
+				// Drain stdout/stderr concurrently with awaiting exitCode: a real child
+				// process closes its output streams on exit, so collecting them only
+				// AFTER `exitCode` resolves races the OS and can lose stdout entirely.
+				const [exitCode, stdoutChunks, stderrChunks] = yield* Effect.all(
+					[
+						process.exitCode,
+						Stream.runCollect(process.stdout.pipe(Stream.decodeText())),
+						Stream.runCollect(process.stderr.pipe(Stream.decodeText())),
+					],
+					{ concurrency: "unbounded" },
+				);
 				return {
 					exitCode,
 					stdout: Chunk.join(stdoutChunks, ""),
