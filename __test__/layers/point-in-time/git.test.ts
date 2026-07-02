@@ -47,70 +47,92 @@ describe("makeGitReader", () => {
 	describe("show", () => {
 		it("returns Option.some with file content when the path exists at the ref", async () => {
 			const executor = mockExecutor({
+				"cat-file -e HEAD:package.json": { exitCode: 0 },
 				"show HEAD:package.json": { exitCode: 0, stdout: '{"name":"pkg-a"}' },
 			});
 			const reader = makeGitReader(executor);
-
 			const result = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json"));
-
 			expect(result).toEqual(Option.some('{"name":"pkg-a"}'));
 		});
 
-		it("returns Option.none when the path does not exist at the ref", async () => {
+		it("returns Option.none when the probe reports the path missing (exit 1, no stderr parsing)", async () => {
 			const executor = mockExecutor({
-				"show abc123:packages/removed/package.json": {
-					exitCode: 128,
-					stderr: "fatal: path 'packages/removed/package.json' does not exist in 'abc123'",
-				},
+				"cat-file -e abc123:packages/removed/package.json": { exitCode: 1 },
 			});
 			const reader = makeGitReader(executor);
-
 			const result = await Effect.runPromise(reader.show("/repo", "abc123", "packages/removed/package.json"));
-
 			expect(result).toEqual(Option.none());
 		});
 
-		it("fails with GitReadError on other git failures", async () => {
+		it("falls back to stderr classification for ambiguous probe failures", async () => {
 			const executor = mockExecutor({
-				"show HEAD:package.json": { exitCode: 128, stderr: "fatal: not a git repository" },
+				"cat-file -e abc123:x/package.json": { exitCode: 128, stderr: "fatal: bad object abc123:x/package.json" },
 			});
 			const reader = makeGitReader(executor);
-
-			const result = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json").pipe(Effect.flip));
-
-			expect(result).toBeInstanceOf(GitReadError);
-			expect(result.cwd).toBe("/repo");
-			expect(result.reason).toContain("not a git repository");
-		});
-
-		it("returns Option.none for an ambiguous 'bad object' stderr shape", async () => {
-			// Load-bearing case: "bad object" could describe the ref itself, but
-			// callers always validate the ref first, so this is treated as
-			// PATH_NOT_AT_REF rather than a hard failure.
-			const executor = mockExecutor({
-				"show deadbeef:package.json": { exitCode: 128, stderr: "fatal: bad object deadbeef" },
-			});
-			const reader = makeGitReader(executor);
-
-			const result = await Effect.runPromise(reader.show("/repo", "deadbeef", "package.json"));
-
+			const result = await Effect.runPromise(reader.show("/repo", "abc123", "x/package.json"));
 			expect(result).toEqual(Option.none());
 		});
 
-		it("returns Option.none for an ambiguous 'unknown revision or path' stderr shape", async () => {
-			// Load-bearing case: git's own message conflates "bad ref" and
-			// "bad path" here; resolved in favor of Option.none per contract.
+		it("classifies the exists-on-disk-but-not-in shape as an absent path", async () => {
 			const executor = mockExecutor({
-				"show HEAD:package.json": {
+				"cat-file -e HEAD:packages/new/package.json": {
 					exitCode: 128,
-					stderr: "fatal: unknown revision or path not in the working tree.",
+					stderr: "fatal: path 'packages/new/package.json' exists on disk, but not in 'HEAD'",
 				},
 			});
 			const reader = makeGitReader(executor);
-
-			const result = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json"));
-
+			const result = await Effect.runPromise(reader.show("/repo", "HEAD", "packages/new/package.json"));
 			expect(result).toEqual(Option.none());
+		});
+
+		it("fails with GitReadError when the probe fails for a non-missing reason", async () => {
+			const executor = mockExecutor({
+				"cat-file -e HEAD:package.json": { exitCode: 128, stderr: "fatal: not a git repository" },
+			});
+			const reader = makeGitReader(executor);
+			const error = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json").pipe(Effect.flip));
+			expect(error).toBeInstanceOf(GitReadError);
+			expect(error.reason).toContain("not a git repository");
+		});
+
+		it("fails with GitReadError when show itself fails after a successful probe", async () => {
+			const executor = mockExecutor({
+				"cat-file -e HEAD:package.json": { exitCode: 0 },
+				"show HEAD:package.json": { exitCode: 128, stderr: "fatal: unable to read object" },
+			});
+			const reader = makeGitReader(executor);
+			const error = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json").pipe(Effect.flip));
+			expect(error).toBeInstanceOf(GitReadError);
+		});
+
+		it("maps an executor spawn failure into GitReadError", async () => {
+			const failing = CommandExecutor.makeExecutor(() => Effect.fail(new Error("spawn ENOENT") as never));
+			const reader = makeGitReader(failing);
+			const error = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json").pipe(Effect.flip));
+			expect(error).toBeInstanceOf(GitReadError);
+			expect(error.cwd).toBe("/repo");
+			expect(error.reason).toContain("spawn ENOENT");
+		});
+
+		it("times out a stalled git command with GitReadError", async () => {
+			const encoder = new TextEncoder();
+			const stalled = CommandExecutor.makeExecutor(() =>
+				Effect.succeed({
+					[CommandExecutor.ProcessTypeId]: CommandExecutor.ProcessTypeId,
+					pid: CommandExecutor.ProcessId(1),
+					exitCode: Effect.never,
+					isRunning: Effect.succeed(true),
+					kill: () => Effect.void,
+					stderr: Stream.make(encoder.encode("")),
+					stdin: Sink.drain,
+					stdout: Stream.make(encoder.encode("")),
+					toJSON: () => ({}),
+				} as unknown as CommandExecutor.Process),
+			);
+			const reader = makeGitReader(stalled, { timeout: "50 millis" });
+			const error = await Effect.runPromise(reader.show("/repo", "HEAD", "package.json").pipe(Effect.flip));
+			expect(error).toBeInstanceOf(GitReadError);
+			expect(error.reason).toContain("timed out");
 		});
 	});
 

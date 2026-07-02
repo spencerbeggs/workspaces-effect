@@ -147,7 +147,12 @@ export { LockfileReader } from "./services/LockfileReader.js";
 export type { DetectedPackageManager } from "./services/PackageManagerDetector.js";
 export { PackageManagerDetector } from "./services/PackageManagerDetector.js";
 export { PackageResolver } from "./services/PackageResolver.js";
-export type { PointInTimeReadError } from "./services/PointInTimeWorkspace.js";
+export type {
+	PointInTimeAtError,
+	PointInTimeOptions,
+	PointInTimeReadError,
+	PointInTimeWorktreeError,
+} from "./services/PointInTimeWorkspace.js";
 export { PointInTimeWorkspace } from "./services/PointInTimeWorkspace.js";
 export { PublishabilityDetector } from "./services/PublishabilityDetector.js";
 export { TopologicalSorter } from "./services/TopologicalSorter.js";

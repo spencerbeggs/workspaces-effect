@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-07-01
-last-synced: 2026-07-01
+updated: 2026-07-02
+last-synced: 2026-07-02
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
@@ -105,29 +105,14 @@ and `dependentsOf` with per-layer caching. See `phase2-dependency-graph.md`.
 | --- | --- | --- |
 | `LockfileReader` | Parse lockfile metadata + PM-specific config | FileSystem, Path, WorkspaceRoot, PackageManagerDetector |
 | `PublishabilityDetector` | Detect which workspace packages are publishable | (none -- pure logic) |
-| `CatalogResolver` | Assemble a workspace's complete pnpm catalog set and resolve `catalog:`/`workspace:` specifiers | FileSystem, Path, WorkspaceRoot, LockfileReader, WorkspaceDiscovery |
+| `CatalogResolver` | Assemble a workspace's complete pnpm catalog set and resolve `catalog:`/`workspace:` specifiers | FileSystem, Path, WorkspaceRoot, WorkspaceDiscovery |
 
 LockfileReader uses Request/RequestResolver internally for `resolvedVersion`
 with per-layer caching. See `phase4-configuration-lockfiles.md`.
 
-CatalogResolver assembles the complete catalog set by unioning three sources
-(precedence lockfile, then inline `pnpm-workspace.yaml` catalogs, then
-config-dependency-injected catalogs), then resolves `catalog:`/`workspace:`
-specifiers in a manifest. The novel piece is recovering catalogs injected by
-pnpm **config dependencies** (declared under `configDependencies`): pnpm never
-persists those to a durable file (they live only in the transient
-`.pnpm-workspace-state-v1.json`), so CatalogResolver durably replays each
-plugin-named config dependency's installed `pnpmfile` `updateConfig` hook
-out-of-band — the same mechanism pnpm uses at install time, but driven from the
-installed pnpmfile rather than the state cache. It reuses the pnpm catalog
-primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for
-inline-catalog projection, protocol parsing, and single-spec resolution, and the
-workspace graph (`WorkspaceDiscovery`) for `workspace:` resolution. Assembly is
-lazy (`Effect.cached`, first-call) and surfaces `CatalogAssemblyError` /
-`CatalogResolutionError` as typed, `catchTag`-able failures. Hook replay uses a
-hand-rolled light loader (no `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile`
-runtime dependency). The implementation lives in `src/layers/CatalogResolverLive.ts`
-with helpers under `src/layers/catalog/`.
+CatalogResolver assembles the complete catalog set by unioning three sources (precedence lockfile, then inline `pnpm-workspace.yaml` catalogs, then config-dependency-injected catalogs), then resolves `catalog:`/`workspace:` specifiers in a manifest. The novel piece is recovering catalogs injected by pnpm **config dependencies** (declared under `configDependencies`): pnpm never persists those to a durable file (they live only in the transient `.pnpm-workspace-state-v1.json`), so CatalogResolver durably replays each plugin-named config dependency's installed `pnpmfile` `updateConfig` hook out-of-band — the same mechanism pnpm uses at install time, but driven from the installed pnpmfile rather than the state cache. It reuses the pnpm catalog primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog projection, protocol parsing and single-spec resolution, and the workspace graph (`WorkspaceDiscovery`) for `workspace:` resolution. Assembly is lazy (`Effect.cached`, first-call) and surfaces `CatalogAssemblyError` / `CatalogResolutionError` as typed, `catchTag`-able failures. Hook replay uses a hand-rolled light loader (no `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime dependency). The implementation lives in `src/layers/CatalogResolverLive.ts` with helpers under `src/layers/catalog/`.
+
+Assembly reads the working tree's manifest and lockfile catalogs through the shared worktree-catalog pipeline (`readWorktreeCatalogState` in `src/layers/point-in-time/worktree-catalogs.ts`), seeding hook replay with the inline catalog set — `CatalogResolverLive` no longer depends on `LockfileReader`. The exported `CatalogResolverError` union is accordingly `CatalogAssemblyError | WorkspaceRootNotFoundError`: a missing or malformed lockfile degrades to empty lockfile catalogs, while any other lockfile read failure fails as `CatalogAssemblyError`. See `point-in-time-workspace.md` "Shared cores".
 
 PublishabilityDetector checks `private` field and `publishConfig.access`.
 Users can provide custom layers to override detection strategy.
@@ -142,7 +127,7 @@ Users can provide custom layers to override detection strategy.
 | --- | --- | --- |
 | `PointInTimeWorkspace` | Workspace packages + catalogs at a git ref or the live worktree | WorkspaceRoot, WorkspaceDiscovery, CommandExecutor, FileSystem, Path |
 
-`PointInTimeWorkspace.at(ref)` reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at any git ref via `git show`/`git ls-tree` (over `CommandExecutor`, without checking the ref out); `worktree()` reads the same shape from the live tree via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot` — packages plus an assembled `CatalogSet` — whose `resolve` method answers `catalog:`/`workspace:` specifiers against that moment's state. `at` results are cached per `(resolved root, ref)`; `worktree` is uncached. Wired into `WorkspacesFullLive` only (it needs git). See `point-in-time-workspace.md` for the full design, including the skip-not-fail package-read contract, ref glob expansion and the no-hook-replay catalog decision.
+`PointInTimeWorkspace.at(ref, options?)` reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at any git ref via `git show`/`git ls-tree` (over `CommandExecutor`, without checking the ref out); `worktree(options?)` reads the same shape from the live tree via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot` — packages plus an assembled `CatalogSet` — whose `resolve` method answers `catalog:`/`workspace:` specifiers against that moment's state, and each fails with its own exported error union (`PointInTimeAtError` / `PointInTimeWorktreeError`; see the error hierarchy below). Ref glob expansion shares the live discovery compilation core (`src/layers/discovery/glob-core.ts`). `at` results are cached per `(resolved root, ref)` in a bounded per-layer cache; `worktree` is uncached. Wired into `WorkspacesFullLive` only (it needs git). See `point-in-time-workspace.md` for the full design, including the skip-not-fail package-read contract, the shared cores and the hook-replay-as-overlay catalog decision.
 
 ### Service Interface Pattern
 
@@ -198,7 +183,9 @@ All errors use `Data.TaggedError` with exported `*Base` constants for api-extrac
 - Lockfiles and catalogs: `LockfileReadError`, `LockfileParseError`, `LockfileIntegrityError`, `CatalogAssemblyError`, `CatalogResolutionError`
 - Point-in-time: `GitReadError` (a `git show`/`git ls-tree` invocation failed irrecoverably; a path merely absent at a ref is `Option.none`, not an error)
 
-`PointInTimeReadError` is an exported union (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`) surfaced by both `PointInTimeWorkspace` methods.
+`PointInTimeWorkspace` exports per-method unions: `PointInTimeAtError` for `at` (no `WorkspaceDiscoveryError` — `at` never enumerates the live filesystem) and `PointInTimeWorktreeError` for `worktree` (no `GitReadError` — `worktree` never invokes git). `PointInTimeReadError` is retained as the umbrella union of the two.
+
+`CatalogResolverError` is the exported union (`CatalogAssemblyError | WorkspaceRootNotFoundError`) describing `CatalogResolver`'s lazy assembly failures; resolution failures surface separately as `CatalogResolutionError`.
 
 `LockfileInitError` is an exported union (`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`) describing the deferred failure modes of the lazily-initialized lockfile/discovery layers; see the lazy-init decision below.
 
@@ -293,6 +280,7 @@ as `findWorkspaceRootSync` and `getWorkspacePackagesSync`.
 - **pnpm-workspace.yaml parsing**: Implements its own minimal YAML parser
   for the `packages:` field rather than pulling in a YAML dependency,
   keeping the sync codepath dependency-free.
+- **Independent glob resolver**: the sync API does not route through the shared `glob-core` compilation path used by the Effect producers — keeping it free of Effect-layer internals is the point, but it means sync pattern resolution can drift from the Effect API's; changes to workspace glob semantics must be mirrored in `src/sync.ts` by hand.
 
 ### Differences from Effect API
 
@@ -338,7 +326,7 @@ the correct platform context (NodeContext vs BunContext).
 - **`WorkspacesLive` / `WorkspacesFullLive`** as the two composite layers; individual `*Live` layers stay available for fine-grained composition
 - **PublishabilityDetector** as a separate composable service, not embedded in LockfileReader
 - **Unified LockfileReader** rather than per-PM services or a separate workspace-config reader
-- **Workspace patterns handled in `WorkspaceDiscoveryLive`** rather than a separate glob-resolver service
+- **Workspace glob compilation lives in one shared internal core** (`compileWorkspaceGlobs` in `src/layers/discovery/glob-core.ts`), consumed by both `WorkspaceDiscoveryLive` and `PointInTimeWorkspaceLive.at` so live and at-ref pattern semantics cannot drift; there is no separate public glob-resolver service. The one-level wildcard limitation (#62) lives in that core and nowhere else. `src/sync.ts` keeps an independent synchronous resolver (documented drift risk; see Sync API)
 - **Static method wiring** in `src/index.ts` following the `semver-effect` pattern, avoiding circular imports between schema classes and the dual-API functions in `src/utils/`
 - **Root package included in `listPackages()`** as the first entry; filter on the `isRootWorkspace` getter when not wanted
 - **Point-in-time reads via git objects, never checkouts** — `PointInTimeWorkspaceLive` reads refs through `git show`/`git ls-tree` over `CommandExecutor` (internal `GitReader` in `src/layers/point-in-time/git.ts`), so no temp worktrees and no mutation of the consumer's checkout; see `point-in-time-workspace.md`

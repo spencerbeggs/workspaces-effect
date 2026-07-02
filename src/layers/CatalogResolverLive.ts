@@ -14,17 +14,15 @@ import { FileSystem, Path } from "@effect/platform";
 import type { Catalogs } from "@pnpm/catalogs.types";
 import { Effect, Layer, Option } from "effect";
 import { CatalogResolutionError } from "../errors/CatalogResolutionError.js";
-import { CatalogSet } from "../schemas/CatalogSet.js";
 import type { CatalogResolverError } from "../services/CatalogResolver.js";
 import { CatalogResolver } from "../services/CatalogResolver.js";
-import { LockfileReader } from "../services/LockfileReader.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
-import { assembleCatalogs, inlineCatalogs } from "./catalog/assemble.js";
+import { assembleCatalogs } from "./catalog/assemble.js";
 import { loadConfigDependencyHooks, runUpdateConfigHooks } from "./catalog/config-dependency-hooks.js";
 import type { ManifestLike } from "./catalog/resolve.js";
 import { resolveManifest } from "./catalog/resolve.js";
-import { readWorkspaceManifest } from "./catalog/workspace-manifest.js";
+import { readWorktreeCatalogState } from "./point-in-time/worktree-catalogs.js";
 
 /**
  * Convenience type alias for the {@link CatalogResolverLive} layer signature.
@@ -34,7 +32,7 @@ import { readWorkspaceManifest } from "./catalog/workspace-manifest.js";
 export type CatalogResolverLiveLayer = Layer.Layer<
 	CatalogResolver,
 	never,
-	WorkspaceRoot | LockfileReader | WorkspaceDiscovery | FileSystem.FileSystem | Path.Path
+	WorkspaceRoot | WorkspaceDiscovery | FileSystem.FileSystem | Path.Path
 >;
 
 /**
@@ -54,7 +52,6 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 	CatalogResolver,
 	Effect.gen(function* () {
 		const workspaceRoot = yield* WorkspaceRoot;
-		const lockfileReader = yield* LockfileReader;
 		const discovery = yield* WorkspaceDiscovery;
 		// Resolve FileSystem and Path at layer construction time so the cached
 		// Effect has R=never (same pattern as readWorkspaceManifest / assembleCatalogs
@@ -64,30 +61,19 @@ export const CatalogResolverLive: CatalogResolverLiveLayer = Layer.effect(
 
 		// Lazy, cached assembly: runs once on first access (success or failure both
 		// memoized for the lifetime of the layer — same idiom as LockfileReaderLive).
+		// The manifest/lockfile read is the SHARED worktree pipeline; this layer
+		// only adds the config-dependency hook-replay overlay on top.
 		const assembled: Effect.Effect<Catalogs, CatalogResolverError> = yield* Effect.cached(
 			Effect.gen(function* () {
 				const root = yield* workspaceRoot.find(process.cwd());
-				const manifest = yield* readWorkspaceManifest(root);
-				const seed = inlineCatalogs(manifest);
-				const hooks = yield* loadConfigDependencyHooks(root, manifest.configDependencies);
+				const state = yield* readWorktreeCatalogState(root);
+				const seed = state.inline.toCatalogs();
+				const hooks = yield* loadConfigDependencyHooks(root, state.configDependencies);
 				const injected = yield* Effect.promise(() => runUpdateConfigHooks(hooks, seed));
-
-				// Extract lockfile catalogs for pnpm. The lockfile stores each entry as
-				// either a plain string specifier or a {specifier, version} object;
-				// CatalogSet.fromLockfileCatalogs normalises to the specifier string.
-				const lockfileCatalogs: Catalogs | undefined = yield* lockfileReader.readLockfile().pipe(
-					Effect.map((data) => {
-						const pmSpecific = data.pmSpecific;
-						if (pmSpecific?._tag !== "pnpm" || !pmSpecific.catalogs) return undefined;
-						return CatalogSet.fromLockfileCatalogs(pmSpecific.catalogs).toCatalogs();
-					}),
-					Effect.orElseSucceed(() => undefined),
-				);
-
 				return yield* assembleCatalogs({
 					workspaceRoot: root,
 					inlineCatalogs: seed,
-					lockfileCatalogs,
+					lockfileCatalogs: state.lockfile.toCatalogs(),
 					injectedCatalogs: injected,
 				});
 			}).pipe(

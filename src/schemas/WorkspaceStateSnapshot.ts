@@ -33,17 +33,36 @@ export class WorkspaceStateSnapshot extends Schema.Class<WorkspaceStateSnapshot>
 	packages: Schema.Array(PackageStateSnapshot),
 	catalogs: CatalogSet,
 }) {
-	/** name → version map for workspace: resolution. */
+	// Lazily built, instance-cached indexes. Snapshots are immutable value
+	// objects, so computing once is safe; private fields sit outside the
+	// schema's declared fields and never encode.
+	#versions: Record<string, string> | undefined;
+	#byName: Map<string, PackageStateSnapshot> | undefined;
+
+	/**
+	 * name → version map for workspace: resolution. Stable reference.
+	 *
+	 * @remarks
+	 * The returned record is this instance's memo, built once and reused by
+	 * every subsequent {@link resolve} call. Treat it as read-only -- mutating
+	 * it corrupts resolution for the lifetime of this snapshot.
+	 */
 	get versions(): Record<string, string> {
-		const map: Record<string, string> = {};
-		for (const pkg of this.packages) map[pkg.name] = pkg.version;
-		return map;
+		if (this.#versions === undefined) {
+			const map: Record<string, string> = {};
+			for (const pkg of this.packages) map[pkg.name] = pkg.version;
+			this.#versions = map;
+		}
+		return this.#versions;
 	}
 
-	/** Find a package snapshot by name. */
+	/** Find a package snapshot by name (O(1) after the first call). */
 	package(name: string): Option.Option<PackageStateSnapshot> {
-		const found = this.packages.find((p) => p.name === name);
-		return found ? Option.some(found) : Option.none();
+		if (this.#byName === undefined) {
+			this.#byName = new Map(this.packages.map((pkg) => [pkg.name, pkg]));
+		}
+		const found = this.#byName.get(name);
+		return found === undefined ? Option.none() : Option.some(found);
 	}
 
 	/**

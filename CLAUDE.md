@@ -6,7 +6,7 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 ## Status
 
 All phases complete plus WorkspacePackage enrichment (Issue #12) and the
-CatalogResolver service. 477 tests passing (333 unit + 144 integration). Full
+CatalogResolver service. 514 tests passing (370 unit + 144 integration). Full
 observability (spans + structured
 logging at Debug level) across all services -- library is silent under
 Effect's default logger; consumers opt in via
@@ -29,7 +29,7 @@ the resolved-root memo is preserved. See
 listPackages() now includes root
 workspace (breaking change). PnpmExtension.catalogs accepts union type for
 pnpm v9+ format (catalogs defined in pnpm-workspace.yaml in v10).
-CatalogResolver service (Group 4) assembles a workspace's complete pnpm catalog set (inline pnpm-workspace.yaml catalogs, config-dependency-injected catalogs durably replayed from each plugin's installed pnpmfile updateConfig hook NOT the transient .pnpm-workspace-state-v1.json, and lockfile catalogs) and resolves catalog:/workspace: specifiers in a manifest; lazy Effect.cached, typed CatalogAssemblyError/CatalogResolutionError, reuses @pnpm/catalogs.* primitives with a hand-rolled light hook loader (no @pnpm/config.reader), wired into WorkspacesLive (and thus WorkspacesFullLive). See `@.claude/design/architecture.md` Group 4 and `@.claude/design/phase4-configuration-lockfiles.md` "CatalogResolver Service".
+CatalogResolver service (Group 4) assembles a workspace's complete pnpm catalog set (inline pnpm-workspace.yaml catalogs, config-dependency-injected catalogs durably replayed from each plugin's installed pnpmfile updateConfig hook NOT the transient .pnpm-workspace-state-v1.json, and lockfile catalogs) and resolves catalog:/workspace: specifiers in a manifest; assembly = the shared `readWorktreeCatalogState` pipeline plus a hook-replay overlay (precedence unchanged); lazy Effect.cached; `CatalogResolverError = CatalogAssemblyError | WorkspaceRootNotFoundError` (resolve/resolveSpecifier add CatalogResolutionError); CatalogResolverLive no longer requires LockfileReader (needs WorkspaceRoot | WorkspaceDiscovery | FileSystem | Path); reuses @pnpm/catalogs.* primitives with a hand-rolled light hook loader (no @pnpm/config.reader), wired into WorkspacesLive (and thus WorkspacesFullLive). See `@.claude/design/architecture.md` Group 4 and `@.claude/design/phase4-configuration-lockfiles.md` "CatalogResolver Service".
 PublishConfig is a Schema.Class with `tag` and `linkDirectory` fields
 (PublishConfigSchema alias removed). DetectedPackageManager has `runtime`
 field ("node" | "bun"). WorkspaceDiscoveryLive has standalone fallback
@@ -51,28 +51,7 @@ call. New exported `LockfileInitError` =
 `WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`;
 LockfileReader method signatures include `LockfileInitError` in their E
 channels (breaking: previously construction-time failures only).
-PointInTimeWorkspace service (branch feat/catalog-point-in-time, 2.0.0 major):
-`at(ref, cwd?)` reads pnpm-workspace.yaml, pnpm-lock.yaml, and each
-package.json at any git ref via `git show`/`git ls-tree` over CommandExecutor
-(no checkout), cached per (resolved root, ref); `worktree(cwd?)` reads the
-live tree via WorkspaceDiscovery, uncached. Both return
-WorkspaceStateSnapshot; error union `PointInTimeReadError = GitReadError |
-CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`.
-Wired into WorkspacesFullLive only (needs CommandExecutor), NOT WorkspacesLive.
-New pure Schema.Class value objects: CatalogSet (statics
-empty/fromCatalogs/fromWorkspaceYaml/fromLockfileCatalogs/merge; instance
-resolveSpecifier/toCatalogs) and WorkspaceStateSnapshot/PackageStateSnapshot
-(`resolve()` answers catalog:/workspace: specifiers against the snapshot's own
-package versions and catalogs; plain or unresolvable → Option.none).
-GitReadError added; `workspaceManifestFromYaml` + `WorkspaceManifestData` now
-exported @public. Internal GitReader (`src/layers/point-in-time/git.ts`,
-@internal) has Option-based missing-path semantics (absent path at ref is
-Option.none, never an error) and concurrent stream draining.
-CatalogResolverLive now normalizes lockfile catalogs through
-`CatalogSet.fromLockfileCatalogs` (behavior identical). Known limits:
-worktree() cannot see config-dependency edits not yet pnpm-installed; at(ref)
-glob expansion is one-level (matches #62). See
-`@.claude/design/point-in-time-workspace.md`.
+PointInTimeWorkspace service (2.0.0 major; hardened on branch feat/point-in-time-hardening): `at(ref, options?)` reads pnpm-workspace.yaml, pnpm-lock.yaml, and each package.json at any git ref via `git show`/`git ls-tree` over CommandExecutor (no checkout); `worktree(options?)` reads the live tree via WorkspaceDiscovery, uncached. Both take `PointInTimeOptions` (`cwd` walks UP to the workspace root via WorkspaceRoot.find; defaults to process.cwd()) and return WorkspaceStateSnapshot. Per-method error unions `PointInTimeAtError = GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError` and `PointInTimeWorktreeError = CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`; umbrella `PointInTimeReadError` retained as their union. at-ref snapshots cached per (resolved root, ref) in a capacity-bounded effect `Cache.makeWith` (64 entries; failures not cached — zero TTL on failed exits). Wired into WorkspacesFullLive only (needs CommandExecutor), NOT WorkspacesLive. Shared cores: `compileWorkspaceGlobs` (`src/layers/discovery/glob-core.ts`) is the single glob-compilation path for WorkspaceDiscoveryLive AND at-ref reads, so at(ref) now honors `!` negations; `readWorktreeCatalogState` (`src/layers/point-in-time/worktree-catalogs.ts`) is the single worktree catalog reader (used by CatalogResolverLive and worktree()). Pure Schema.Class value objects: CatalogSet (statics empty/fromCatalogs/fromWorkspaceYaml/fromLockfileCatalogs/merge; instance resolveSpecifier/toCatalogs) and WorkspaceStateSnapshot/PackageStateSnapshot (`resolve()` answers catalog:/workspace: specifiers against the snapshot's own package versions and catalogs; plain or unresolvable → Option.none); snapshot `versions` and `package()` are memoized per instance. Internal GitReader (`src/layers/point-in-time/git.ts`, @internal): Option-based missing-path semantics (absent path at ref is Option.none, never an error), `cat-file -e` existence probe before `show`, `LC_ALL=C` pinned so the NOT_AT_REF stderr regex (still the primary missing-path classifier) sees untranslated messages, configurable timeout (default 30s) failing as GitReadError, concurrent stream draining. GitReadError added; `workspaceManifestFromYaml` + `WorkspaceManifestData` exported @public. Known limits: worktree() cannot see config-dependency edits not yet pnpm-installed; at(ref) glob expansion is one-level (matches #62). See `@.claude/design/point-in-time-workspace.md`.
 
 ## Design Documents
 

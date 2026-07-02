@@ -180,7 +180,7 @@ Every error extends `Data.TaggedError`, so `Effect.catchTag` can pattern-match o
 | `LockfileIntegrityError` | LockfileReader | Integrity check cannot complete |
 | `CatalogAssemblyError` | CatalogResolver, PointInTimeWorkspace | Catalog assembly fails, usually a malformed `pnpm-workspace.yaml` |
 | `CatalogResolutionError` | CatalogResolver | A `catalog:`/`workspace:` specifier cannot be resolved |
-| `GitReadError` | PointInTimeWorkspace | A git read at a ref fails irrecoverably |
+| `GitReadError` | PointInTimeWorkspace | A git read at a ref fails irrecoverably (`at` only) |
 
 Catch them by tag:
 
@@ -214,6 +214,6 @@ import type { LockfileInitError } from "workspaces-effect";
 
 Every `LockfileReader` method (`readLockfile`, `resolvedVersion`, `workspaceDependencies`, `checkIntegrity`) lists `LockfileInitError` in its E channel; `checkIntegrity` adds `LockfileIntegrityError`. The Layer E channels for `LockfileReaderLive` and `WorkspaceDiscoveryLive` stay `never`, which means you handle init failures at the call site, not around `Effect.provide`. See [Lockfile parsing -> Lazy initialization](./05-lockfile-parsing.md#lazy-initialization).
 
-Two more unions follow the same pattern. `CatalogResolverError` (`CatalogAssemblyError | LockfileInitError`) appears on every `CatalogResolver` method because catalog assembly is lazy in the same way. `PointInTimeReadError` (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`) appears on both `PointInTimeWorkspace` methods. The [Services reference](./08-services-reference.md) breaks down each union member by member.
+Two more unions follow the same pattern. `CatalogResolverError` (`CatalogAssemblyError | WorkspaceRootNotFoundError`) appears on every `CatalogResolver` method because catalog assembly is lazy in the same way. `PointInTimeWorkspace` splits its errors per method: `at` fails with `PointInTimeAtError` (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError`), `worktree` with `PointInTimeWorktreeError` (`CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`) and `PointInTimeReadError` is the umbrella over both. The [Services reference](./08-services-reference.md) breaks down each union member by member.
 
 For error fields and recovery suggestions, see [Troubleshooting](./09-troubleshooting.md).

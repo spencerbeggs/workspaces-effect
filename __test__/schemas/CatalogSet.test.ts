@@ -33,4 +33,23 @@ describe("CatalogSet", () => {
 		expect(Option.isNone(set.resolveSpecifier("ghost", "catalog:silk"))).toBe(true);
 		expect(Option.isNone(CatalogSet.empty().resolveSpecifier("react", "catalog:"))).toBe(true);
 	});
+
+	it("fromLockfileCatalogs does not pollute Object.prototype via __proto__ keys", () => {
+		const set = CatalogSet.fromLockfileCatalogs({
+			__proto__: { polluted: "1.0.0" },
+			default: { __proto__: { specifier: "^1.0.0" } },
+		});
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+		expect(set.toCatalogs().default).toBeDefined();
+	});
+
+	it("fromCatalogs does not pollute Object.prototype via __proto__ keys", () => {
+		CatalogSet.fromCatalogs(JSON.parse('{"__proto__":{"polluted":"1.0.0"}}'));
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+	});
+
+	it("resolveSpecifier returns Option.none for a catalog: ref to a missing entry", () => {
+		const set = CatalogSet.fromCatalogs({ default: { effect: "^3.20.0" } });
+		expect(Option.isNone(set.resolveSpecifier("nonexistent", "catalog:default"))).toBe(true);
+	});
 });

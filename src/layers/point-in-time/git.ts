@@ -11,7 +11,7 @@
 
 import type { CommandExecutor } from "@effect/platform";
 import { Command } from "@effect/platform";
-import { Chunk, Effect, Option, Stream } from "effect";
+import { Chunk, Duration, Effect, Option, Stream } from "effect";
 import { GitReadError } from "../../errors/GitReadError.js";
 
 /**
@@ -25,7 +25,14 @@ import { GitReadError } from "../../errors/GitReadError.js";
  * is treated as PATH_NOT_AT_REF for `show`. This mirrors silk-effects'
  * `runGitShow` decision: ambiguity between "bad ref" and "missing path" is
  * resolved in favor of `Option.none` because the ref is never in question
- * by the time `show` runs.
+ * by the time `show` runs. As of the `cat-file -e` existence probe, this
+ * regex classifies probe failures whose exit code is neither 0 (exists) nor
+ * 1 (raw nonexistent object hash, a form the probe's `<ref>:<path>` argument
+ * never produces) -- and since git exits 128 with a fatal message for the
+ * realistic "valid ref, path missing" case, it remains the primary
+ * classifier for missing-path-at-valid-ref probe failures. `LC_ALL=C` is
+ * pinned on every command, so this regex -- still that primary classifier --
+ * is locale-stable.
  *
  * @internal
  */
@@ -48,15 +55,22 @@ export interface GitReader {
  *
  * @internal
  */
-export const makeGitReader = (executor: CommandExecutor.CommandExecutor): GitReader => {
-	/** Run a git command and collect exit code, stdout, and stderr. */
+export const makeGitReader = (
+	executor: CommandExecutor.CommandExecutor,
+	options?: { readonly timeout?: Duration.DurationInput },
+): GitReader => {
+	const timeout = Duration.decode(options?.timeout ?? "30 seconds");
+
+	/** Run a git command (locale pinned to C) and collect exit code, stdout, stderr. */
 	const run = (
 		cwd: string,
 		args: ReadonlyArray<string>,
 	): Effect.Effect<{ exitCode: number; stdout: string; stderr: string }, GitReadError> =>
 		Effect.scoped(
 			Effect.gen(function* () {
-				const process = yield* executor.start(Command.make("git", ...args).pipe(Command.workingDirectory(cwd)));
+				const process = yield* executor.start(
+					Command.make("git", ...args).pipe(Command.workingDirectory(cwd), Command.env({ LC_ALL: "C" })),
+				);
 				// Drain stdout/stderr concurrently with awaiting exitCode: a real child
 				// process closes its output streams on exit, so collecting them only
 				// AFTER `exitCode` resolves races the OS and can lose stdout entirely.
@@ -76,16 +90,43 @@ export const makeGitReader = (executor: CommandExecutor.CommandExecutor): GitRea
 			}),
 		).pipe(
 			Effect.mapError((error) => new GitReadError({ command: `git ${args.join(" ")}`, cwd, reason: String(error) })),
+			Effect.timeoutFail({
+				duration: timeout,
+				onTimeout: () =>
+					new GitReadError({
+						command: `git ${args.join(" ")}`,
+						cwd,
+						reason: `timed out after ${Duration.format(timeout)}`,
+					}),
+			}),
 		);
 
 	const show: GitReader["show"] = (cwd, ref, path) =>
-		run(cwd, ["show", `${ref}:${path}`]).pipe(
-			Effect.flatMap(({ exitCode, stdout, stderr }) => {
-				if (exitCode === 0) return Effect.succeed(Option.some(stdout));
-				// See NOT_AT_REF above: every "not there" stderr shape is treated as
-				// an absent path, not a hard failure.
-				if (NOT_AT_REF.test(stderr)) return Effect.succeed(Option.none());
-				return Effect.fail(new GitReadError({ command: `git show ${ref}:${path}`, cwd, reason: stderr.trim() }));
+		run(cwd, ["cat-file", "-e", `${ref}:${path}`]).pipe(
+			Effect.flatMap(({ exitCode, stderr }) => {
+				// Existence probe: exit 0 = object exists. Exit 1 is a defensive
+				// branch -- git only exits 1 for a raw nonexistent object hash, a
+				// form this code's `${ref}:${path}` argument never produces; for
+				// the realistic "valid ref, path missing" case git exits 128 with
+				// a fatal message, which the NOT_AT_REF fallback below classifies
+				// (see NOT_AT_REF's @privateRemarks). The probe's realized value:
+				// a `show` failure after a confirmed-exists probe is a genuine
+				// error, never a skip.
+				if (exitCode === 1) return Effect.succeed(Option.none<string>());
+				if (exitCode !== 0) {
+					if (NOT_AT_REF.test(stderr)) return Effect.succeed(Option.none<string>());
+					return Effect.fail(
+						new GitReadError({ command: `git cat-file -e ${ref}:${path}`, cwd, reason: stderr.trim() }),
+					);
+				}
+				// Object exists: a show failure now is a genuine error, never a skip.
+				return run(cwd, ["show", `${ref}:${path}`]).pipe(
+					Effect.flatMap(({ exitCode: showExit, stdout, stderr: showStderr }) =>
+						showExit === 0
+							? Effect.succeed(Option.some(stdout))
+							: Effect.fail(new GitReadError({ command: `git show ${ref}:${path}`, cwd, reason: showStderr.trim() })),
+					),
+				);
 			}),
 		);
 

@@ -11,17 +11,19 @@
  */
 
 import { CommandExecutor, FileSystem, Path } from "@effect/platform";
-import { Effect, Layer, Option } from "effect";
+import { Cache, Data, Duration, Effect, Exit, Layer, Option } from "effect";
 import { parse as parseYaml } from "yaml-effect";
-import type { CatalogAssemblyError } from "../errors/CatalogAssemblyError.js";
 import { CatalogSet } from "../schemas/CatalogSet.js";
 import { PackageStateSnapshot, WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.js";
+import type { PointInTimeOptions } from "../services/PointInTimeWorkspace.js";
 import { PointInTimeWorkspace } from "../services/PointInTimeWorkspace.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { inlineCatalogs } from "./catalog/assemble.js";
-import { readWorkspaceManifest, workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
+import { workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
+import { compileWorkspaceGlobs } from "./discovery/glob-core.js";
 import { makeGitReader } from "./point-in-time/git.js";
+import { readWorktreeCatalogState } from "./point-in-time/worktree-catalogs.js";
 
 /**
  * Build a {@link PackageStateSnapshot} from raw `package.json` text.
@@ -63,6 +65,21 @@ const packageSnapshotFromJson = (text: string, relativePath: string): PackageSta
 };
 
 /**
+ * Catalogs of a lockfile text read at a ref. Malformed → empty set
+ * (mirrors worktree-catalogs.ts; the at-ref side has no filesystem read,
+ * so only the parse-degradation branch applies here).
+ *
+ * @internal
+ */
+const lockfileCatalogsAtRef = (text: Option.Option<string>): Effect.Effect<CatalogSet> =>
+	Option.isNone(text)
+		? Effect.succeed(CatalogSet.empty())
+		: parseYaml(text.value).pipe(
+				Effect.map((parsed) => CatalogSet.fromLockfileCatalogs((parsed as { catalogs?: unknown } | null)?.catalogs)),
+				Effect.orElseSucceed(() => CatalogSet.empty()),
+			);
+
+/**
  * Convenience type alias for the {@link PointInTimeWorkspaceLive} layer signature.
  *
  * @public
@@ -72,6 +89,16 @@ export type PointInTimeWorkspaceLiveLayer = Layer.Layer<
 	never,
 	WorkspaceRoot | WorkspaceDiscovery | CommandExecutor.CommandExecutor | FileSystem.FileSystem | Path.Path
 >;
+
+/**
+ * Capacity of the per-layer at-ref snapshot cache. Refs are immutable, so
+ * entries never expire — capacity is the only knob; least-recently-used
+ * entries evict past it. Bounds memory for long-lived processes (an MCP
+ * server accumulating refs) where the previous unbounded Map grew forever.
+ *
+ * @internal
+ */
+export const AT_CACHE_CAPACITY = 64;
 
 /**
  * Live layer for the {@link PointInTimeWorkspace} service.
@@ -91,30 +118,11 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
 		const reader = makeGitReader(executor);
-		const cache = new Map<string, WorkspaceStateSnapshot>();
 
-		const resolveRoot = (cwd?: string) => (cwd ? Effect.succeed(cwd) : workspaceRoot.find(process.cwd()));
+		const resolveRoot = (cwd?: string) => workspaceRoot.find(cwd ?? process.cwd());
 
-		// Catalogs of a lockfile TEXT (shared by at/worktree). A malformed lockfile
-		// degrades to "no lockfile catalogs" — the inline catalogs still resolve; do
-		// not fail the whole snapshot.
-		const lockfileCatalogsFromText = (text: string | null): Effect.Effect<CatalogSet, CatalogAssemblyError> =>
-			text === null
-				? Effect.succeed(CatalogSet.empty())
-				: parseYaml(text).pipe(
-						Effect.map((parsed) =>
-							CatalogSet.fromLockfileCatalogs((parsed as { catalogs?: unknown } | null)?.catalogs),
-						),
-						Effect.orElseSucceed(() => CatalogSet.empty()),
-					);
-
-		const at = (ref: string, cwd?: string) =>
+		const readAtRef = (root: string, ref: string) =>
 			Effect.gen(function* () {
-				const root = yield* resolveRoot(cwd);
-				const key = `${root}::${ref}`;
-				const hit = cache.get(key);
-				if (hit) return hit;
-
 				const wsYaml = yield* reader.show(root, ref, "pnpm-workspace.yaml");
 				const manifest = Option.isSome(wsYaml)
 					? yield* workspaceManifestFromYaml(wsYaml.value)
@@ -123,33 +131,32 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 					inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }),
 				);
 				const lockText = yield* reader.show(root, ref, "pnpm-lock.yaml");
-				const lockCatalogs = yield* lockfileCatalogsFromText(Option.getOrNull(lockText));
+				const lockCatalogs = yield* lockfileCatalogsAtRef(lockText);
 
-				// Expand package globs at the ref: literal dirs pass through; a single
-				// trailing wildcard segment lists the parent via ls-tree. The root (".")
-				// is always included.
-				const globs = (manifest.packages ?? []).map((g) => g.replace(/\/\*\*$/, "/*"));
+				// Expand package globs at the ref through the shared core: literal dirs
+				// pass through; each wildcard lists its parent via ls-tree; negations
+				// remove matches. The root (".") is always included.
+				const compiled = compileWorkspaceGlobs(manifest.packages ?? []);
 				const dirs: string[] = ["."];
-				for (const glob of globs) {
-					if (!glob.includes("*") && !glob.includes("?")) {
-						if (!dirs.includes(glob)) dirs.push(glob);
-						continue;
-					}
-					const prefix = glob.includes("/") ? glob.slice(0, glob.lastIndexOf("/") + 1) : "";
-					const entries = yield* reader.lsTree(root, ref, prefix);
-					const regex = new RegExp(
-						`^${glob
-							.replace(/[.+^${}()|[\]\\]/g, "\\$&")
-							.replace(/\*/g, "[^/]*")
-							.replace(/\?/g, "[^/]")}$`,
-					);
+				for (const literal of compiled.literals) {
+					if (!dirs.includes(literal)) dirs.push(literal);
+				}
+				for (const wildcard of compiled.wildcards) {
+					// `git ls-tree --name-only <ref> ""` is fatal ("empty string is not
+					// a valid pathspec"); "." is the git-documented substitute and lists
+					// top-level entries as bare names (e.g. "pkg-a"), which is exactly
+					// the candidate form a prefix-"" wildcard's predicate expects --
+					// matching WorkspaceDiscoveryLive's `fs.readDirectory(root)` behavior
+					// for the same root-level pattern.
+					const entries = yield* reader.lsTree(root, ref, wildcard.prefix === "" ? "." : wildcard.prefix);
 					for (const entry of entries) {
-						if (regex.test(entry) && !dirs.includes(entry)) dirs.push(entry);
+						if (wildcard.matches(entry) && !dirs.includes(entry)) dirs.push(entry);
 					}
 				}
+				const included = dirs.filter((dir) => dir === "." || !compiled.isExcluded(dir));
 
 				const packages: PackageStateSnapshot[] = [];
-				for (const dir of dirs) {
+				for (const dir of included) {
 					const pkgPath = dir === "." ? "package.json" : `${dir}/package.json`;
 					const text = yield* reader.show(root, ref, pkgPath);
 					if (Option.isNone(text)) continue;
@@ -157,17 +164,41 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 					if (snap) packages.push(snap);
 				}
 
-				const snapshot = new WorkspaceStateSnapshot({
+				return new WorkspaceStateSnapshot({
 					packages,
 					catalogs: CatalogSet.merge(lockCatalogs, inline),
 				});
-				cache.set(key, snapshot);
-				return snapshot;
+			});
+
+		// effect Cache gives the capacity bound AND deduplication of concurrent
+		// in-flight lookups for the same (root, ref) — the reason it was chosen
+		// over the repo's Request/RequestResolver pattern, which exists for
+		// request BATCHING (DependencyGraph, LockfileReader), not bounded caching.
+		//
+		// Cache.make applies a single fixed TTL to both success AND failure exits
+		// (verified against the installed effect@3.21.4: internal/cache.js
+		// lookupValueOf calls `this.timeToLive(exit)` unconditionally), so a plain
+		// `Cache.make` with `timeToLive: Duration.infinity` would memoize failures
+		// forever and break retry behavior the old Map never had a problem with
+		// (it only cached on the success path). Using `Cache.makeWith` with an
+		// exit-dependent TTL -- infinity on success, zero on failure -- restores
+		// that: failed lookups are evicted immediately so the next `at()` call
+		// retries instead of replaying a stale error.
+		const cache = yield* Cache.makeWith({
+			capacity: AT_CACHE_CAPACITY,
+			lookup: (key: { readonly root: string; readonly ref: string }) => readAtRef(key.root, key.ref),
+			timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+		});
+
+		const at = (ref: string, options?: PointInTimeOptions) =>
+			Effect.gen(function* () {
+				const root = yield* resolveRoot(options?.cwd);
+				return yield* cache.get(Data.struct({ root, ref }));
 			}).pipe(Effect.withSpan("PointInTimeWorkspace.at", { attributes: { ref } }));
 
-		const worktree = (cwd?: string) =>
+		const worktree = (options?: PointInTimeOptions) =>
 			Effect.gen(function* () {
-				const root = yield* resolveRoot(cwd);
+				const root = yield* resolveRoot(options?.cwd);
 				const pkgs = yield* discovery.listPackages(root);
 				const packages = pkgs.map(
 					(p) =>
@@ -181,17 +212,11 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 							optionalDependencies: { ...p.optionalDependencies },
 						}),
 				);
-				const manifest = yield* readWorkspaceManifest(root).pipe(
+				const state = yield* readWorktreeCatalogState(root).pipe(
 					Effect.provideService(FileSystem.FileSystem, fs),
 					Effect.provideService(Path.Path, path),
 				);
-				const inline = CatalogSet.fromCatalogs(
-					inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }),
-				);
-				const lockPath = path.join(root, "pnpm-lock.yaml");
-				const lockText = yield* fs.readFileString(lockPath).pipe(Effect.orElseSucceed(() => null));
-				const lockCatalogs = yield* lockfileCatalogsFromText(lockText);
-				return new WorkspaceStateSnapshot({ packages, catalogs: CatalogSet.merge(lockCatalogs, inline) });
+				return new WorkspaceStateSnapshot({ packages, catalogs: state.merged });
 			}).pipe(Effect.withSpan("PointInTimeWorkspace.worktree"));
 
 		return PointInTimeWorkspace.of({ at, worktree });

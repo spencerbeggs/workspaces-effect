@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 90
 created: 2026-03-12
-updated: 2026-07-01
-last-synced: 2026-07-01
+updated: 2026-07-02
+last-synced: 2026-07-02
 authors:
   - C. Spencer Beggs
 tags:
@@ -240,24 +240,13 @@ the composite layer shapes.
 
 ## CatalogResolver Service
 
-`CatalogResolver` (`src/services/CatalogResolver.ts`, `CatalogResolverLive` in
-`src/layers/CatalogResolverLive.ts`) is the second service in this group. It
-assembles a workspace's complete pnpm catalog set and resolves `catalog:` /
-`workspace:` specifiers in a manifest, depending on `LockfileReader` (for
-lockfile catalog snapshots) and `WorkspaceDiscovery` (for the `workspace:`
-graph). Assembly unions three precedence-ordered sources: lockfile catalogs,
-inline `pnpm-workspace.yaml` catalogs, then catalogs injected by pnpm **config
-dependencies**. The crux is that pnpm never persists config-dependency catalogs
-to a durable file — they live only in the transient
-`.pnpm-workspace-state-v1.json` — so the service replays each plugin-named config
-dependency's installed `pnpmfile` `updateConfig` hook out-of-band to recover them
-without that cache. Helper modules live under `src/layers/catalog/`
-(`workspace-manifest.ts`, `assemble.ts`, `config-dependency-hooks.ts`,
-`resolve.ts`). The service interface (`catalogs`, `resolve`, `resolveSpecifier`) and its `CatalogResolverError` type live in `src/services/CatalogResolver.ts`. Failures surface as the typed `CatalogAssemblyError` / `CatalogResolutionError`; see `architecture.md` (Group 4) for the full design paragraph.
+`CatalogResolver` (`src/services/CatalogResolver.ts`, `CatalogResolverLive` in `src/layers/CatalogResolverLive.ts`) is the second service in this group. It assembles a workspace's complete pnpm catalog set and resolves `catalog:` / `workspace:` specifiers in a manifest, depending on `WorkspaceDiscovery` (for the `workspace:` graph) and reading lockfile catalog snapshots through the shared worktree-catalog pipeline (`src/layers/point-in-time/worktree-catalogs.ts`) rather than `LockfileReader`, on which it no longer depends. Assembly unions three precedence-ordered sources: lockfile catalogs, inline `pnpm-workspace.yaml` catalogs, then catalogs injected by pnpm **config dependencies**. The crux is that pnpm never persists config-dependency catalogs to a durable file — they live only in the transient `.pnpm-workspace-state-v1.json` — so the service replays each plugin-named config dependency's installed `pnpmfile` `updateConfig` hook out-of-band to recover them without that cache. Helper modules live under `src/layers/catalog/` (`workspace-manifest.ts`, `assemble.ts`, `config-dependency-hooks.ts`, `resolve.ts`). The service interface (`catalogs`, `resolve`, `resolveSpecifier`) and its `CatalogResolverError` type live in `src/services/CatalogResolver.ts`. Failures surface as the typed `CatalogAssemblyError` / `CatalogResolutionError`; see `architecture.md` (Group 4) for the full design paragraph.
 
 It narrowly reuses the lightweight pnpm catalog primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog projection, protocol parsing and single-spec resolution, while avoiding the heavy `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime chain (hook replay uses a hand-rolled light loader). The lockfile parsers themselves take no `@pnpm` dependency — they parse `pnpm-lock.yaml` directly through the YAML pipeline, keeping the core platform-independent.
 
-Since the point-in-time work (2.0.0), the catalog-normalization core is shared with `PointInTimeWorkspace` through two extractions: `CatalogSet` (`src/schemas/CatalogSet.ts`), a pure `Schema.Class` value object carrying the single normalization/resolution semantic — `CatalogResolverLive` now routes lockfile-catalog normalization (string-or-`{specifier, version}` entries) through `CatalogSet.fromLockfileCatalogs` instead of hand-rolling it — and `workspaceManifestFromYaml` (`src/layers/catalog/workspace-manifest.ts`), a filesystem-free text parser for the catalog/config-dependency/packages slice of `pnpm-workspace.yaml` that the filesystem-bound `readWorkspaceManifest` now delegates to. Point-in-time snapshots use the same lockfile-then-inline precedence but skip config-dependency hook replay at a ref; see `point-in-time-workspace.md`.
+Since the point-in-time work (2.0.0), the catalog-normalization core is shared with `PointInTimeWorkspace` through two extractions: `CatalogSet` (`src/schemas/CatalogSet.ts`), a pure `Schema.Class` value object carrying the single normalization/resolution semantic — `CatalogResolverLive` now routes lockfile-catalog normalization (string-or-`{specifier, version}` entries) through `CatalogSet.fromLockfileCatalogs` instead of hand-rolling it — and `workspaceManifestFromYaml` (`src/layers/catalog/workspace-manifest.ts`), a filesystem-free text parser for the catalog/config-dependency/packages slice of `pnpm-workspace.yaml` that the filesystem-bound `readWorkspaceManifest` now delegates to.
+
+Since the point-in-time hardening, the worktree manifest/lockfile read is also shared: `readWorktreeCatalogState` (`src/layers/point-in-time/worktree-catalogs.ts`) is the single reader of the working tree's catalog sources. Point-in-time snapshots take its merged (lockfile-then-inline) set; `CatalogResolverLive` overlays config-dependency hook replay on top, seeding the hooks with the inline set. Hook replay is an overlay only the live resolver applies by default. The exported `CatalogResolverError` union is `CatalogAssemblyError | WorkspaceRootNotFoundError`: a missing or malformed lockfile degrades to empty lockfile catalogs, while any other lockfile read failure fails as `CatalogAssemblyError`. See `point-in-time-workspace.md` "Shared cores".
 
 ## Testing Strategy
 
