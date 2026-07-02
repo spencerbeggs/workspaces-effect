@@ -27,7 +27,7 @@ pnpm add workspaces-effect effect @effect/platform @effect/platform-node
 bun add workspaces-effect effect @effect/platform @effect/platform-bun
 ```
 
-The required `effect` and `@effect/platform` versions are declared in this package's `peerDependencies` — see the `package.json` of the version installed from npm.
+The exact `effect` and `@effect/platform` version ranges live in `peerDependencies` — check the `package.json` of the version you installed.
 
 ## Prerequisites
 
@@ -79,7 +79,7 @@ Run this from anywhere inside your monorepo. The library finds the workspace roo
 
 workspaces-effect uses Effect's layer system for dependency injection. You write programs against **service interfaces** (`Context.Tag` classes like `WorkspaceDiscovery`) and provide **layer implementations** at the edge of your program.
 
-That separation keeps business logic decoupled from implementation, lets services swap cleanly under test, and wires dependencies up once instead of threading them through every function.
+The payoff: tests can substitute mock layers for real ones, and dependencies get wired once at the edge instead of threaded through every function.
 
 The pattern:
 
@@ -112,9 +112,9 @@ Both `NodeContext.layer` and `BunContext.layer` provide all three platform servi
 
 ### Choosing a layer
 
-Reach for **`WorkspacesLive`** when git-based change detection is not in play. It pulls fewer services and does not require git on the host. It provides `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`, `DependencyGraph`, `TopologicalSorter`, `LockfileReader` and `PublishabilityDetector`.
+Use **`WorkspacesLive`** unless you need git-based change detection. It does not require git on the host and provides `WorkspaceRoot`, `PackageManagerDetector`, `WorkspaceDiscovery`, `DependencyGraph`, `TopologicalSorter`, `LockfileReader` and `PublishabilityDetector`.
 
-Reach for **`WorkspacesFullLive`** when you need `ChangeDetector` or `PackageResolver`. Those services shell out via `CommandExecutor` to run git, and the composite provides every service in the library.
+Use **`WorkspacesFullLive`** when you need `ChangeDetector` or `PackageResolver`. Both shell out to git via `CommandExecutor`, so the host needs git installed. This composite provides every service in the library.
 
 ### Individual layers
 
@@ -167,7 +167,7 @@ import {
 
 ### findWorkspaceRootSync
 
-Walks upward from a starting directory. At each level it checks, in order, for `pnpm-workspace.yaml` and then a `package.json` with a `workspaces` field, and returns the first match. If neither marker turns up before the walk reaches a `.git` directory, ascent stops at that git project boundary and returns the boundary directory — provided it has a `package.json`. A git boundary with no `package.json` throws; a project missing a root manifest is an error. The function returns `null` only when no `.git` is found above `cwd`.
+Walks upward from a starting directory. At each level it checks for `pnpm-workspace.yaml`, then for a `package.json` with a `workspaces` field, and returns the first match. If neither marker appears before the walk hits a `.git` directory, the walk stops at that project boundary — it returns the directory when a `package.json` sits beside `.git` (single-package repos) and throws when one does not. It returns `null` only when there is no `.git` anywhere above `cwd`.
 
 ```typescript
 const root = findWorkspaceRootSync(); // starts from process.cwd()

@@ -36,7 +36,7 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 
 **Solutions:**
 
-1. Confirm the current working directory sits inside a monorepo
+1. Check that the current working directory is inside a monorepo
 2. For pnpm: check that `pnpm-workspace.yaml` exists at the root
 3. For npm/yarn/bun: check that root `package.json` has a `workspaces` field
 4. Check whether the workspace config was deleted or renamed
@@ -92,8 +92,8 @@ Effect.catchTag("PackageManagerDetectionError", (e) =>
 **Solutions:**
 
 1. Check that workspace patterns are correct (e.g. `["packages/*"]`)
-2. Confirm each pattern's base directory exists on disk
-3. Confirm matched directories contain a `package.json`
+2. Check that each pattern's base directory exists on disk
+3. Check that matched directories contain a `package.json`
 4. Add `name` and `version` to every workspace `package.json`
 5. Fix filesystem permissions so the matched directories are readable
 
@@ -170,10 +170,7 @@ Effect.catchTag("PackageNotFoundError", (e) =>
 **Solutions:**
 
 1. Read the cycle path on the error
-2. Break the cycle by:
-   - Moving shared code into a separate package
-   - Using dynamic imports for optional features
-   - Restructuring around dependency inversion
+2. Break the cycle: move shared code into a separate package, switch optional features to dynamic imports or restructure around dependency inversion
 3. Call `DependencyGraph.hasCycle()` in CI to catch cycles before they merge
 
 ```typescript
@@ -274,14 +271,14 @@ Effect.catchTag("ChangeDetectionError", (e) =>
 - The ref does not exist: a typo, an unfetched branch or a shallow clone without that history
 - Git is not installed, or the directory is not inside a git repository
 
-A path that simply does not exist at the ref is never a cause — point-in-time readers treat that as an absent file and skip it.
+A path that does not exist at the ref is never a cause — point-in-time readers treat that as an absent file and skip it.
 
 **Solutions:**
 
 1. Resolve the ref first: `git rev-parse <ref>`
 2. In CI, set `fetch-depth: 0` on the checkout action — or at least enough history to include the requested ref
 3. Install git, or run inside a git repository
-4. Read the `command` and `reason` fields on the error; `reason` carries the captured stderr
+4. Read the `command` and `reason` fields on the error; `reason` contains the captured stderr
 
 ```typescript
 Effect.catchTag("GitReadError", (e) =>

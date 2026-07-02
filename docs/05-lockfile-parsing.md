@@ -94,7 +94,7 @@ if (Option.isSome(react)) {
 }
 ```
 
-Use this to audit exact versions across a monorepo, or to confirm that every package resolves a shared dependency to the same version.
+Use this to audit exact versions across a monorepo or to confirm that every package resolves a shared dependency to the same version.
 
 ## Workspace dependencies
 
@@ -196,7 +196,7 @@ if (lockfile.pmSpecific?._tag === "pnpm") {
 }
 ```
 
-The `PnpmExtension.catalogs` value type is `string | { specifier: string; version: string }`. Older pnpm versions store catalog entries as plain version strings. pnpm v9+ stores them as objects holding both the declared specifier and the resolved version.
+The `PnpmExtension.catalogs` value type is `string | { specifier: string; version: string }`. Older pnpm versions store catalog entries as plain version strings. pnpm v9+ stores them as objects with both the declared specifier and the resolved version.
 
 ### bun extensions
 
@@ -225,7 +225,7 @@ if (lockfile.pmSpecific?._tag === "bun") {
 
 ## Error handling
 
-Lockfile operations fail in two layers. Initialization failures — root discovery, package-manager detection, lockfile read, lockfile parse — surface from the **first** call to any `LockfileReader` method as a member of the exported `LockfileInitError` union:
+Lockfile operations fail at two stages. Initialization failures — root discovery, package-manager detection, lockfile read, lockfile parse — surface from the **first** call to any `LockfileReader` method as a member of the exported `LockfileInitError` union:
 
 ```typescript
 import type { LockfileInitError } from "workspaces-effect";
@@ -275,7 +275,7 @@ See [Troubleshooting](./09-troubleshooting.md) for solutions to specific failure
 
 `LockfileReaderLive` defers every filesystem operation (workspace-root discovery, package-manager detection, lockfile read and lockfile parse) until the first call to `readLockfile`, `resolvedVersion`, `workspaceDependencies` or `checkIntegrity`. `Effect.cached` memoizes the result for the life of the layer instance, so later calls reuse the parsed data.
 
-What this means in practice:
+In practice:
 
 - **Layer construction is O(1).** Building the layer via `Effect.provide(WorkspacesLive)` does no filesystem work. A program that composes the layer but never calls a `LockfileReader` method pays nothing.
 - **Errors surface from the first method call**, as members of the exported `LockfileInitError` union. Each `LockfileReader` method lists `LockfileInitError` in its E channel, so error handling sits at the call site instead of around `Effect.provide`.

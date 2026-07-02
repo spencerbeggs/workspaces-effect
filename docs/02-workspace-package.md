@@ -1,6 +1,6 @@
 # WorkspacePackage API
 
-`WorkspacePackage` is an Effect `Schema.Class`. `WorkspaceDiscovery` produces one instance per package it finds in the monorepo. Each instance has the parsed `package.json` fields, a handful of derived getters and methods for querying dependencies. Every method is also exported as a standalone dual function — call it on the instance, or use the static form with or without `pipe`.
+`WorkspacePackage` is an Effect `Schema.Class`. `WorkspaceDiscovery` produces one instance per package it finds in the monorepo. Each instance has the parsed `package.json` fields, computed getters and dependency-query methods. Every method is also exported as a standalone dual function — call it on the instance, or use the static form with or without `pipe`.
 
 ## Table of contents
 

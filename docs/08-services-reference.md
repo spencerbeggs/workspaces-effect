@@ -85,7 +85,7 @@ console.log(pm.type, pm.version, pm.runtime);
 
 ## WorkspaceDiscovery
 
-Resolves the workspace glob patterns and reads each matched `package.json`. The root workspace (with `relativePath: "."`) is the first entry in the returned list. When neither `pnpm-workspace.yaml` nor a `workspaces` field is present, discovery falls back to treating the root as a single-package workspace.
+Resolves the workspace glob patterns and reads each matched `package.json`. The root workspace (with `relativePath: "."`) is the first entry in the returned list. When neither `pnpm-workspace.yaml` nor a `workspaces` field is present, the root itself becomes the single workspace.
 
 **Layer:** `WorkspaceDiscoveryLive` (E channel: `never`; default-root discovery is deferred to the first method call that omits an explicit `cwd` and memoized via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`
@@ -109,7 +109,7 @@ Returns a single workspace package by name.
 
 #### `importerMap()`
 
-Returns a map keyed by workspace-relative directory path. Useful for cross-referencing lockfile importer keys against workspace packages. Derived from `listPackages()` and shares its cache.
+Returns a map keyed by workspace-relative directory path. Use it to cross-reference lockfile importer keys against workspace packages. Derived from `listPackages()` and shares its cache.
 
 - **Returns:** `Effect<ReadonlyMap<string, WorkspacePackage>, WorkspaceDiscoveryError>`
 
@@ -315,7 +315,7 @@ const affected = yield* detector.affectedPackages(options);
 
 ## PointInTimeWorkspace
 
-Reads workspace state — packages plus assembled pnpm catalogs — as it existed at any git ref, or of the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
+Reads workspace state — packages plus assembled pnpm catalogs — at any git ref or from the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
 
 **Layer:** `PointInTimeWorkspaceLive`
 **Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
@@ -328,7 +328,7 @@ Both methods take an optional `cwd`. Omit it and the workspace root is resolved 
 
 #### `at(ref: string, cwd?: string)`
 
-Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref for the layer's lifetime — git history is immutable, so they never go stale. Workspace globs are expanded one directory level deep at the ref (`packages/**` is treated as `packages/*`), matching live discovery.
+Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref for the layer's lifetime — git history is immutable, so they never go stale. Workspace globs expand one directory level deep at the ref (`packages/**` is treated as `packages/*`), same as live discovery.
 
 - **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeReadError>`
 
@@ -366,7 +366,7 @@ import type { PointInTimeReadError } from "workspaces-effect";
 
 ### WorkspaceStateSnapshot
 
-The `Schema.Class` value object both methods return, exported directly for building your own comparisons.
+The `Schema.Class` value object both methods return, exported directly so you can build your own comparisons.
 
 | Member | Type | Description |
 | --- | --- | --- |
@@ -376,7 +376,7 @@ The `Schema.Class` value object both methods return, exported directly for build
 | `package(name)` | `Option<PackageStateSnapshot>` | Find a package snapshot by name |
 | `resolve(dep, spec)` | `Option<string>` | Resolve a `catalog:`/`workspace:` specifier against this snapshot; `Option.none()` for plain or unresolvable specifiers |
 
-`PackageStateSnapshot` carries `name`, `version`, `relativePath` and the four dependency records (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`).
+`PackageStateSnapshot` has `name`, `version`, `relativePath` and the four dependency records (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`).
 
 ### CatalogSet
 
@@ -396,7 +396,7 @@ An immutable catalog collection shared by live and point-in-time resolution, als
 
 ## LockfileReader
 
-Parses the lockfile of any of the four supported package managers into a unified schema. The parser is selected from `PackageManagerDetector` output.
+Parses the lockfile of any of the four supported package managers into the normalized `LockfileData` shape. The parser is selected from `PackageManagerDetector` output.
 
 **Layer:** `LockfileReaderLive` (E channel: `never`; root discovery, PM detection, lockfile read and lockfile parse are deferred to the first method call and memoized for the layer's lifetime via `Effect.cached`)
 **Service deps:** `WorkspaceRoot`, `PackageManagerDetector`
@@ -409,7 +409,7 @@ All four methods carry the exported [`LockfileInitError`](#lockfileiniterror-uni
 
 #### `readLockfile()`
 
-Reads the workspace lockfile and parses it into the normalized `LockfileData` shape.
+Reads the workspace lockfile and parses it into `LockfileData`.
 
 - **Returns:** `Effect<LockfileData, LockfileInitError>`
 
@@ -450,7 +450,7 @@ import type { LockfileInitError } from "workspaces-effect";
 //   | LockfileParseError
 ```
 
-Each variant carries its own `_tag`. Catch them individually with `Effect.catchTag` or all four at once with `Effect.catchTags`.
+Each variant has its own `_tag`. Catch them individually with `Effect.catchTag` or all four at once with `Effect.catchTags`.
 
 ---
 
