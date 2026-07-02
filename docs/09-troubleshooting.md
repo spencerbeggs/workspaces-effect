@@ -13,6 +13,7 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 - [DependencyResolutionError](#dependencyresolutionerror)
 - [GitNotAvailableError](#gitnotavailableerror)
 - [ChangeDetectionError](#changedetectionerror)
+- [GitReadError](#gitreaderror)
 - [LockfileReadError](#lockfilereaderror)
 - [LockfileParseError](#lockfileparseerror)
 - [LockfileIntegrityError](#lockfileintegrityerror)
@@ -259,6 +260,35 @@ Effect.catchTag("ChangeDetectionError", (e) =>
 
 ---
 
+## GitReadError
+
+**Message:** `git read failed in /path: <command>` — the captured stderr follows on the next line
+
+**Fields:** `command`, `cwd`, `reason`
+
+**Causes:**
+
+- Raised by `PointInTimeWorkspace.at()` when a `git show` or `git ls-tree` invocation fails irrecoverably
+- The ref does not exist: a typo, an unfetched branch or a shallow clone without that history
+- Git is not installed, or the directory is not inside a git repository
+
+A path that simply does not exist at the ref is never a cause — point-in-time readers treat that as an absent file and skip it.
+
+**Solutions:**
+
+1. Resolve the ref first: `git rev-parse <ref>`
+2. In CI, set `fetch-depth: 0` on the checkout action — or at least enough history to include the requested ref
+3. Install git, or run inside a git repository
+4. Read the `command` and `reason` fields on the error; `reason` carries the captured stderr
+
+```typescript
+Effect.catchTag("GitReadError", (e) =>
+  Effect.logError(`Git read failed in ${e.cwd}: ${e.reason}`),
+);
+```
+
+---
+
 ## LockfileReadError
 
 **Message:** `Failed to read lockfile at "/path": <reason>`
@@ -346,7 +376,7 @@ This is a compile-time type error, not a runtime failure. It means a platform la
 **Causes:**
 
 - `NodeContext.layer` or `BunContext.layer` is not provided
-- `ChangeDetector` or `PackageResolver` is wired with `WorkspacesLive` instead of `WorkspacesFullLive`
+- `ChangeDetector`, `PackageResolver` or `PointInTimeWorkspace` is wired with `WorkspacesLive` instead of `WorkspacesFullLive`
 
 **Solutions:**
 

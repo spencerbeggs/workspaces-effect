@@ -76,8 +76,8 @@ Effect.runPromise(
 
 Two composite layers handle the common wiring:
 
-- **`WorkspacesLive`** — every service except change detection (requires `FileSystem` + `Path`)
-- **`WorkspacesFullLive`** — adds change detection (also requires `CommandExecutor`)
+- **`WorkspacesLive`** — every git-free service (requires `FileSystem` + `Path`)
+- **`WorkspacesFullLive`** — adds the git-backed services: change detection and point-in-time workspace reading (also requires `CommandExecutor`)
 
 ## Custom publishability detectors
 
@@ -220,10 +220,10 @@ The [Lazy initialization](./docs/05-lockfile-parsing.md#lazy-initialization) sec
 
 ## Point-in-time workspace reading
 
-`PointInTimeWorkspace` reads workspace state as it existed at any git ref, or the live working tree, without checking anything out. `at(ref)` reads each package's `package.json` and the workspace's pnpm catalogs via `git show`/`git ls-tree`; `worktree()` reads the same shape off disk via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot` — packages plus an assembled `CatalogSet` — so `catalog:`/`workspace:` specifiers resolve against the state as it existed *then*, not against the current tree.
+`PointInTimeWorkspace` reads workspace state as it existed at any git ref, or the live working tree, without checking anything out. `at(ref)` reads each package's `package.json` and the workspace's pnpm catalogs via `git show`/`git ls-tree` over `CommandExecutor` — no temporary checkout, no `node:child_process`. `worktree()` reads the same shape off disk via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot`: the packages plus an assembled `CatalogSet`, so `catalog:` and `workspace:` specifiers resolve against the state as it existed *then*, not against the current tree.
 
 ```typescript
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { NodeContext } from "@effect/platform-node";
 import { PointInTimeWorkspace, WorkspacesFullLive } from "workspaces-effect";
 
@@ -234,11 +234,13 @@ const program = Effect.gen(function* () {
   const live = yield* pointInTime.worktree();
 
   // Compare a package's declared version across the two snapshots
-  const before = atMainTip.package("my-lib");
+  const before = atMainTip.package("my-lib"); // Option<PackageStateSnapshot>
   const after = live.package("my-lib");
 
   // Resolve a catalog: specifier as it existed at that ref
   const resolved = atMainTip.resolve("effect", "catalog:default");
+  console.log(Option.getOrElse(resolved, () => "not in any catalog"));
+  // example output (varies): the range the default catalog held at that ref
 });
 
 Effect.runPromise(
@@ -249,7 +251,13 @@ Effect.runPromise(
 );
 ```
 
-`CatalogSet` (`fromWorkspaceYaml`, `fromLockfileCatalogs`, `merge`, `resolveSpecifier`) and `WorkspaceStateSnapshot` (`packages`, `catalogs`, `resolve`) are exported directly for building your own point-in-time comparisons. `PointInTimeWorkspace` is wired into `WorkspacesFullLive`; both methods fail with `PointInTimeReadError` (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`).
+`at` snapshots are cached per resolved root and ref — git history is immutable, so they never go stale. `worktree` re-reads on every call. Both take an optional `cwd` and resolve the workspace root from `process.cwd()` when it is omitted. A file absent at the ref is a skip, not an error: a package added since that commit simply does not appear in the older snapshot. Both methods fail with `PointInTimeReadError`, the union `GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`.
+
+Each snapshot assembles its catalogs from the lockfile first, then the inline `pnpm-workspace.yaml` catalogs, with inline winning per dependency. Historical refs pick up config-dependency-injected catalogs through the lockfile's `catalogs:` record, since pnpmfile hooks cannot be replayed for past commits. The live `CatalogResolver` service keeps its own precedence, where injected catalogs win.
+
+`PointInTimeWorkspace` ships in `WorkspacesFullLive` only. It needs `CommandExecutor` for the git reads, so the git-free `WorkspacesLive` composite does not include it — provide `WorkspacesFullLive` or wire `PointInTimeWorkspaceLive` yourself. The value objects are plain `Schema.Class` values exported directly: `CatalogSet` (`fromWorkspaceYaml`, `fromLockfileCatalogs`, `merge`, `resolveSpecifier`) and `WorkspaceStateSnapshot` (`packages`, `catalogs`, `package`, `resolve`), so you can build your own point-in-time comparisons without the service.
+
+Two limitations worth knowing: `worktree()` sources injected catalogs from the lockfile, so a `configDependencies` edit in `pnpm-workspace.yaml` that has not been `pnpm install`ed yet is invisible to the snapshot, and `at(ref)` expands workspace globs one directory level deep (`packages/**` is treated as `packages/*`), matching live discovery.
 
 ## Documentation
 

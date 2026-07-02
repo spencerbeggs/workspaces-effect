@@ -13,6 +13,7 @@ All services are imported from `"workspaces-effect"`. Service methods have `R = 
 - [TopologicalSorter](#topologicalsorter)
 - [PackageResolver](#packageresolver)
 - [ChangeDetector](#changedetector)
+- [PointInTimeWorkspace](#pointintimeworkspace)
 - [LockfileReader](#lockfilereader)
 - [PublishabilityDetector](#publishabilitydetector)
 
@@ -308,6 +309,87 @@ const detector = yield* ChangeDetector;
 const options = new ChangeDetectionOptions({ base: "origin/main" });
 const affected = yield* detector.affectedPackages(options);
 ```
+
+---
+
+## PointInTimeWorkspace
+
+Reads workspace state — packages plus assembled pnpm catalogs — as it existed at any git ref, or of the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
+
+**Layer:** `PointInTimeWorkspaceLive`
+**Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
+**Platform deps:** `FileSystem`, `Path`, `CommandExecutor`
+**Composite layers:** `WorkspacesFullLive` only
+
+### Methods
+
+Both methods take an optional `cwd`. Omit it and the workspace root is resolved from `process.cwd()`.
+
+#### `at(ref: string, cwd?: string)`
+
+Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref for the layer's lifetime — git history is immutable, so they never go stale. Workspace globs are expanded one directory level deep at the ref (`packages/**` is treated as `packages/*`), matching live discovery.
+
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeReadError>`
+
+#### `worktree(cwd?: string)`
+
+Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible, because injected catalogs are read from the lockfile.
+
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeReadError>`
+
+```typescript
+const pointInTime = yield* PointInTimeWorkspace;
+const atRef = yield* pointInTime.at("origin/main");
+const live = yield* pointInTime.worktree();
+
+const wasThere = atRef.package("@myorg/ui"); // Option<PackageStateSnapshot>
+const range = atRef.resolve("effect", "catalog:default"); // Option<string>
+```
+
+### PointInTimeReadError union
+
+```typescript
+import type { PointInTimeReadError } from "workspaces-effect";
+
+// PointInTimeReadError =
+//   | GitReadError
+//   | CatalogAssemblyError
+//   | WorkspaceRootNotFoundError
+//   | WorkspaceDiscoveryError
+```
+
+- `GitReadError` — a `git show`/`git ls-tree` invocation failed irrecoverably (git missing, unknown revision)
+- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed; a malformed lockfile never fails, it degrades to an empty catalog set
+- `WorkspaceRootNotFoundError` — no `cwd` was passed and no workspace root was found from `process.cwd()`
+- `WorkspaceDiscoveryError` — `worktree()` could not enumerate the live packages
+
+### WorkspaceStateSnapshot
+
+The `Schema.Class` value object both methods return, exported directly for building your own comparisons.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `packages` | `ReadonlyArray<PackageStateSnapshot>` | Every package at that moment |
+| `catalogs` | `CatalogSet` | Assembled catalogs: lockfile first, then inline `pnpm-workspace.yaml` (inline wins per dependency) |
+| `versions` | `Record<string, string>` | Getter mapping package name to declared version |
+| `package(name)` | `Option<PackageStateSnapshot>` | Find a package snapshot by name |
+| `resolve(dep, spec)` | `Option<string>` | Resolve a `catalog:`/`workspace:` specifier against this snapshot; `Option.none()` for plain or unresolvable specifiers |
+
+`PackageStateSnapshot` carries `name`, `version`, `relativePath` and the four dependency records (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies`).
+
+### CatalogSet
+
+An immutable catalog collection shared by live and point-in-time resolution, also exported directly.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `CatalogSet.empty()` | `CatalogSet` | An empty catalog set |
+| `CatalogSet.fromCatalogs(catalogs)` | `CatalogSet` | Wrap a pnpm `Catalogs` map |
+| `CatalogSet.fromWorkspaceYaml(text)` | `Effect<CatalogSet, CatalogAssemblyError>` | Parse the `catalog:`/`catalogs:` sections of a `pnpm-workspace.yaml` text |
+| `CatalogSet.fromLockfileCatalogs(raw)` | `CatalogSet` | Normalize a pnpm lockfile `catalogs:` section |
+| `CatalogSet.merge(...sets)` | `CatalogSet` | Merge sets; later sets win per dependency within a catalog |
+| `toCatalogs()` | `Catalogs` | View as the pnpm `Catalogs` shape |
+| `resolveSpecifier(dep, spec)` | `Option<string>` | Resolve a `catalog:` specifier; `Option.none()` for non-catalog or unresolved specifiers |
 
 ---
 

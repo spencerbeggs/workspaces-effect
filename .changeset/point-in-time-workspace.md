@@ -30,10 +30,10 @@ upgrading.
   resolution, extracted so `PointInTimeWorkspace` and `CatalogResolver` share
   one resolution semantic. `CatalogSet.fromWorkspaceYaml`,
   `CatalogSet.fromLockfileCatalogs`, and `CatalogSet.merge` build a set from
-  the same three sources `CatalogResolver` already read (inline
-  `pnpm-workspace.yaml`, lockfile `catalogs:`, and lockfile-replayed
-  config-dependency injections); `resolveSpecifier` resolves a `catalog:`
-  specifier against it.
+  inline `pnpm-workspace.yaml` catalogs and lockfile `catalogs:` entries
+  (the lockfile record also carries config-dependency-injected catalogs,
+  which is how they reach historical snapshots); `resolveSpecifier` resolves
+  a `catalog:` specifier against it.
 
 - **`WorkspaceStateSnapshot`** — packages plus an assembled `CatalogSet` for
   one moment in time. `resolve(dependency, specifier)` answers "what did this
@@ -75,6 +75,8 @@ Effect.runPromise(
 
 **Migration note:** `CatalogResolverLive` is internally rebuilt over
 `CatalogSet` in this release. Its public API and behavior are unchanged;
-catalog precedence remains lockfile-then-inline (inline
-`pnpm-workspace.yaml` catalogs win), with config-dependency-injected entries
-reaching resolution through the lockfile record as before.
+catalog precedence remains lockfile, then inline `pnpm-workspace.yaml`,
+then config-dependency-injected catalogs (replayed from each plugin's
+installed pnpmfile `updateConfig` hook — injected entries win, as before).
+Only `at(ref)` snapshots read config-dependency catalogs from the lockfile
+record instead, since hooks cannot be replayed for a historical ref.
