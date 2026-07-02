@@ -4,15 +4,22 @@ import type { Effect, Option } from "effect";
 import { Context } from "effect";
 import type { CatalogAssemblyError } from "../errors/CatalogAssemblyError.js";
 import type { CatalogResolutionError } from "../errors/CatalogResolutionError.js";
+import type { WorkspaceRootNotFoundError } from "../errors/WorkspaceRootNotFoundError.js";
 import type { ManifestLike } from "../layers/catalog/resolve.js";
-import type { LockfileInitError } from "./LockfileReader.js";
 
 /**
  * Errors surfaced by {@link CatalogResolver} methods (assembly defers I/O to first call).
  *
+ * @remarks
+ * Assembly reads the working tree through the shared worktree-catalog pipeline,
+ * so the only failure modes are locating the workspace root
+ * ({@link WorkspaceRootNotFoundError}) and reading/parsing the manifest or an
+ * unreadable lockfile ({@link CatalogAssemblyError}). A missing or malformed
+ * lockfile degrades to empty catalogs rather than failing.
+ *
  * @public
  */
-export type CatalogResolverError = CatalogAssemblyError | LockfileInitError;
+export type CatalogResolverError = CatalogAssemblyError | WorkspaceRootNotFoundError;
 
 /**
  * Resolves a workspace's catalogs and rewrites catalog:/workspace: specifiers.

@@ -13,7 +13,6 @@
 import { CommandExecutor, FileSystem, Path } from "@effect/platform";
 import { Effect, Layer, Option } from "effect";
 import { parse as parseYaml } from "yaml-effect";
-import type { CatalogAssemblyError } from "../errors/CatalogAssemblyError.js";
 import { CatalogSet } from "../schemas/CatalogSet.js";
 import { PackageStateSnapshot, WorkspaceStateSnapshot } from "../schemas/WorkspaceStateSnapshot.js";
 import type { PointInTimeOptions } from "../services/PointInTimeWorkspace.js";
@@ -21,9 +20,10 @@ import { PointInTimeWorkspace } from "../services/PointInTimeWorkspace.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { inlineCatalogs } from "./catalog/assemble.js";
-import { readWorkspaceManifest, workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
+import { workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
 import { compileWorkspaceGlobs } from "./discovery/glob-core.js";
 import { makeGitReader } from "./point-in-time/git.js";
+import { readWorktreeCatalogState } from "./point-in-time/worktree-catalogs.js";
 
 /**
  * Build a {@link PackageStateSnapshot} from raw `package.json` text.
@@ -65,6 +65,21 @@ const packageSnapshotFromJson = (text: string, relativePath: string): PackageSta
 };
 
 /**
+ * Catalogs of a lockfile text read at a ref. Malformed → empty set
+ * (mirrors worktree-catalogs.ts; the at-ref side has no filesystem read,
+ * so only the parse-degradation branch applies here).
+ *
+ * @internal
+ */
+const lockfileCatalogsAtRef = (text: Option.Option<string>): Effect.Effect<CatalogSet> =>
+	Option.isNone(text)
+		? Effect.succeed(CatalogSet.empty())
+		: parseYaml(text.value).pipe(
+				Effect.map((parsed) => CatalogSet.fromLockfileCatalogs((parsed as { catalogs?: unknown } | null)?.catalogs)),
+				Effect.orElseSucceed(() => CatalogSet.empty()),
+			);
+
+/**
  * Convenience type alias for the {@link PointInTimeWorkspaceLive} layer signature.
  *
  * @public
@@ -97,19 +112,6 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 
 		const resolveRoot = (cwd?: string) => workspaceRoot.find(cwd ?? process.cwd());
 
-		// Catalogs of a lockfile TEXT (shared by at/worktree). A malformed lockfile
-		// degrades to "no lockfile catalogs" — the inline catalogs still resolve; do
-		// not fail the whole snapshot.
-		const lockfileCatalogsFromText = (text: string | null): Effect.Effect<CatalogSet, CatalogAssemblyError> =>
-			text === null
-				? Effect.succeed(CatalogSet.empty())
-				: parseYaml(text).pipe(
-						Effect.map((parsed) =>
-							CatalogSet.fromLockfileCatalogs((parsed as { catalogs?: unknown } | null)?.catalogs),
-						),
-						Effect.orElseSucceed(() => CatalogSet.empty()),
-					);
-
 		const at = (ref: string, options?: PointInTimeOptions) =>
 			Effect.gen(function* () {
 				const root = yield* resolveRoot(options?.cwd);
@@ -125,7 +127,7 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 					inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }),
 				);
 				const lockText = yield* reader.show(root, ref, "pnpm-lock.yaml");
-				const lockCatalogs = yield* lockfileCatalogsFromText(Option.getOrNull(lockText));
+				const lockCatalogs = yield* lockfileCatalogsAtRef(lockText);
 
 				// Expand package globs at the ref through the shared core: literal dirs
 				// pass through; each wildcard lists its parent via ls-tree; negations
@@ -176,17 +178,11 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 							optionalDependencies: { ...p.optionalDependencies },
 						}),
 				);
-				const manifest = yield* readWorkspaceManifest(root).pipe(
+				const state = yield* readWorktreeCatalogState(root).pipe(
 					Effect.provideService(FileSystem.FileSystem, fs),
 					Effect.provideService(Path.Path, path),
 				);
-				const inline = CatalogSet.fromCatalogs(
-					inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }),
-				);
-				const lockPath = path.join(root, "pnpm-lock.yaml");
-				const lockText = yield* fs.readFileString(lockPath).pipe(Effect.orElseSucceed(() => null));
-				const lockCatalogs = yield* lockfileCatalogsFromText(lockText);
-				return new WorkspaceStateSnapshot({ packages, catalogs: CatalogSet.merge(lockCatalogs, inline) });
+				return new WorkspaceStateSnapshot({ packages, catalogs: state.merged });
 			}).pipe(Effect.withSpan("PointInTimeWorkspace.worktree"));
 
 		return PointInTimeWorkspace.of({ at, worktree });

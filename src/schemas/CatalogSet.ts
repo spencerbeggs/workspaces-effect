@@ -25,16 +25,16 @@ export class CatalogSet extends Schema.Class<CatalogSet>("CatalogSet")({
 
 	/** Wrap a pnpm `Catalogs` map, dropping undefined entries. */
 	static fromCatalogs(catalogs: Catalogs): CatalogSet {
-		const entries: Record<string, Record<string, string>> = {};
+		const entries: Record<string, Record<string, string>> = Object.create(null);
 		for (const [name, catalog] of Object.entries(catalogs)) {
 			if (!catalog) continue;
-			const clean: Record<string, string> = {};
+			const clean: Record<string, string> = Object.create(null);
 			for (const [dep, spec] of Object.entries(catalog)) {
 				if (typeof spec === "string") clean[dep] = spec;
 			}
 			entries[name] = clean;
 		}
-		return new CatalogSet({ entries });
+		return new CatalogSet({ entries: { ...entries } });
 	}
 
 	/** Parse the `catalog:`/`catalogs:` sections of a pnpm-workspace.yaml text. */
@@ -52,10 +52,10 @@ export class CatalogSet extends Schema.Class<CatalogSet>("CatalogSet")({
 	 */
 	static fromLockfileCatalogs(raw: unknown): CatalogSet {
 		if (raw === null || typeof raw !== "object") return CatalogSet.empty();
-		const entries: Record<string, Record<string, string>> = {};
+		const entries: Record<string, Record<string, string>> = Object.create(null);
 		for (const [catalogName, catalog] of Object.entries(raw as Record<string, unknown>)) {
 			if (catalog === null || typeof catalog !== "object") continue;
-			const clean: Record<string, string> = {};
+			const clean: Record<string, string> = Object.create(null);
 			for (const [dep, value] of Object.entries(catalog as Record<string, unknown>)) {
 				if (typeof value === "string") {
 					clean[dep] = value;
@@ -66,7 +66,7 @@ export class CatalogSet extends Schema.Class<CatalogSet>("CatalogSet")({
 			}
 			entries[catalogName] = clean;
 		}
-		return new CatalogSet({ entries });
+		return new CatalogSet({ entries: { ...entries } });
 	}
 
 	/** Merge sets; later sets win per dependency within a catalog. */
@@ -82,6 +82,13 @@ export class CatalogSet extends Schema.Class<CatalogSet>("CatalogSet")({
 	/**
 	 * Resolve a `catalog:` specifier to its concrete range. `Option.none`
 	 * for non-catalog specifiers and unresolved catalog entries.
+	 *
+	 * @remarks
+	 * Deliberately contrasts with `CatalogResolver.resolveSpecifier`: this
+	 * method is catalog-only and returns `Option.none` on unresolvable refs,
+	 * whereas the live service also handles `workspace:` specifiers and fails
+	 * with a typed `CatalogResolutionError`. Both route through
+	 * `resolveManifest`, which is the single resolution semantic.
 	 */
 	resolveSpecifier(dependency: string, specifier: string): Option.Option<string> {
 		if (!specifier.startsWith("catalog:")) return Option.none();
@@ -96,7 +103,9 @@ export class CatalogSet extends Schema.Class<CatalogSet>("CatalogSet")({
 				},
 			);
 			const spec = resolved.dependencies?.[dependency];
-			return spec !== undefined && spec !== specifier ? Option.some(spec) : Option.none();
+			// resolveManifest throws on unresolved refs, so a returned spec is
+			// always a rewritten value — no unchanged-specifier guard needed.
+			return spec === undefined ? Option.none() : Option.some(spec);
 		} catch (e) {
 			if (e instanceof CatalogResolutionError) return Option.none();
 			throw e;
