@@ -1,5 +1,17 @@
 # workspaces-effect
 
+## 2.0.1
+
+### Bug Fixes
+
+* [`be79bd4`](https://github.com/spencerbeggs/workspaces-effect/commit/be79bd4e6d1a2c229b740cfa5b8b067678c85f21) Bump semver-effect to side effectful version for bundling
+
+### Dependencies
+
+* [`be79bd4`](https://github.com/spencerbeggs/workspaces-effect/commit/be79bd4e6d1a2c229b740cfa5b8b067678c85f21) | Dependency | Type | Action | From | To |
+  \| ------------- | ---------- | ------- | ------ | ------ |
+  \| semver-effect | dependency | updated | ^0.3.0 | ^0.3.1 |
+
 ## 2.0.0
 
 ### Breaking Changes
