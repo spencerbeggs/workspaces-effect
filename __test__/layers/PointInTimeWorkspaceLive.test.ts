@@ -227,3 +227,42 @@ describe("PointInTimeWorkspaceLive", () => {
 		}
 	});
 });
+
+describe("relativePath producer parity", () => {
+	let parityRoot: string;
+
+	beforeAll(() => {
+		parityRoot = mkdtempSync(join(tmpdir(), "pit-parity-"));
+		writeFileSync(join(parityRoot, "package.json"), JSON.stringify({ name: "parity-root", version: "0.0.0" }));
+		writeFileSync(join(parityRoot, "pnpm-workspace.yaml"), `packages:\n  - packages/*\n`);
+		mkdirSync(join(parityRoot, "packages", "a"), { recursive: true });
+		writeFileSync(
+			join(parityRoot, "packages", "a", "package.json"),
+			JSON.stringify({ name: "@parity/a", version: "1.0.0" }),
+		);
+		const g = (...args: string[]) => execFileSync("git", args, { cwd: parityRoot, encoding: "utf8" });
+		g("init", "-b", "main");
+		g("add", "-A");
+		g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "parity base");
+	});
+	afterAll(() => rmSync(parityRoot, { recursive: true, force: true }));
+
+	it("at(HEAD) and worktree() agree on relativePath for every package, root included", async () => {
+		const RootStubP = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(parityRoot) } as never);
+		const liveP = PointInTimeWorkspaceLive.pipe(
+			Layer.provide(Layer.mergeAll(RootStubP, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStubP)))),
+			Layer.provide(NodeContext.layer),
+		);
+		const [atPaths, wtPaths] = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				const atSnap = yield* pit.at("HEAD");
+				const wtSnap = yield* pit.worktree();
+				const paths = (s: typeof atSnap) => s.packages.map((p) => `${p.name}=${p.relativePath}`).sort();
+				return [paths(atSnap), paths(wtSnap)] as const;
+			}).pipe(Effect.provide(liveP)) as Effect.Effect<readonly [string[], string[]], unknown, never>,
+		);
+		expect(wtPaths).toEqual(atPaths);
+		expect(atPaths).toContain("parity-root=.");
+	});
+});
