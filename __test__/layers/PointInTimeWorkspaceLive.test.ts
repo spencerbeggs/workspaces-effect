@@ -25,7 +25,7 @@ beforeAll(() => {
 	writeFileSync(join(root, "package.json"), JSON.stringify({ name: "fixture-root", version: "0.0.0" }));
 	writeFileSync(
 		join(root, "pnpm-workspace.yaml"),
-		`packages:\n  - packages/*\ncatalogs:\n  silk:\n    effect: ^3.20.0\n`,
+		`packages:\n  - packages/*\n  - "!packages/excluded-pkg"\ncatalogs:\n  silk:\n    effect: ^3.20.0\n`,
 	);
 	writeFileSync(
 		join(root, "pnpm-lock.yaml"),
@@ -36,6 +36,13 @@ beforeAll(() => {
 		join(root, "packages", "a", "package.json"),
 		JSON.stringify({ name: "@fixture/a", version: "1.0.0", dependencies: { effect: "catalog:silk" } }),
 	);
+	mkdirSync(join(root, "packages", "excluded-pkg"), { recursive: true });
+	writeFileSync(
+		join(root, "packages", "excluded-pkg", "package.json"),
+		JSON.stringify({ name: "@fixture/excluded", version: "1.0.0" }),
+	);
+	mkdirSync(join(root, "packages", "no-manifest"), { recursive: true });
+	writeFileSync(join(root, "packages", "no-manifest", "README.md"), "no package.json here\n");
 	git("init", "-b", "main");
 	git("add", "-A");
 	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "base");
@@ -43,7 +50,7 @@ beforeAll(() => {
 	// Working-tree mutation: bump the catalog, bump the package version.
 	writeFileSync(
 		join(root, "pnpm-workspace.yaml"),
-		`packages:\n  - packages/*\ncatalogs:\n  silk:\n    effect: ^3.21.0\n`,
+		`packages:\n  - packages/*\n  - "!packages/excluded-pkg"\ncatalogs:\n  silk:\n    effect: ^3.21.0\n`,
 	);
 	writeFileSync(
 		join(root, "packages", "a", "package.json"),
@@ -147,5 +154,36 @@ describe("PointInTimeWorkspaceLive", () => {
 				return yield* pit.at(baseSha);
 			}),
 		);
+	});
+
+	it("at(ref) honors negation patterns like live discovery", async () => {
+		const snap = await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at(baseSha);
+			}),
+		);
+		expect(Option.isNone(snap.package("@fixture/excluded"))).toBe(true);
+		expect(Option.isSome(snap.package("@fixture/a"))).toBe(true);
+	});
+
+	it("at(ref) skips a directory listed in the tree whose package.json is absent at the ref", async () => {
+		const snap = await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at(baseSha);
+			}),
+		);
+		expect(snap.packages.map((p) => p.relativePath)).not.toContain("packages/no-manifest");
+	});
+
+	it("worktree() honors negation patterns (producer parity)", async () => {
+		const snap = await run(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.worktree();
+			}),
+		);
+		expect(Option.isNone(snap.package("@fixture/excluded"))).toBe(true);
 	});
 });

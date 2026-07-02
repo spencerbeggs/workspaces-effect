@@ -22,6 +22,7 @@ import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { inlineCatalogs } from "./catalog/assemble.js";
 import { readWorkspaceManifest, workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
+import { compileWorkspaceGlobs } from "./discovery/glob-core.js";
 import { makeGitReader } from "./point-in-time/git.js";
 
 /**
@@ -126,31 +127,24 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 				const lockText = yield* reader.show(root, ref, "pnpm-lock.yaml");
 				const lockCatalogs = yield* lockfileCatalogsFromText(Option.getOrNull(lockText));
 
-				// Expand package globs at the ref: literal dirs pass through; a single
-				// trailing wildcard segment lists the parent via ls-tree. The root (".")
-				// is always included.
-				const globs = (manifest.packages ?? []).map((g) => g.replace(/\/\*\*$/, "/*"));
+				// Expand package globs at the ref through the shared core: literal dirs
+				// pass through; each wildcard lists its parent via ls-tree; negations
+				// remove matches. The root (".") is always included.
+				const compiled = compileWorkspaceGlobs(manifest.packages ?? []);
 				const dirs: string[] = ["."];
-				for (const glob of globs) {
-					if (!glob.includes("*") && !glob.includes("?")) {
-						if (!dirs.includes(glob)) dirs.push(glob);
-						continue;
-					}
-					const prefix = glob.includes("/") ? glob.slice(0, glob.lastIndexOf("/") + 1) : "";
-					const entries = yield* reader.lsTree(root, ref, prefix);
-					const regex = new RegExp(
-						`^${glob
-							.replace(/[.+^${}()|[\]\\]/g, "\\$&")
-							.replace(/\*/g, "[^/]*")
-							.replace(/\?/g, "[^/]")}$`,
-					);
+				for (const literal of compiled.literals) {
+					if (!dirs.includes(literal)) dirs.push(literal);
+				}
+				for (const wildcard of compiled.wildcards) {
+					const entries = yield* reader.lsTree(root, ref, wildcard.prefix);
 					for (const entry of entries) {
-						if (regex.test(entry) && !dirs.includes(entry)) dirs.push(entry);
+						if (wildcard.matches(entry) && !dirs.includes(entry)) dirs.push(entry);
 					}
 				}
+				const included = dirs.filter((dir) => dir === "." || !compiled.isExcluded(dir));
 
 				const packages: PackageStateSnapshot[] = [];
-				for (const dir of dirs) {
+				for (const dir of included) {
 					const pkgPath = dir === "." ? "package.json" : `${dir}/package.json`;
 					const text = yield* reader.show(root, ref, pkgPath);
 					if (Option.isNone(text)) continue;

@@ -15,6 +15,7 @@ import { WorkspaceDiscoveryError } from "../errors/WorkspaceDiscoveryError.js";
 import { PackageJsonSchema, WorkspacePackage } from "../schemas/core.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
+import { compileWorkspaceGlobs } from "./discovery/glob-core.js";
 
 /**
  * Read workspace patterns from `pnpm-workspace.yaml` or `package.json`.
@@ -116,9 +117,11 @@ const parsePnpmWorkspacePatterns = (content: string): string[] => {
 };
 
 /**
- * Resolve workspace patterns to actual directory paths.
- * Handles simple wildcard patterns like `"packages/*"`.
- * Negation patterns (starting with `"!"`) are used to exclude matches.
+ * Resolve workspace patterns to actual directory paths through the shared
+ * {@link compileWorkspaceGlobs} core, so live discovery and at-ref discovery
+ * (`PointInTimeWorkspaceLive.at`) interpret `packages:` patterns identically.
+ * Negation patterns (starting with `"!"`) exclude matches by pattern, not by
+ * re-resolving them against the filesystem.
  *
  * @internal
  */
@@ -129,78 +132,43 @@ const resolvePatterns = (
 	patterns: ReadonlyArray<string>,
 ): Effect.Effect<ReadonlyArray<string>, WorkspaceDiscoveryError> =>
 	Effect.gen(function* () {
-		const included = new Set<string>();
-		const excluded = new Set<string>();
+		const compiled = compileWorkspaceGlobs(patterns);
+		const included = new Map<string, string>(); // relative (POSIX) -> absolute
 
-		for (const pattern of patterns) {
-			if (pattern.startsWith("!")) {
-				// Negation pattern — resolve and add to exclusions
-				const positivePattern = pattern.slice(1);
-				const resolved = yield* resolvePattern(fs, path, root, positivePattern);
-				for (const p of resolved) excluded.add(p);
-			} else {
-				const resolved = yield* resolvePattern(fs, path, root, pattern);
-				for (const p of resolved) included.add(p);
-			}
+		const hasPackageJson = (dir: string) =>
+			fs.exists(path.join(dir, "package.json")).pipe(Effect.orElseSucceed(() => false));
+
+		for (const literal of compiled.literals) {
+			const fullPath = path.join(root, literal);
+			if (yield* hasPackageJson(fullPath)) included.set(literal, fullPath);
 		}
 
-		// Remove excluded paths
-		for (const ex of excluded) included.delete(ex);
-
-		return Array.from(included).sort();
-	});
-
-/**
- * Resolve a single workspace pattern to directory paths.
- * Supports: `"packages/*"`, `"apps/*"`, exact paths like `"tools/cli"`.
- *
- * @internal
- */
-const resolvePattern = (
-	fs: FileSystem.FileSystem,
-	path: Path.Path,
-	root: string,
-	pattern: string,
-): Effect.Effect<ReadonlyArray<string>, WorkspaceDiscoveryError> =>
-	Effect.gen(function* () {
-		// Handle "packages/*" style patterns
-		if (pattern.endsWith("/*") || pattern.endsWith("/**")) {
-			const baseDir = pattern.replace(/\/\*+$/, "");
+		for (const wildcard of compiled.wildcards) {
+			const baseDir = wildcard.prefix.replace(/\/$/, "");
 			const fullBase = path.join(root, baseDir);
-
 			const exists = yield* fs.exists(fullBase).pipe(Effect.orElseSucceed(() => false));
 			if (!exists) {
 				return yield* Effect.fail(
 					new WorkspaceDiscoveryError({
 						root,
-						reason: `workspace pattern "${pattern}" references non-existent directory "${baseDir}"`,
+						reason: `workspace pattern "${wildcard.source}" references non-existent directory "${baseDir}"`,
 					}),
 				);
 			}
-
 			const entries = yield* fs.readDirectory(fullBase).pipe(Effect.orElseSucceed(() => [] as string[]));
-
-			// Filter to directories that contain a package.json
-			const results: string[] = [];
 			for (const entry of entries) {
+				const candidate = baseDir === "" ? entry : `${baseDir}/${entry}`;
+				if (!wildcard.matches(candidate)) continue;
 				const entryPath = path.join(fullBase, entry);
-				const hasPkgJson = yield* fs
-					.exists(path.join(entryPath, "package.json"))
-					.pipe(Effect.orElseSucceed(() => false));
-				if (hasPkgJson) {
-					results.push(entryPath);
-				}
+				if (yield* hasPackageJson(entryPath)) included.set(candidate, entryPath);
 			}
-			return results;
 		}
 
-		// Exact path — check if it has a package.json
-		const fullPath = path.join(root, pattern);
-		const hasPkgJson = yield* fs.exists(path.join(fullPath, "package.json")).pipe(Effect.orElseSucceed(() => false));
-		if (hasPkgJson) {
-			return [fullPath];
+		const results: string[] = [];
+		for (const [relative, absolute] of included) {
+			if (!compiled.isExcluded(relative)) results.push(absolute);
 		}
-		return [];
+		return results.sort();
 	});
 
 /**
