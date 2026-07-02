@@ -6,7 +6,7 @@ tooling. Supports npm, pnpm, yarn Berry, and Bun workspaces.
 ## Status
 
 All phases complete plus WorkspacePackage enrichment (Issue #12) and the
-CatalogResolver service. 457 tests passing (313 unit + 144 integration). Full
+CatalogResolver service. 477 tests passing (333 unit + 144 integration). Full
 observability (spans + structured
 logging at Debug level) across all services -- library is silent under
 Effect's default logger; consumers opt in via
@@ -51,6 +51,28 @@ call. New exported `LockfileInitError` =
 `WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`;
 LockfileReader method signatures include `LockfileInitError` in their E
 channels (breaking: previously construction-time failures only).
+PointInTimeWorkspace service (branch feat/catalog-point-in-time, 2.0.0 major):
+`at(ref, cwd?)` reads pnpm-workspace.yaml, pnpm-lock.yaml, and each
+package.json at any git ref via `git show`/`git ls-tree` over CommandExecutor
+(no checkout), cached per (resolved root, ref); `worktree(cwd?)` reads the
+live tree via WorkspaceDiscovery, uncached. Both return
+WorkspaceStateSnapshot; error union `PointInTimeReadError = GitReadError |
+CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`.
+Wired into WorkspacesFullLive only (needs CommandExecutor), NOT WorkspacesLive.
+New pure Schema.Class value objects: CatalogSet (statics
+empty/fromCatalogs/fromWorkspaceYaml/fromLockfileCatalogs/merge; instance
+resolveSpecifier/toCatalogs) and WorkspaceStateSnapshot/PackageStateSnapshot
+(`resolve()` answers catalog:/workspace: specifiers against the snapshot's own
+package versions and catalogs; plain or unresolvable → Option.none).
+GitReadError added; `workspaceManifestFromYaml` + `WorkspaceManifestData` now
+exported @public. Internal GitReader (`src/layers/point-in-time/git.ts`,
+@internal) has Option-based missing-path semantics (absent path at ref is
+Option.none, never an error) and concurrent stream draining.
+CatalogResolverLive now normalizes lockfile catalogs through
+`CatalogSet.fromLockfileCatalogs` (behavior identical). Known limits:
+worktree() cannot see config-dependency edits not yet pnpm-installed; at(ref)
+glob expansion is one-level (matches #62). See
+`@.claude/design/point-in-time-workspace.md`.
 
 ## Design Documents
 
@@ -63,6 +85,7 @@ Load these when working on the corresponding area:
 - `.claude/design/phase2-dependency-graph.md` — dependency graph design
 - `.claude/design/phase3-change-detection.md` — git change detection design
 - `.claude/design/phase4-configuration-lockfiles.md` — configuration and lockfiles design (parsing, catalogs, CatalogResolver)
+- `.claude/design/point-in-time-workspace.md` — PointInTimeWorkspace service, snapshots at a git ref, CatalogSet/WorkspaceStateSnapshot value objects, GitReader
 - `.claude/design/lockfile-reader-service.md` — LockfileReader and PublishabilityDetector service interfaces
 - `.claude/design/lockfile-schemas.md` — all 4 lockfile format schemas
 - `.claude/design/bun-lockfile.md` — bun.lock JSONC format reference

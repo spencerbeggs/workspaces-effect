@@ -5,8 +5,8 @@ category: architecture
 status: current
 completeness: 90
 created: 2026-03-12
-updated: 2026-06-13
-last-synced: 2026-06-13
+updated: 2026-07-01
+last-synced: 2026-07-01
 authors:
   - C. Spencer Beggs
 tags:
@@ -19,6 +19,7 @@ related:
   - lockfile-reader-service.md
   - effect-patterns-parsing.md
   - research-notes.md
+  - point-in-time-workspace.md
 ---
 
 ## Configuration and lockfiles design
@@ -230,6 +231,7 @@ export const WorkspacesFullLive = Layer.mergeAll(
     Layer.provide(PackageResolverLive),
     Layer.provide(WorkspacesLive),
   ),
+  PointInTimeWorkspaceLive.pipe(Layer.provide(WorkspacesLive)),
 )
 ```
 
@@ -254,6 +256,8 @@ without that cache. Helper modules live under `src/layers/catalog/`
 `resolve.ts`). The service interface (`catalogs`, `resolve`, `resolveSpecifier`) and its `CatalogResolverError` type live in `src/services/CatalogResolver.ts`. Failures surface as the typed `CatalogAssemblyError` / `CatalogResolutionError`; see `architecture.md` (Group 4) for the full design paragraph.
 
 It narrowly reuses the lightweight pnpm catalog primitives (`@pnpm/catalogs.{types,config,protocol-parser,resolver}`) for inline-catalog projection, protocol parsing and single-spec resolution, while avoiding the heavy `@pnpm/config.reader` / `@pnpm/hooks.pnpmfile` runtime chain (hook replay uses a hand-rolled light loader). The lockfile parsers themselves take no `@pnpm` dependency — they parse `pnpm-lock.yaml` directly through the YAML pipeline, keeping the core platform-independent.
+
+Since the point-in-time work (2.0.0), the catalog-normalization core is shared with `PointInTimeWorkspace` through two extractions: `CatalogSet` (`src/schemas/CatalogSet.ts`), a pure `Schema.Class` value object carrying the single normalization/resolution semantic — `CatalogResolverLive` now routes lockfile-catalog normalization (string-or-`{specifier, version}` entries) through `CatalogSet.fromLockfileCatalogs` instead of hand-rolling it — and `workspaceManifestFromYaml` (`src/layers/catalog/workspace-manifest.ts`), a filesystem-free text parser for the catalog/config-dependency/packages slice of `pnpm-workspace.yaml` that the filesystem-bound `readWorkspaceManifest` now delegates to. Point-in-time snapshots use the same lockfile-then-inline precedence but skip config-dependency hook replay at a ref; see `point-in-time-workspace.md`.
 
 ## Testing Strategy
 

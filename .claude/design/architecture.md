@@ -5,12 +5,13 @@ category: architecture
 status: current
 completeness: 100
 created: 2026-03-12
-updated: 2026-06-13
-last-synced: 2026-06-13
+updated: 2026-07-01
+last-synced: 2026-07-01
 related:
   - phase2-dependency-graph.md
   - phase3-change-detection.md
   - phase4-configuration-lockfiles.md
+  - point-in-time-workspace.md
   - lockfile-reader-service.md
   - lockfile-schemas.md
   - effect-patterns-core.md
@@ -44,7 +45,7 @@ platform layers (Node.js or Bun) at the edge.
 
 ## Current State
 
-The library exposes ten services across four groups, two composite layers (`WorkspacesLive` without git, `WorkspacesFullLive` with git), and a synchronous escape-hatch API. Observability is wired across every service via `Effect.withSpan` plus structured logging at Debug/Trace level only, so the library is silent under Effect's default logger; consumers opt in with `Logger.withMinimumLogLevel(LogLevel.Debug)`. See the README "Observability" section for subscription examples.
+The library exposes eleven services across five groups, two composite layers (`WorkspacesLive` without git, `WorkspacesFullLive` with git), and a synchronous escape-hatch API. Observability is wired across every service via `Effect.withSpan` plus structured logging at Debug/Trace level only, so the library is silent under Effect's default logger; consumers opt in with `Logger.withMinimumLogLevel(LogLevel.Debug)`. See the README "Observability" section for subscription examples.
 
 Two layers defer their I/O to first method call: `LockfileReaderLive` and `WorkspaceDiscoveryLive` wrap their initialization (root walk, PM detection, lockfile read/parse, package scan) in `Effect.cached`, keeping layer construction O(1) and paying the cost once per layer instance. The pure in-memory data services (`DependencyGraphLive`, `TopologicalSorterLive`) build their structures eagerly in `Layer.effect`. Lazy init means initialization failures surface from the first method call rather than from `Layer.provide`; see the lazy-init decision below and `effect-patterns-core.md`.
 
@@ -66,7 +67,7 @@ Tests live in a top-level `__test__/` directory following the `@savvy-web/vitest
 
 ## Service Architecture
 
-The library provides 10 services organized into four groups:
+The library provides 11 services organized into five groups:
 
 ### Group 1: Discovery
 
@@ -135,6 +136,14 @@ Users can provide custom layers to override detection strategy.
 `Schema.Class` representing resolved publish target metadata with fields:
 `name`, `registry`, `directory`, `access`, `provenance`.
 
+### Group 5: Point-in-Time State
+
+| Service | Purpose | Dependencies |
+| --- | --- | --- |
+| `PointInTimeWorkspace` | Workspace packages + catalogs at a git ref or the live worktree | WorkspaceRoot, WorkspaceDiscovery, CommandExecutor, FileSystem, Path |
+
+`PointInTimeWorkspace.at(ref)` reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at any git ref via `git show`/`git ls-tree` (over `CommandExecutor`, without checking the ref out); `worktree()` reads the same shape from the live tree via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot` — packages plus an assembled `CatalogSet` — whose `resolve` method answers `catalog:`/`workspace:` specifiers against that moment's state. `at` results are cached per `(resolved root, ref)`; `worktree` is uncached. Wired into `WorkspacesFullLive` only (it needs git). See `point-in-time-workspace.md` for the full design, including the skip-not-fail package-read contract, ref glob expansion and the no-hook-replay catalog decision.
+
 ### Service Interface Pattern
 
 Class-based `Context.Tag` pattern (GenericTag deprecated):
@@ -177,6 +186,8 @@ pipe(pkg, WorkspacePackage.hasDependency("x")) // static data-last
 
 `readPackageJson` is a related standalone effectful utility (not dual) that reads and decodes a package's `package.json`, also wired as a static method. `DependencyDiff` (the result type of `dependencyDiff`) is defined in `src/schemas/core.ts`.
 
+Three further pure `Schema.Class` value objects support point-in-time reads and are public exports: `CatalogSet` (`src/schemas/CatalogSet.ts`, the shared catalog normalization/resolution semantic used by both `CatalogResolver` and `PointInTimeWorkspace`) and `WorkspaceStateSnapshot` / `PackageStateSnapshot` (`src/schemas/WorkspaceStateSnapshot.ts`, one moment's packages plus catalogs with a snapshot-scoped `resolve`). See `point-in-time-workspace.md`.
+
 ## Error hierarchy
 
 All errors use `Data.TaggedError` with exported `*Base` constants for api-extractor DTS bundling and computed `message` getters. The full set lives under `src/errors/` and is exported from the barrel; group them by where they arise:
@@ -185,6 +196,9 @@ All errors use `Data.TaggedError` with exported `*Base` constants for api-extrac
 - Analysis: `PackageNotFoundError`, `CyclicDependencyError`, `DependencyResolutionError`
 - Change detection: `GitNotAvailableError`, `ChangeDetectionError`
 - Lockfiles and catalogs: `LockfileReadError`, `LockfileParseError`, `LockfileIntegrityError`, `CatalogAssemblyError`, `CatalogResolutionError`
+- Point-in-time: `GitReadError` (a `git show`/`git ls-tree` invocation failed irrecoverably; a path merely absent at a ref is `Option.none`, not an error)
+
+`PointInTimeReadError` is an exported union (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`) surfaced by both `PointInTimeWorkspace` methods.
 
 `LockfileInitError` is an exported union (`WorkspaceRootNotFoundError | PackageManagerDetectionError | LockfileReadError | LockfileParseError`) describing the deferred failure modes of the lazily-initialized lockfile/discovery layers; see the lazy-init decision below.
 
@@ -211,7 +225,7 @@ const WorkspacesFullLive: Layer.Layer<
   WorkspaceRoot | PackageManagerDetector | WorkspaceDiscovery |
   DependencyGraph | TopologicalSorter |
   LockfileReader | PublishabilityDetector |
-  PackageResolver | ChangeDetector,
+  PackageResolver | ChangeDetector | PointInTimeWorkspace,
   never,
   FileSystem | Path | CommandExecutor
 >
@@ -327,4 +341,6 @@ the correct platform context (NodeContext vs BunContext).
 - **Workspace patterns handled in `WorkspaceDiscoveryLive`** rather than a separate glob-resolver service
 - **Static method wiring** in `src/index.ts` following the `semver-effect` pattern, avoiding circular imports between schema classes and the dual-API functions in `src/utils/`
 - **Root package included in `listPackages()`** as the first entry; filter on the `isRootWorkspace` getter when not wanted
+- **Point-in-time reads via git objects, never checkouts** — `PointInTimeWorkspaceLive` reads refs through `git show`/`git ls-tree` over `CommandExecutor` (internal `GitReader` in `src/layers/point-in-time/git.ts`), so no temp worktrees and no mutation of the consumer's checkout; see `point-in-time-workspace.md`
+- **`CatalogSet` as the single catalog value object** — `CatalogResolverLive` and point-in-time snapshots share one normalization and resolution semantic (`CatalogResolverLive` normalizes lockfile catalogs through `CatalogSet.fromLockfileCatalogs` rather than hand-rolling it)
 - **Sync API as escape hatch** — `src/sync.ts` uses `node:` imports directly, an intentional exception to the platform-abstraction rule because synchronous callers (lint-staged, Vitest config) cannot boot an Effect runtime. The sync API does not participate in caching, observability or typed errors.
