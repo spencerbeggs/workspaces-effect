@@ -270,6 +270,7 @@ Effect.catchTag("ChangeDetectionError", (e) =>
 - Raised by `PointInTimeWorkspace.at()` when a `git show` or `git ls-tree` invocation fails irrecoverably
 - The ref does not exist: a typo, an unfetched branch or a shallow clone without that history
 - Git is not installed, or the directory is not inside a git repository
+- The command exceeded its 30-second timeout (`reason` contains `timed out`), which usually points to a hung git process or a pathologically large object
 
 A path that does not exist at the ref is never a cause — point-in-time readers treat that as an absent file and skip it.
 
@@ -278,7 +279,8 @@ A path that does not exist at the ref is never a cause — point-in-time readers
 1. Resolve the ref first: `git rev-parse <ref>`
 2. In CI, set `fetch-depth: 0` on the checkout action — or at least enough history to include the requested ref
 3. Install git, or run inside a git repository
-4. Read the `command` and `reason` fields on the error; `reason` contains the captured stderr
+4. For timeouts, check for stuck git processes or credential prompts blocking the command
+5. Read the `command` and `reason` fields on the error; `reason` contains the captured stderr
 
 ```typescript
 Effect.catchTag("GitReadError", (e) =>
@@ -376,15 +378,17 @@ Effect.catchTag("LockfileIntegrityError", (e) =>
 
 - `pnpm-workspace.yaml` is unreadable or its YAML is malformed
 - The default catalog is defined twice — both a top-level `catalog:` section and a `catalogs.default:` entry
+- A `pnpm-lock.yaml` exists on disk but cannot be read (permissions, I/O); this fails with `source: "lockfile"`
 - For point-in-time reads, the `pnpm-workspace.yaml` stored at the requested git ref is malformed
 
-Two things that do not raise this error: a failing config-dependency hook is logged and skipped, and a malformed lockfile degrades to an empty lockfile-catalog source.
+Two things that do not raise this error: a failing config-dependency hook is logged and skipped, and a missing or malformed lockfile degrades to an empty lockfile-catalog source.
 
 **Solutions:**
 
 1. Fix the YAML syntax in `pnpm-workspace.yaml` — look for merge conflict markers and bad indentation
 2. Define the default catalog once: either `catalog:` or `catalogs.default:`, not both
-3. Read the `source` field to see which input failed
+3. For `source: "lockfile"`, check read permissions on `pnpm-lock.yaml`
+4. Read the `source` field to see which input failed
 
 ```typescript
 Effect.catchTag("CatalogAssemblyError", (e) =>

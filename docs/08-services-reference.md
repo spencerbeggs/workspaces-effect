@@ -324,19 +324,19 @@ Reads workspace state — packages plus assembled pnpm catalogs — at any git r
 
 ### Methods
 
-Both methods take an optional `cwd`. Omit it and the workspace root is resolved from `process.cwd()`.
+Both methods take an optional `PointInTimeOptions` object with one field, `cwd` — a starting directory the workspace root is resolved from by walking up, the same semantics as `WorkspaceDiscovery`. Omit it and the walk starts at `process.cwd()`.
 
-#### `at(ref: string, cwd?: string)`
+#### `at(ref: string, options?: PointInTimeOptions)`
 
-Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref for the layer's lifetime — git history is immutable, so they never go stale. Workspace globs expand one directory level deep at the ref (`packages/**` is treated as `packages/*`), same as live discovery.
+Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref: the cache holds 64 entries, evicts the least recently used past that and never caches failures, so a failed read retries on the next call. Workspace globs — `!` negations included — go through the same pattern core as live discovery; expansion is one directory level deep at the ref (`packages/**` is treated as `packages/*`).
 
-- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeReadError>`
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeAtError>`
 
-#### `worktree(cwd?: string)`
+#### `worktree(options?: PointInTimeOptions)`
 
-Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible, because injected catalogs are read from the lockfile.
+Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible: pnpmfile hook replay is an overlay only the live `CatalogResolver` applies by default, so snapshots see injected catalogs through the lockfile record.
 
-- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeReadError>`
+- **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeWorktreeError>`
 
 ```typescript
 const pointInTime = yield* PointInTimeWorkspace;
@@ -347,22 +347,26 @@ const wasThere = atRef.package("@myorg/ui"); // Option<PackageStateSnapshot>
 const range = atRef.resolve("effect", "catalog:default"); // Option<string>
 ```
 
-### PointInTimeReadError union
+### Per-method error unions
+
+Each method has its own union; `PointInTimeReadError` covers both when you handle them in one place.
 
 ```typescript
-import type { PointInTimeReadError } from "workspaces-effect";
+import type {
+  PointInTimeAtError,
+  PointInTimeReadError,
+  PointInTimeWorktreeError,
+} from "workspaces-effect";
 
-// PointInTimeReadError =
-//   | GitReadError
-//   | CatalogAssemblyError
-//   | WorkspaceRootNotFoundError
-//   | WorkspaceDiscoveryError
+// PointInTimeAtError       = GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError
+// PointInTimeWorktreeError = CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError
+// PointInTimeReadError     = PointInTimeAtError | PointInTimeWorktreeError
 ```
 
-- `GitReadError` — a `git show`/`git ls-tree` invocation failed irrecoverably (git missing, unknown revision)
-- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed; a malformed lockfile never fails, it degrades to an empty catalog set
-- `WorkspaceRootNotFoundError` — no `cwd` was passed and no workspace root was found from `process.cwd()`
-- `WorkspaceDiscoveryError` — `worktree()` could not enumerate the live packages
+- `GitReadError` — a `git show`/`git ls-tree` invocation failed irrecoverably (git missing, unknown revision, 30-second timeout). `at` only
+- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed, or an on-disk `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile never fails, it degrades to an empty catalog set
+- `WorkspaceRootNotFoundError` — no workspace root was found walking up from `options.cwd` (or `process.cwd()` when omitted)
+- `WorkspaceDiscoveryError` — the live packages could not be enumerated. `worktree` only
 
 ### WorkspaceStateSnapshot
 
@@ -456,10 +460,10 @@ Each variant has its own `_tag`. Catch them individually with `Effect.catchTag` 
 
 ## CatalogResolver
 
-Assembles the workspace's complete pnpm catalog set and rewrites `catalog:` and `workspace:` specifiers to concrete version constraints. Three sources feed the set, merged with later-wins precedence per dependency: lockfile-recorded catalogs, then inline `catalog:`/`catalogs:` declarations in `pnpm-workspace.yaml`, then catalogs injected by config dependencies (replayed from each plugin's installed pnpmfile `updateConfig` hook). `workspace:` specifiers resolve against live `WorkspaceDiscovery` versions, so they work on npm, yarn and Bun workspaces too.
+Assembles the workspace's complete pnpm catalog set and rewrites `catalog:` and `workspace:` specifiers to concrete version constraints. Three sources feed the set, merged with later-wins precedence per dependency: lockfile-recorded catalogs, then inline `catalog:`/`catalogs:` declarations in `pnpm-workspace.yaml`, then catalogs injected by config dependencies (replayed from each plugin's installed pnpmfile `updateConfig` hook). The manifest and lockfile are read through the same working-tree pipeline that feeds `PointInTimeWorkspace.worktree()`; hook replay is the overlay this resolver adds on top. `workspace:` specifiers resolve against live `WorkspaceDiscovery` versions, so they work on npm, yarn and Bun workspaces too.
 
 **Layer:** `CatalogResolverLive` (E channel: `never`; catalog assembly is deferred to the first method call and memoized via `Effect.cached`, the same lazy-init pattern as `LockfileReaderLive`)
-**Service deps:** `WorkspaceRoot`, `LockfileReader`, `WorkspaceDiscovery`
+**Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
 **Platform deps:** `FileSystem`, `Path`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
@@ -503,11 +507,11 @@ import type { CatalogResolverError } from "workspaces-effect";
 
 // CatalogResolverError =
 //   | CatalogAssemblyError
-//   | LockfileInitError
+//   | WorkspaceRootNotFoundError
 ```
 
-- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, or the default catalog is defined twice
-- `LockfileInitError` — the lazy-init union from [`LockfileReader`](#lockfileiniterror-union); in practice a failed lockfile read degrades to "no lockfile catalogs" rather than failing assembly, so the member most likely to surface is `WorkspaceRootNotFoundError`
+- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, the default catalog is defined twice, or a `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile degrades to empty lockfile catalogs instead
+- `WorkspaceRootNotFoundError` — no workspace root was found from `process.cwd()`
 
 ---
 

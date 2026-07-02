@@ -14,17 +14,24 @@ existing consumers should review the catalog precedence note below before
 upgrading.
 
 - **`PointInTimeWorkspace`** — a new service with two methods:
-  - `at(ref, cwd?)` — workspace packages and catalogs as they existed at any
-    git ref (SHA, branch, tag), read via `git show`/`git ls-tree` over
-    `CommandExecutor` without checking the ref out. Cached per
-    `(resolved root, ref)`.
-  - `worktree(cwd?)` — the same shape for the live working tree, via
+  - `at(ref, options?)` — workspace packages and catalogs as they existed at
+    any git ref (SHA, branch, tag), read via `git show`/`git ls-tree` over
+    `CommandExecutor` without checking the ref out. Workspace `!` negation
+    patterns are honored identically to live discovery. Snapshots are cached
+    per `(resolved root, ref)` in a capacity-bounded cache (64 entries, LRU);
+    failed reads are never cached.
+  - `worktree(options?)` — the same shape for the live working tree, via
     `WorkspaceDiscovery`.
 
-  Both return a `WorkspaceStateSnapshot` and fail with `PointInTimeReadError`
-  (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError |
-  WorkspaceDiscoveryError`). Wired into `WorkspacesFullLive` — no extra layer
-  wiring required for consumers already on the full composite.
+  Both take `options.cwd` as a starting directory for workspace-root
+  resolution (the root is found by walking up, matching `WorkspaceDiscovery`)
+  and return a `WorkspaceStateSnapshot`. `at` fails with `PointInTimeAtError`
+  (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError`) and
+  `worktree` with `PointInTimeWorktreeError` (`CatalogAssemblyError |
+  WorkspaceRootNotFoundError | WorkspaceDiscoveryError`); the umbrella
+  `PointInTimeReadError` union remains exported. Wired into
+  `WorkspacesFullLive` — no extra layer wiring required for consumers already
+  on the full composite.
 
 - **`CatalogSet`** — a pure, immutable value object for catalog assembly and
   resolution, extracted so `PointInTimeWorkspace` and `CatalogResolver` share
@@ -40,10 +47,13 @@ upgrading.
   specifier mean here" — `catalog:` against the snapshot's catalogs,
   `workspace:` against the snapshot's package versions.
 
-- **`GitReadError`** and the internal `GitReader` (`git show`/`git ls-tree`
-  over `CommandExecutor`) support the above; `workspaceManifestFromYaml`
-  parses `pnpm-workspace.yaml` text independent of the filesystem, useful for
-  parsing a ref's manifest without checking it out.
+- **`GitReadError`** and the internal `GitReader` (`git cat-file`/`git show`/
+  `git ls-tree` over `CommandExecutor`) support the above. Every git command
+  pins `LC_ALL=C` and carries a 30-second timeout surfaced as `GitReadError`;
+  a path absent at the ref is a skip, never an error.
+  `workspaceManifestFromYaml` parses `pnpm-workspace.yaml` text independent
+  of the filesystem, useful for parsing a ref's manifest without checking it
+  out.
 
 **Usage:**
 
@@ -73,10 +83,15 @@ Effect.runPromise(
 );
 ```
 
-**Migration note:** `CatalogResolverLive` is internally rebuilt over
-`CatalogSet` in this release. Its public API and behavior are unchanged;
-catalog precedence remains lockfile, then inline `pnpm-workspace.yaml`,
-then config-dependency-injected catalogs (replayed from each plugin's
-installed pnpmfile `updateConfig` hook — injected entries win, as before).
-Only `at(ref)` snapshots read config-dependency catalogs from the lockfile
-record instead, since hooks cannot be replayed for a historical ref.
+**Migration note:** `CatalogResolverLive` is rebuilt over the same
+worktree-catalog pipeline that powers `worktree()` snapshots. Catalog
+precedence is unchanged: lockfile, then inline `pnpm-workspace.yaml`, then
+config-dependency-injected catalogs (replayed from each plugin's installed
+pnpmfile `updateConfig` hook — injected entries win). Only `at(ref)`
+snapshots read config-dependency catalogs from the lockfile record instead,
+since hooks cannot be replayed for a historical ref. Three visible changes:
+the layer no longer requires `LockfileReader`, the `CatalogResolverError`
+union narrows to `CatalogAssemblyError | WorkspaceRootNotFoundError`, and a
+`pnpm-lock.yaml` that exists but cannot be read now fails assembly with
+`CatalogAssemblyError` instead of silently yielding no lockfile catalogs (a
+missing lockfile still degrades gracefully).
