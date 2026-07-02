@@ -13,6 +13,7 @@ An [Effect](https://effect.website) library for monorepo tooling. It discovers w
 - Git-driven change detection that returns the affected packages for a diff
 - Lockfile parsing for all four package managers, including integrity checks against `package.json` ranges
 - Catalog resolution that rewrites `catalog:` and `workspace:` specifiers to concrete versions, assembling pnpm catalogs from inline, config-dependency and lockfile sources (`workspace:` still resolves on npm, yarn and Bun)
+- Point-in-time workspace reading — packages and catalogs as they existed at any git ref, or the live working tree, without checking anything out
 - Runs on Node.js or Bun via `@effect/platform` adapters — no `node:` imports leak into your code
 - Synchronous helpers (`findWorkspaceRootSync`, `getWorkspacePackagesSync`) for places Effect cannot reach, like lint-staged hooks
 
@@ -216,6 +217,39 @@ const program = Effect.gen(function* () {
 ```
 
 The [Lazy initialization](./docs/05-lockfile-parsing.md#lazy-initialization) section of the lockfile guide goes deeper.
+
+## Point-in-time workspace reading
+
+`PointInTimeWorkspace` reads workspace state as it existed at any git ref, or the live working tree, without checking anything out. `at(ref)` reads each package's `package.json` and the workspace's pnpm catalogs via `git show`/`git ls-tree`; `worktree()` reads the same shape off disk via `WorkspaceDiscovery`. Both return a `WorkspaceStateSnapshot` — packages plus an assembled `CatalogSet` — so `catalog:`/`workspace:` specifiers resolve against the state as it existed *then*, not against the current tree.
+
+```typescript
+import { Effect } from "effect";
+import { NodeContext } from "@effect/platform-node";
+import { PointInTimeWorkspace, WorkspacesFullLive } from "workspaces-effect";
+
+const program = Effect.gen(function* () {
+  const pointInTime = yield* PointInTimeWorkspace;
+
+  const atMainTip = yield* pointInTime.at("main");
+  const live = yield* pointInTime.worktree();
+
+  // Compare a package's declared version across the two snapshots
+  const before = atMainTip.package("my-lib");
+  const after = live.package("my-lib");
+
+  // Resolve a catalog: specifier as it existed at that ref
+  const resolved = atMainTip.resolve("effect", "catalog:default");
+});
+
+Effect.runPromise(
+  program.pipe(
+    Effect.provide(WorkspacesFullLive),
+    Effect.provide(NodeContext.layer),
+  ),
+);
+```
+
+`CatalogSet` (`fromWorkspaceYaml`, `fromLockfileCatalogs`, `merge`, `resolveSpecifier`) and `WorkspaceStateSnapshot` (`packages`, `catalogs`, `resolve`) are exported directly for building your own point-in-time comparisons. `PointInTimeWorkspace` is wired into `WorkspacesFullLive`; both methods fail with `PointInTimeReadError` (`GitReadError | CatalogAssemblyError | WorkspaceRootNotFoundError | WorkspaceDiscoveryError`).
 
 ## Documentation
 
