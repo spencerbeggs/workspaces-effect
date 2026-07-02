@@ -70,7 +70,6 @@ export const WorkspacesLive = Layer.mergeAll(
 	PublishabilityDetectorLive, // pure layer, no dependencies
 	CatalogResolverLive.pipe(
 		Layer.provide(WorkspaceRootLive),
-		Layer.provide(LockfileReaderLive.pipe(Layer.provide(WorkspaceRootLive), Layer.provide(PackageManagerDetectorLive))),
 		Layer.provide(WorkspaceDiscoveryLive.pipe(Layer.provide(WorkspaceRootLive))),
 	),
 );
