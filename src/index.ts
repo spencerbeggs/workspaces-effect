@@ -135,6 +135,7 @@ export {
 	WorkspaceDependency,
 } from "./schemas/lockfile.js";
 export { PublishTarget } from "./schemas/publish.js";
+export { PackageStateSnapshot, WorkspaceStateSnapshot } from "./schemas/WorkspaceStateSnapshot.js";
 export type { CatalogResolverError } from "./services/CatalogResolver.js";
 export { CatalogResolver } from "./services/CatalogResolver.js";
 export { ChangeDetectionOptions, ChangeDetector } from "./services/ChangeDetector.js";
