@@ -17,6 +17,8 @@ Reference for every error type in workspaces-effect. All errors extend `Data.Tag
 - [LockfileReadError](#lockfilereaderror)
 - [LockfileParseError](#lockfileparseerror)
 - [LockfileIntegrityError](#lockfileintegrityerror)
+- [CatalogAssemblyError](#catalogassemblyerror)
+- [CatalogResolutionError](#catalogresolutionerror)
 - [Platform layer missing](#platform-layer-missing)
 
 ---
@@ -362,6 +364,60 @@ Effect.catchTag("LockfileParseError", (e) =>
 ```typescript
 Effect.catchTag("LockfileIntegrityError", (e) =>
   Effect.logError(`Integrity check failed: ${e.reason}`),
+);
+```
+
+---
+
+## CatalogAssemblyError
+
+**Message:** `Catalog assembly failed (<source>): <reason>`
+
+**Fields:** `source` (`"manifest" | "config-dependency" | "lockfile"`), `reason`
+
+**Causes:**
+
+- `pnpm-workspace.yaml` is unreadable or its YAML is malformed
+- The default catalog is defined twice — both a top-level `catalog:` section and a `catalogs.default:` entry
+- For point-in-time reads, the `pnpm-workspace.yaml` stored at the requested git ref is malformed
+
+Two things that do not raise this error: a failing config-dependency hook is logged and skipped, and a malformed lockfile degrades to an empty lockfile-catalog source.
+
+**Solutions:**
+
+1. Fix the YAML syntax in `pnpm-workspace.yaml` — look for merge conflict markers and bad indentation
+2. Define the default catalog once: either `catalog:` or `catalogs.default:`, not both
+3. Read the `source` field to see which input failed
+
+```typescript
+Effect.catchTag("CatalogAssemblyError", (e) =>
+  Effect.logError(`Catalog assembly failed (${e.source}): ${e.reason}`),
+);
+```
+
+---
+
+## CatalogResolutionError
+
+**Message:** `Cannot resolve <field>.<dependency> ("<specifier>"): <reason>`
+
+**Fields:** `field`, `dependency`, `specifier`, `reason`
+
+**Causes:**
+
+- A `catalog:` specifier names a catalog that does not exist in the assembled set
+- The catalog exists but has no entry for the dependency
+- A `workspace:` specifier references a name that matches no workspace package
+
+**Solutions:**
+
+1. Define the missing catalog or catalog entry in `pnpm-workspace.yaml`
+2. Run install so lockfile-recorded catalogs are current
+3. For `workspace:` specifiers, confirm the referenced package exists in the workspace and the name matches exactly (case-sensitive, including scope)
+
+```typescript
+Effect.catchTag("CatalogResolutionError", (e) =>
+  Effect.logError(`${e.field}.${e.dependency} ("${e.specifier}"): ${e.reason}`),
 );
 ```
 

@@ -15,6 +15,7 @@ All services are imported from `"workspaces-effect"`. Service methods have `R = 
 - [ChangeDetector](#changedetector)
 - [PointInTimeWorkspace](#pointintimeworkspace)
 - [LockfileReader](#lockfilereader)
+- [CatalogResolver](#catalogresolver)
 - [PublishabilityDetector](#publishabilitydetector)
 
 ---
@@ -450,6 +451,63 @@ import type { LockfileInitError } from "workspaces-effect";
 ```
 
 Each variant carries its own `_tag`. Catch them individually with `Effect.catchTag` or all four at once with `Effect.catchTags`.
+
+---
+
+## CatalogResolver
+
+Assembles the workspace's complete pnpm catalog set and rewrites `catalog:` and `workspace:` specifiers to concrete version constraints. Three sources feed the set, merged with later-wins precedence per dependency: lockfile-recorded catalogs, then inline `catalog:`/`catalogs:` declarations in `pnpm-workspace.yaml`, then catalogs injected by config dependencies (replayed from each plugin's installed pnpmfile `updateConfig` hook). `workspace:` specifiers resolve against live `WorkspaceDiscovery` versions, so they work on npm, yarn and Bun workspaces too.
+
+**Layer:** `CatalogResolverLive` (E channel: `never`; catalog assembly is deferred to the first method call and memoized via `Effect.cached`, the same lazy-init pattern as `LockfileReaderLive`)
+**Service deps:** `WorkspaceRoot`, `LockfileReader`, `WorkspaceDiscovery`
+**Platform deps:** `FileSystem`, `Path`
+**Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
+
+### Methods
+
+All three methods carry the exported [`CatalogResolverError`](#catalogresolvererror-union) union in their E channels because the first call drives the lazy assembly.
+
+#### `catalogs()`
+
+The complete assembled catalog set as a pnpm `Catalogs` map. Assembled once, then cached.
+
+- **Returns:** `Effect<Catalogs, CatalogResolverError>`
+
+#### `resolve(manifest: ManifestLike)`
+
+Rewrites every `catalog:` and `workspace:` specifier across a manifest's four dependency records and returns the rewritten manifest. Plain specifiers pass through untouched. `ManifestLike` is the exported minimal `package.json` shape: `name`, `version` and the optional dependency records.
+
+- **Returns:** `Effect<ManifestLike, CatalogResolverError | CatalogResolutionError>`
+
+#### `resolveSpecifier(dependency: string, specifier: string)`
+
+Resolves a single specifier. `Option.none()` means no rewrite is needed — a plain specifier. An unresolvable `catalog:` or `workspace:` reference fails with `CatalogResolutionError`, the same behavior as `resolve`, not a silent `Option.none()`.
+
+- **Returns:** `Effect<Option<string>, CatalogResolverError | CatalogResolutionError>`
+
+```typescript
+const resolver = yield* CatalogResolver;
+const catalogs = yield* resolver.catalogs();
+const rewritten = yield* resolver.resolve({
+  name: "@myorg/ui",
+  version: "1.0.0",
+  dependencies: { effect: "catalog:default", "@myorg/core": "workspace:^" },
+});
+const one = yield* resolver.resolveSpecifier("effect", "catalog:default"); // Option<string>
+```
+
+### CatalogResolverError union
+
+```typescript
+import type { CatalogResolverError } from "workspaces-effect";
+
+// CatalogResolverError =
+//   | CatalogAssemblyError
+//   | LockfileInitError
+```
+
+- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, or the default catalog is defined twice
+- `LockfileInitError` — the lazy-init union from [`LockfileReader`](#lockfileiniterror-union); in practice a failed lockfile read degrades to "no lockfile catalogs" rather than failing assembly, so the member most likely to surface is `WorkspaceRootNotFoundError`
 
 ---
 
