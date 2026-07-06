@@ -1,5 +1,15 @@
 # workspaces-effect
 
+## 2.0.2
+
+### Bug Fixes
+
+* Forced patch release to remove broken yaml-effect\@0.7.1 peer issue
+
+### Patch Changes
+
+Thanks to [@spencerbeggs](https://github.com/spencerbeggs) for their contributions!
+
 ## 2.0.1
 
 ### Bug Fixes
