@@ -199,6 +199,11 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 		const worktree = (options?: PointInTimeOptions) =>
 			Effect.gen(function* () {
 				const root = yield* resolveRoot(options?.cwd);
+				// A worktree snapshot means "the live state now". WorkspaceDiscovery
+				// caches listPackages per root for the layer lifetime, so a snapshot
+				// taken after manifests changed on disk would otherwise serve the
+				// pre-change manifests (and diff as a no-op against the base ref).
+				yield* discovery.refresh();
 				const pkgs = yield* discovery.listPackages(root);
 				const packages = pkgs.map(
 					(p) =>
