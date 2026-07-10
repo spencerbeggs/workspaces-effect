@@ -267,6 +267,58 @@ describe("relativePath producer parity", () => {
 	});
 });
 
+describe("worktree freshness", () => {
+	let freshRoot: string;
+
+	beforeAll(() => {
+		freshRoot = mkdtempSync(join(tmpdir(), "pit-fresh-"));
+		writeFileSync(join(freshRoot, "package.json"), JSON.stringify({ name: "fresh-root", version: "0.0.0" }));
+		writeFileSync(join(freshRoot, "pnpm-workspace.yaml"), `packages:\n  - packages/*\n`);
+		mkdirSync(join(freshRoot, "packages", "a"), { recursive: true });
+		writeFileSync(
+			join(freshRoot, "packages", "a", "package.json"),
+			JSON.stringify({ name: "@fresh/a", version: "1.0.0", dependencies: { "std-env": "^4.1.0" } }),
+		);
+		const g = (...args: string[]) => execFileSync("git", args, { cwd: freshRoot, encoding: "utf8" });
+		g("init", "-b", "main");
+		g("add", "-A");
+		g("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "fresh base");
+	});
+	afterAll(() => rmSync(freshRoot, { recursive: true, force: true }));
+
+	it("worktree() reflects manifest edits made after an earlier read of the same layer", async () => {
+		// Regression: WorkspaceDiscoveryLive caches listPackages per root for the
+		// layer lifetime, so a worktree() snapshot taken after files changed used
+		// to serve the manifests from BEFORE the change (the silk-update-action
+		// "DepsRegen: wrote 0 changeset(s)" bug). worktree() means "live state
+		// now" -- it must re-read the working tree on every call.
+		const RootStubF = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(freshRoot) } as never);
+		const liveF = PointInTimeWorkspaceLive.pipe(
+			Layer.provide(Layer.mergeAll(RootStubF, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStubF)))),
+			Layer.provide(NodeContext.layer),
+		);
+		const [before, after] = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				const first = yield* pit.worktree();
+				// Mutate the manifest on disk between the two reads.
+				writeFileSync(
+					join(freshRoot, "packages", "a", "package.json"),
+					JSON.stringify({ name: "@fresh/a", version: "1.0.0", dependencies: { "std-env": "^4.2.0" } }),
+				);
+				const second = yield* pit.worktree();
+				return [first, second] as const;
+			}).pipe(Effect.provide(liveF)) as Effect.Effect<
+				readonly [WorkspaceStateSnapshot, WorkspaceStateSnapshot],
+				unknown,
+				never
+			>,
+		);
+		expect(Option.getOrNull(before.package("@fresh/a"))?.dependencies["std-env"]).toBe("^4.1.0");
+		expect(Option.getOrNull(after.package("@fresh/a"))?.dependencies["std-env"]).toBe("^4.2.0");
+	});
+});
+
 describe("root-level wildcard parity", () => {
 	let wildcardRoot: string;
 
