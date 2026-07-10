@@ -1,5 +1,17 @@
 # workspaces-effect
 
+## 2.0.3
+
+### Bug Fixes
+
+* `PointInTimeWorkspace.worktree()` now discards the `WorkspaceDiscovery` cache before reading, so a snapshot taken after `package.json` files changed on disk reflects the live manifests instead of the ones cached at the first discovery call. Previously a long-lived layer (one shared discovery instance) served the pre-change manifests, making a worktree snapshot compare equal to its base ref and silently producing an empty dependency diff downstream. [#163][#163]
+
+### Patch Changes
+
+Thanks to [@spencerbeggs](https://github.com/spencerbeggs) for their contributions!
+
+[#163]: https://github.com/spencerbeggs/workspaces-effect/pull/163
+
 ## 2.0.2
 
 ### Bug Fixes
