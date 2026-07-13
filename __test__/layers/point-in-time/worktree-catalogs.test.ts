@@ -70,3 +70,34 @@ describe("readWorktreeCatalogState", () => {
 		rmSync(dir, { recursive: true, force: true });
 	});
 });
+
+describe("package.json catalogs (bun/npm)", () => {
+	let pkgJsonRoot: string;
+
+	beforeAll(() => {
+		pkgJsonRoot = mkdtempSync(join(tmpdir(), "wc-pkgjson-"));
+		writeFileSync(
+			join(pkgJsonRoot, "package.json"),
+			JSON.stringify({
+				name: "root",
+				workspaces: {
+					packages: ["packages/*"],
+					catalog: { react: "^19.0.0" },
+					catalogs: { silk: { effect: "^3.21.4" } },
+				},
+			}),
+		);
+	});
+
+	afterAll(() => {
+		rmSync(pkgJsonRoot, { recursive: true, force: true });
+	});
+
+	it("reads catalogs from the workspaces field when there is no pnpm-workspace.yaml", async () => {
+		const state = await run(read(pkgJsonRoot));
+
+		expect(state.merged.entries.default).toEqual({ react: "^19.0.0" });
+		expect(state.merged.entries.silk).toEqual({ effect: "^3.21.4" });
+		expect(state.lockfile.entries).toEqual({});
+	});
+});

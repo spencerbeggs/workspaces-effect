@@ -20,6 +20,8 @@ import { PointInTimeWorkspace } from "../services/PointInTimeWorkspace.js";
 import { WorkspaceDiscovery } from "../services/WorkspaceDiscovery.js";
 import { WorkspaceRoot } from "../services/WorkspaceRoot.js";
 import { inlineCatalogs } from "./catalog/assemble.js";
+import { catalogSetFromPackageJson, parsePackageJsonWorkspaces } from "./catalog/package-json-workspaces.js";
+import type { WorkspaceManifestData } from "./catalog/workspace-manifest.js";
 import { workspaceManifestFromYaml } from "./catalog/workspace-manifest.js";
 import { compileWorkspaceGlobs } from "./discovery/glob-core.js";
 import { makeGitReader } from "./point-in-time/git.js";
@@ -124,12 +126,27 @@ export const PointInTimeWorkspaceLive: PointInTimeWorkspaceLiveLayer = Layer.eff
 		const readAtRef = (root: string, ref: string) =>
 			Effect.gen(function* () {
 				const wsYaml = yield* reader.show(root, ref, "pnpm-workspace.yaml");
-				const manifest = Option.isSome(wsYaml)
+
+				// pnpm declares globs and catalogs in pnpm-workspace.yaml; npm and bun
+				// declare them in the root package.json `workspaces` field. Without this
+				// fallback a bun repo yields manifest.packages === undefined at a ref,
+				// so dirs collapses to ["."] and the snapshot holds only the root package.
+				const rootPkgJson = Option.isSome(wsYaml)
+					? Option.none<string>()
+					: yield* reader.show(root, ref, "package.json");
+
+				const manifest: WorkspaceManifestData = Option.isSome(wsYaml)
 					? yield* workspaceManifestFromYaml(wsYaml.value)
-					: { catalog: undefined, catalogs: undefined, configDependencies: undefined, packages: undefined };
-				const inline = CatalogSet.fromCatalogs(
-					inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }),
-				);
+					: Option.isSome(rootPkgJson)
+						? yield* parsePackageJsonWorkspaces(rootPkgJson.value)
+						: { catalog: undefined, catalogs: undefined, configDependencies: undefined, packages: undefined };
+
+				const inline = Option.isSome(wsYaml)
+					? CatalogSet.fromCatalogs(inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }))
+					: Option.isSome(rootPkgJson)
+						? yield* catalogSetFromPackageJson(rootPkgJson.value)
+						: CatalogSet.empty();
+
 				const lockText = yield* reader.show(root, ref, "pnpm-lock.yaml");
 				const lockCatalogs = yield* lockfileCatalogsAtRef(lockText);
 
