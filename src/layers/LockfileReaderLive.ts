@@ -10,6 +10,7 @@
 
 import { FileSystem, Path } from "@effect/platform";
 import { Effect, Exit, Layer, Option, Request, RequestResolver } from "effect";
+import type { LockfileParseError } from "../errors/LockfileParseError.js";
 import { LockfileReadError } from "../errors/LockfileReadError.js";
 import type { PackageManagerType } from "../schemas/core.js";
 import { LockfileData, ResolvedPackage, WorkspaceDependency } from "../schemas/lockfile.js";
@@ -42,11 +43,37 @@ const lockfileNameFor = (pm: PackageManagerType): string => {
 };
 
 /**
- * Dispatch lockfile content to the appropriate format-specific parser.
+ * Parse lockfile text for a known package manager.
  *
- * @internal
+ * @remarks
+ * The pure core of {@link LockfileReader}, exposed so a caller holding two
+ * snapshots of a lockfile — a "before" and an "after" — can parse both in one
+ * process. The service itself reads a single lockfile from the workspace root
+ * and memoizes it, which cannot express a diff.
+ *
+ * @param content - Raw lockfile text.
+ * @param lockfilePath - Path used only for error reporting.
+ * @param pm - The package manager whose format `content` is in.
+ *
+ * @example Diffing two snapshots
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { parseLockfileContent } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const before = yield* parseLockfileContent(beforeText, "pnpm-lock.yaml", "pnpm");
+ *   const after = yield* parseLockfileContent(afterText, "pnpm-lock.yaml", "pnpm");
+ *   return after.importers.length - before.importers.length;
+ * });
+ * ```
+ *
+ * @public
  */
-const parseLockfile = (content: string, lockfilePath: string, pm: PackageManagerType) => {
+export const parseLockfileContent = (
+	content: string,
+	lockfilePath: string,
+	pm: PackageManagerType,
+): Effect.Effect<LockfileData, LockfileParseError> => {
 	switch (pm) {
 		case "pnpm":
 			return parsePnpmLockfile(content, lockfilePath);
@@ -163,7 +190,7 @@ export const LockfileReaderLive: LockfileReaderLiveLayer = Layer.effect(
 					),
 				);
 
-				let lockfileData = yield* parseLockfile(content, lockfilePath, pm);
+				let lockfileData = yield* parseLockfileContent(content, lockfilePath, pm);
 
 				// For pnpm, resolve importer paths to actual package names from package.json
 				if (pm === "pnpm") {
@@ -215,6 +242,10 @@ export const LockfileReaderLive: LockfileReaderLiveLayer = Layer.effect(
 							lockfileVersion: lockfileData.lockfileVersion,
 							packages: resolvedPackages,
 							workspaceDependencies: resolvedWsDeps,
+							// Importers stay keyed by importer path (`.` for the root), matching
+							// WorkspaceDiscovery.importerMap — they are not run through the
+							// path-to-name repair above.
+							importers: lockfileData.importers,
 							pmSpecific: lockfileData.pmSpecific,
 						});
 					}

@@ -15,9 +15,9 @@
 
 import { Effect, Schema } from "effect";
 import { LockfileParseError } from "../../errors/LockfileParseError.js";
-import { LockfileData, ResolvedPackage } from "../../schemas/lockfile.js";
+import { ImporterDependency, LockfileData, LockfileImporter, ResolvedPackage } from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
-import { extractWorkspaceDeps } from "./shared.js";
+import { DEP_SECTIONS, extractWorkspaceDeps } from "./shared.js";
 
 /**
  * Raw schema for npm lockfile validation.
@@ -75,6 +75,29 @@ const NpmLockfileRaw = Schema.Struct({
 });
 
 type NpmLockfileRawType = Schema.Schema.Type<typeof NpmLockfileRaw>;
+type NpmPackageEntryType = Schema.Schema.Type<typeof NpmPackageEntry>;
+
+/**
+ * Collect a manifest entry's declared dependencies as {@link ImporterDependency}
+ * records.
+ *
+ * @privateRemarks
+ * `package-lock.json` records resolved versions on the `node_modules/*` entries,
+ * not on the workspace path entries, so `version` is left unset here.
+ *
+ * @internal
+ */
+const importerDependencies = (entry: NpmPackageEntryType): Array<ImporterDependency> => {
+	const deps: Array<ImporterDependency> = [];
+	for (const [field, depType] of DEP_SECTIONS) {
+		const section = entry[field];
+		if (!section) continue;
+		for (const [name, specifier] of Object.entries(section)) {
+			deps.push(new ImporterDependency({ name, specifier, depType }));
+		}
+	}
+	return deps;
+};
 
 /**
  * Parse an npm `package-lock.json` lockfile into the unified {@link LockfileData} model.
@@ -136,6 +159,13 @@ const toLockfileData = (raw: NpmLockfileRawType): LockfileData => {
 	const packages: ResolvedPackage[] = [];
 	const workspaceNames = new Set<string>();
 	const workspaceEntries = new Map<string, WorkspaceEntry>();
+	const importers: Array<LockfileImporter> = [];
+
+	// The root manifest is the `""` entry; it is the `"."` importer.
+	const rootEntry = raw.packages[""];
+	if (rootEntry) {
+		importers.push(new LockfileImporter({ path: ".", dependencies: importerDependencies(rootEntry) }));
+	}
 
 	// First pass: identify workspace link entries
 	for (const [key, entry] of Object.entries(raw.packages)) {
@@ -170,6 +200,14 @@ const toLockfileData = (raw: NpmLockfileRawType): LockfileData => {
 					...(wsEntry.optionalDependencies ? { optionalDependencies: wsEntry.optionalDependencies } : {}),
 				});
 			}
+			if (resolved) {
+				importers.push(
+					new LockfileImporter({
+						path: resolved,
+						dependencies: wsEntry ? importerDependencies(wsEntry) : [],
+					}),
+				);
+			}
 		} else if (key.startsWith("node_modules/")) {
 			// Regular resolved package
 			const name = key.slice("node_modules/".length);
@@ -196,5 +234,6 @@ const toLockfileData = (raw: NpmLockfileRawType): LockfileData => {
 		lockfileVersion: String(raw.lockfileVersion),
 		packages,
 		workspaceDependencies: [...wsDeps],
+		importers,
 	});
 };

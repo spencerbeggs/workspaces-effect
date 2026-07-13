@@ -103,7 +103,7 @@ export type { WorkspaceManifestCatalogs, WorkspaceManifestData } from "./layers/
 export { workspaceManifestFromYaml } from "./layers/catalog/workspace-manifest.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
-export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
+export { LockfileReaderLive, parseLockfileContent } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
 export type { PointInTimeWorkspaceLiveLayer } from "./layers/PointInTimeWorkspaceLive.js";
@@ -135,7 +135,9 @@ export {
 } from "./schemas/core.js";
 export {
 	BunExtension,
+	ImporterDependency,
 	LockfileData,
+	LockfileImporter,
 	LockfileIntegrity,
 	PnpmExtension,
 	ResolvedPackage,

@@ -28,11 +28,24 @@ const MINIMAL_BUN_LOCK = `{
         "zod": "^3.22.0",
       },
     },
+    "packages/core": {
+      "name": "@my-monorepo/core",
+      "version": "1.0.0",
+      "dependencies": {
+        "lodash": "^4.17.21",
+        "react": "catalog:",
+      },
+    },
   },
   "packages": {
     "hono": ["hono@4.6.14", "", {}, "sha512-abc"],
+    "lodash": ["lodash@4.17.21", "", {}, "sha512-jkl"],
+    "react": ["react@19.0.0", "", {}, "sha512-mno"],
     "zod": ["zod@3.23.8", "", {}, "sha512-def"],
     "typescript": ["typescript@5.3.3", "", {}, "sha512-ghi"],
+  },
+  "catalog": {
+    "react": "^19.0.0",
   },
   "overrides": {
     "lodash": "^4.17.23",
@@ -124,5 +137,31 @@ describe("parseBunLockfile", () => {
 		const EDGE = `{ "lockfileVersion": 0, "packages": { "bare": ["barepackage", "", {}, "sha512-abc"] } }`;
 		const result = await Effect.runPromise(parseBunLockfile(EDGE, "/project/bun.lock"));
 		expect(result.packageManager).toBe("bun");
+	});
+});
+
+describe("importers", () => {
+	it("records each workspace's declared dependencies with their specifiers", async () => {
+		const data = await Effect.runPromise(parseBunLockfile(MINIMAL_BUN_LOCK, "/project/bun.lock"));
+
+		const importer = data.importers.find((i) => i.path === "packages/core");
+		expect(importer).toBeDefined();
+		expect(importer?.dependencies.some((d) => d.name === "lodash" && d.depType === "dependencies")).toBe(true);
+	});
+
+	it("preserves a catalog: specifier verbatim", async () => {
+		const data = await Effect.runPromise(parseBunLockfile(MINIMAL_BUN_LOCK, "/project/bun.lock"));
+
+		const all = data.importers.flatMap((i) => i.dependencies);
+		const catalogDep = all.find((d) => d.specifier.startsWith("catalog:"));
+		expect(catalogDep).toBeDefined();
+	});
+
+	it("keeps the root importer under the path '.'", async () => {
+		const data = await Effect.runPromise(parseBunLockfile(MINIMAL_BUN_LOCK, "/project/bun.lock"));
+
+		const root = data.importers.find((i) => i.path === ".");
+		expect(root).toBeDefined();
+		expect(root?.dependencies.some((d) => d.name === "typescript" && d.depType === "devDependencies")).toBe(true);
 	});
 });

@@ -2,6 +2,52 @@
 
 exports[`LockfileReader integration: bun > v1 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "react",
+          "specifier": "catalog:",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "react-dom",
+          "specifier": "catalog:",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "chalk",
+          "specifier": "^5.3.0",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "1",
   "packageManager": "bun",
   "packages": [
@@ -89,6 +135,67 @@ exports[`LockfileReader integration: bun > v1 > returns workspace dependencies 1
 
 exports[`LockfileReader integration: bun > v2 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "react-dom",
+          "specifier": "catalog:",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "zod",
+          "specifier": "catalog:",
+        },
+        ImporterDependency {
+          "depType": "peerDependencies",
+          "name": "react",
+          "specifier": "catalog:",
+        },
+        ImporterDependency {
+          "depType": "optionalDependencies",
+          "name": "fsevents",
+          "specifier": "^2.3.0",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+        },
+      ],
+      "path": "packages/new-pkg",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "vitest",
+          "specifier": "catalog:testing",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "1",
   "packageManager": "bun",
   "packages": [
@@ -900,6 +1007,37 @@ exports[`LockfileReader integration: bun > v2 > returns workspace dependencies 1
 
 exports[`LockfileReader integration: bun > v3 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "react",
+          "specifier": "catalog:",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "1",
   "packageManager": "bun",
   "packages": [
@@ -965,6 +1103,53 @@ exports[`LockfileReader integration: bun > v3 > returns workspace dependencies 1
 
 exports[`LockfileReader integration: npm > v1 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "*",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "lodash",
+          "specifier": "^4.17.21",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "chalk",
+          "specifier": "^5.3.0",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "3",
   "packageManager": "npm",
   "packages": [
@@ -1028,6 +1213,73 @@ exports[`LockfileReader integration: npm > v1 > returns workspace dependencies 1
 
 exports[`LockfileReader integration: npm > v2 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+      ],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "*",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "lodash",
+          "specifier": "^4.17.23",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "zod",
+          "specifier": "^3.23.0",
+        },
+        ImporterDependency {
+          "depType": "peerDependencies",
+          "name": "react",
+          "specifier": "^19.0.0",
+        },
+        ImporterDependency {
+          "depType": "optionalDependencies",
+          "name": "fsevents",
+          "specifier": "^2.3.0",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "*",
+        },
+      ],
+      "path": "packages/new-pkg",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "vitest",
+          "specifier": "^3.0.0",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "3",
   "packageManager": "npm",
   "packages": [
@@ -1909,6 +2161,52 @@ exports[`LockfileReader integration: npm > v2 > returns workspace dependencies 1
 
 exports[`LockfileReader integration: pnpm > v1 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+          "version": "link:../utils",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "lodash",
+          "specifier": "4.17.21",
+          "version": "4.17.21",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+          "version": "5.9.3",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "chalk",
+          "specifier": "catalog:",
+          "version": "5.6.2",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+          "version": "5.9.3",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "9.0",
   "packageManager": "pnpm",
   "packages": [
@@ -1992,6 +2290,81 @@ exports[`LockfileReader integration: pnpm > v1 > returns workspace dependencies 
 
 exports[`LockfileReader integration: pnpm > v2 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+          "version": "link:../utils",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "effect",
+          "specifier": "catalog:silk",
+          "version": "3.21.0",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "lodash",
+          "specifier": "4.17.23",
+          "version": "4.17.23",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "zod",
+          "specifier": "catalog:",
+          "version": "3.25.76",
+        },
+        ImporterDependency {
+          "depType": "optionalDependencies",
+          "name": "fsevents",
+          "specifier": "^2.3.0",
+          "version": "2.3.3",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+          "version": "link:../utils",
+        },
+      ],
+      "path": "packages/new-pkg",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@effect/platform",
+          "specifier": "catalog:silk",
+          "version": "0.96.0(effect@3.21.0)",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+          "version": "5.9.3",
+        },
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "vitest",
+          "specifier": "^3.0.0",
+          "version": "3.2.4",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "9.0",
   "packageManager": "pnpm",
   "packages": [
@@ -2924,6 +3297,40 @@ exports[`LockfileReader integration: pnpm > v2 > returns workspace dependencies 
 
 exports[`LockfileReader integration: pnpm > v3 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [
+    LockfileImporter {
+      "dependencies": [],
+      "path": ".",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "@test-monorepo/utils",
+          "specifier": "workspace:*",
+          "version": "link:../utils",
+        },
+        ImporterDependency {
+          "depType": "dependencies",
+          "name": "lodash",
+          "specifier": "catalog:",
+          "version": "4.17.23",
+        },
+      ],
+      "path": "packages/core",
+    },
+    LockfileImporter {
+      "dependencies": [
+        ImporterDependency {
+          "depType": "devDependencies",
+          "name": "typescript",
+          "specifier": "^5.3.0",
+          "version": "5.9.3",
+        },
+      ],
+      "path": "packages/utils",
+    },
+  ],
   "lockfileVersion": "9.0",
   "packageManager": "pnpm",
   "packages": [
@@ -2998,6 +3405,7 @@ exports[`LockfileReader integration: pnpm > v3 > returns workspace dependencies 
 
 exports[`LockfileReader integration: yarn > v1 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [],
   "lockfileVersion": "8",
   "packageManager": "yarn",
   "packages": [
@@ -3078,6 +3486,7 @@ exports[`LockfileReader integration: yarn > v1 > returns workspace dependencies 
 
 exports[`LockfileReader integration: yarn > v2 > parses lockfile data 1`] = `
 LockfileData {
+  "importers": [],
   "lockfileVersion": "8",
   "packageManager": "yarn",
   "packages": [
