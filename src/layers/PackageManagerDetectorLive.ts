@@ -2,6 +2,7 @@
  * Live implementation of the {@link PackageManagerDetector} service.
  *
  * Detection priority (first match wins):
+ * 0. devEngines.packageManager -- declared in the root `package.json`
  * 1. pnpm -- `pnpm-workspace.yaml` exists
  * 2. bun -- `bun.lock` exists AND `packageManager` starts with `"bun@"`
  * 3. yarn -- `yarn.lock` exists AND `packageManager` starts with `"yarn@"`
@@ -58,6 +59,42 @@ const readPackageManagerField = (
 	}).pipe(Effect.orElseSucceed(() => undefined));
 
 /**
+ * Read `devEngines.packageManager` from the root `package.json`.
+ *
+ * The npm spec allows a single object or an array of them; we take the first
+ * entry. Any read/parse failure is `undefined` — this is a hint, not a contract.
+ *
+ * @internal
+ */
+const readDevEnginesPackageManager = (
+	fs: FileSystem.FileSystem,
+	path: Path.Path,
+	root: string,
+): Effect.Effect<{ name: string; version: string | undefined } | undefined> =>
+	Effect.gen(function* () {
+		const pkgJsonPath = path.join(root, "package.json");
+		if (!(yield* fs.exists(pkgJsonPath))) return undefined;
+		const content = yield* fs.readFileString(pkgJsonPath);
+		const parsed = JSON.parse(content) as {
+			devEngines?: { packageManager?: unknown };
+		};
+		const raw = parsed.devEngines?.packageManager;
+		const entry = Array.isArray(raw) ? raw[0] : raw;
+		if (typeof entry !== "object" || entry === null) return undefined;
+		const { name, version } = entry as { name?: unknown; version?: unknown };
+		if (typeof name !== "string" || name === "") return undefined;
+		return { name, version: typeof version === "string" ? version : undefined };
+	}).pipe(Effect.orElseSucceed(() => undefined));
+
+/**
+ * Narrow a free-form package manager name to a known one.
+ *
+ * @internal
+ */
+const asPackageManagerType = (name: string): PackageManagerType | undefined =>
+	name === "npm" || name === "pnpm" || name === "yarn" || name === "bun" ? name : undefined;
+
+/**
  * Check if a file exists at the given path.
  *
  * @internal
@@ -73,7 +110,7 @@ const fileExists = (
  * Detect the package manager for the given workspace root.
  *
  * @privateRemarks
- * Follows a strict priority chain: pnpm \> bun \> yarn \> npm.
+ * Follows a strict priority chain: devEngines \> pnpm \> bun \> yarn \> npm.
  * Each check combines lockfile presence with `packageManager` field validation.
  *
  * @internal
@@ -86,6 +123,27 @@ const detectPackageManager = (
 	Effect.gen(function* () {
 		const pmField = yield* readPackageManagerField(fs, path, root);
 		const pmInfo = parsePackageManagerField(pmField);
+
+		// 0. devEngines.packageManager — the declarative, intentional signal. It
+		//    outranks file presence: a repo may carry a stale pnpm-workspace.yaml
+		//    while devEngines says bun, and devEngines is what the human meant.
+		const devEngines = yield* readDevEnginesPackageManager(fs, path, root);
+		const declared = devEngines ? asPackageManagerType(devEngines.name) : undefined;
+		if (declared) {
+			// The packageManager field is an exact pin; devEngines may hold a range.
+			// Prefer the pin when both name the same PM.
+			const version = pmInfo?.name === declared ? pmInfo.version : devEngines?.version;
+			const detected: DetectedPackageManager = {
+				type: declared,
+				version,
+				runtime: declared === "bun" ? "bun" : "node",
+			};
+			yield* Effect.logDebug("Package manager detected").pipe(
+				Effect.annotateLogs("workspace.pm", declared),
+				Effect.annotateLogs("workspace.pm.source", "devEngines"),
+			);
+			return detected;
+		}
 
 		// 1. pnpm: pnpm-workspace.yaml exists
 		const hasPnpmWorkspace = yield* fileExists(fs, path, root, "pnpm-workspace.yaml");
