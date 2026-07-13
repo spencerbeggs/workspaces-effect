@@ -70,8 +70,16 @@ export class ResolvedPackage extends Schema.Class<ResolvedPackage>("ResolvedPack
  * @remarks
  * `specifier` is the range declared in the importer's `package.json` (which may
  * be a `catalog:` reference); `version` is the concrete version the lockfile
- * resolved it to, when the format records one. Together they are what a
- * before/after lockfile diff needs — the pair the parsers used to discard.
+ * resolved it to. Together they are what a before/after lockfile diff needs —
+ * the pair the parsers used to discard.
+ *
+ * `version` is populated by **pnpm only**: pnpm records `{ specifier, version }`
+ * per importer dependency, while bun and npm record the resolved version on
+ * their package tuples/entries instead. So for a bun or npm lockfile every
+ * `ImporterDependency` carries a `specifier` and no `version`, and a consumer
+ * that needs the resolved version joins by name against the `packages` field of
+ * {@link LockfileData}. yarn does not record importers at all — its `importers`
+ * field is always empty.
  *
  * @example Reading an importer's dependencies
  * ```typescript
@@ -103,7 +111,10 @@ export class ImporterDependency extends Schema.Class<ImporterDependency>("Import
  *
  * @remarks
  * `path` is the importer path relative to the workspace root — `"."` for the
- * root package — matching the keys of {@link WorkspaceDiscovery.importerMap}.
+ * root package — matching the keys of `WorkspaceDiscovery.importerMap()`.
+ *
+ * Populated by the pnpm, bun, and npm parsers. yarn does not record importers,
+ * so a yarn lockfile always yields an empty `importers` array.
  *
  * @example Finding the root importer
  * ```typescript

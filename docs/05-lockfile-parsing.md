@@ -7,6 +7,8 @@ workspaces-effect parses lockfiles from all four package managers into one schem
 - [Supported formats](#supported-formats)
 - [Reading lockfile data](#reading-lockfile-data)
 - [Querying resolved versions](#querying-resolved-versions)
+- [Importers](#importers)
+- [Parsing lockfile text directly](#parsing-lockfile-text-directly)
 - [Workspace dependencies](#workspace-dependencies)
 - [Integrity checking](#integrity-checking)
 - [PM-specific extensions](#pm-specific-extensions)
@@ -61,6 +63,7 @@ The `LockfileData` schema contains:
 | `lockfileVersion` | `string` | The lockfile format version |
 | `packages` | `ReadonlyArray<ResolvedPackage>` | All resolved packages |
 | `workspaceDependencies` | `ReadonlyArray<WorkspaceDependency>` | Inter-workspace dependency links |
+| `importers` | `ReadonlyArray<LockfileImporter>` | Each workspace importer's declared dependencies. See [Importers](#importers) |
 | `pmSpecific` | `PnpmExtension \| BunExtension \| undefined` | PM-specific data |
 
 Each `ResolvedPackage` contains:
@@ -95,6 +98,69 @@ if (Option.isSome(react)) {
 ```
 
 Use this to audit exact versions across a monorepo or to confirm that every package resolves a shared dependency to the same version.
+
+## Importers
+
+`packages` is the flat resolution graph. `importers` is the other half: what each workspace package *declared*, as the lockfile recorded it, keyed by importer path.
+
+```typescript
+const lockfile = yield* reader.readLockfile();
+
+for (const importer of lockfile.importers) {
+  for (const dep of importer.dependencies) {
+    console.log(`${importer.path} ${dep.depType} ${dep.name} ${dep.specifier} -> ${dep.version ?? "-"}`);
+  }
+}
+// example output (varies):
+// . devDependencies typescript ^5.9.0 -> 5.9.3
+// packages/ui dependencies effect catalog:default -> 3.19.4
+```
+
+Each `LockfileImporter` contains:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `path` | `string` | Importer path relative to the workspace root; `"."` for the root package. These are the same keys `WorkspaceDiscovery.importerMap()` uses, so the two line up without translation |
+| `dependencies` | `ReadonlyArray<ImporterDependency>` | Every dependency the importer declares, across all four sections |
+
+Each `ImporterDependency` contains:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | Dependency name |
+| `specifier` | `string` | The range declared in the importer's `package.json`; may be a `catalog:` reference |
+| `version` | `string \| undefined` | The concrete version the lockfile resolved the specifier to. **pnpm only** — see below |
+| `depType` | `"dependencies" \| "devDependencies" \| "peerDependencies" \| "optionalDependencies"` | The manifest section that declared it |
+
+Coverage differs by package manager, because the formats differ:
+
+| Package manager | `importers` | `ImporterDependency.version` |
+| --- | --- | --- |
+| pnpm | Populated | Populated — pnpm records `{ specifier, version }` per importer dependency |
+| bun | Populated | **Always `undefined`** — bun records the resolved version on its package tuples, not per importer |
+| npm | Populated | **Always `undefined`** — npm records the resolved version on the `node_modules/...` package entries, not per importer |
+| yarn | **Always `[]`** — the yarn Berry lockfile does not record importers | n/a |
+
+So a consumer that needs the resolved version of a bun or npm importer dependency joins `specifier` against `packages` (or `resolvedVersion(name)`) by name itself.
+
+## Parsing lockfile text directly
+
+`LockfileReader` reads one lockfile from the workspace root and memoizes it — which cannot express a diff. When you hold two snapshots of a lockfile, a "before" and an "after", call the parser dispatch directly instead:
+
+```typescript
+import { Effect } from "effect";
+import { parseLockfileContent } from "workspaces-effect";
+
+const program = Effect.gen(function* () {
+  const before = yield* parseLockfileContent(beforeText, "pnpm-lock.yaml", "pnpm");
+  const after = yield* parseLockfileContent(afterText, "pnpm-lock.yaml", "pnpm");
+
+  const seen = new Set(before.packages.map((p) => `${p.name}@${p.version}`));
+  return after.packages.filter((p) => !seen.has(`${p.name}@${p.version}`));
+});
+```
+
+`parseLockfileContent(content, lockfilePath, packageManager)` is pure with respect to the filesystem: it needs no services, `lockfilePath` is used only for error reporting, and `packageManager` selects the format. It returns `Effect<LockfileData, LockfileParseError>`, so both parses can run in one process against text you fetched from anywhere — git, an API, a temp file.
 
 ## Workspace dependencies
 

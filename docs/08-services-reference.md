@@ -50,20 +50,46 @@ Detects which package manager a workspace uses.
 
 Detection priority:
 
-1. pnpm — `pnpm-workspace.yaml` exists
-2. bun — `bun.lock` or `bun.lockb` exists AND `packageManager` starts with `bun@`
-3. yarn — `yarn.lock` exists AND `packageManager` starts with `yarn@`
-4. npm — fallback when `package.json` has a `workspaces` field
+1. `devEngines.packageManager` in the root `package.json` names one of the four supported managers
+2. pnpm — `pnpm-workspace.yaml` exists
+3. bun — `bun.lock` or `bun.lockb` exists AND `packageManager` starts with `bun@`
+4. yarn — `yarn.lock` exists AND `packageManager` starts with `yarn@`
+5. npm — fallback when `package.json` has a `workspaces` field
 
 **Layer:** `PackageManagerDetectorLive`
 **Platform deps:** `FileSystem`, `Path`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
+### devEngines.packageManager
+
+`devEngines.packageManager` is the declarative statement of intent a repo makes about its package manager, so it outranks file presence: a repo carrying a stale `pnpm-workspace.yaml` while `devEngines` says `bun` is detected as bun. Both shapes the npm spec allows are accepted — a single object, or an array of them, in which case the first entry is used:
+
+```json
+{
+  "devEngines": {
+    "packageManager": { "name": "bun", "version": "^1.2.0", "onFail": "error" }
+  }
+}
+```
+
+```json
+{
+  "devEngines": {
+    "packageManager": [{ "name": "pnpm", "version": "^10.0.0" }]
+  }
+}
+```
+
+Rules:
+
+- A name outside `npm` / `pnpm` / `yarn` / `bun` is ignored and detection falls through to the lockfile chain below. So is a missing, malformed or unreadable `devEngines` block — it is a hint, never a hard failure.
+- **Version precedence:** when `devEngines` and the `packageManager` field name the *same* manager, the `packageManager` field supplies the version, because it is an exact pin while `devEngines.version` may be a range. Otherwise the `devEngines` version is used, and it may be `undefined`.
+
 ### Methods
 
 #### `detect(root: string)`
 
-Inspect lockfiles and `package.json` at the workspace root.
+Inspect `devEngines.packageManager`, then lockfiles and the `packageManager` field, at the workspace root.
 
 - **Returns:** `Effect<DetectedPackageManager, PackageManagerDetectionError>`
 - **Errors:** `PackageManagerDetectionError` — none of the four supported package managers matched
@@ -71,7 +97,7 @@ Inspect lockfiles and `package.json` at the workspace root.
 `DetectedPackageManager` is an interface with:
 
 - `type`: `"npm" | "pnpm" | "yarn" | "bun"`
-- `version`: `string | undefined` — extracted from the `packageManager` field in root `package.json`
+- `version`: `string | undefined` — from the `packageManager` field in root `package.json`, or from `devEngines.packageManager.version` when that is the only source (see the precedence rule above)
 - `runtime`: `"node" | "bun"` — bun package manager implies bun runtime; the rest run on node
 
 ```typescript
@@ -315,12 +341,27 @@ const affected = yield* detector.affectedPackages(options);
 
 ## PointInTimeWorkspace
 
-Reads workspace state — packages plus assembled pnpm catalogs — at any git ref or from the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
+Reads workspace state — packages plus assembled catalogs — at any git ref or from the live working tree, without checking anything out. Git reads go through `git show` and `git ls-tree` over `CommandExecutor`.
 
 **Layer:** `PointInTimeWorkspaceLive`
 **Service deps:** `WorkspaceRoot`, `WorkspaceDiscovery`
 **Platform deps:** `FileSystem`, `Path`, `CommandExecutor`
 **Composite layers:** `WorkspacesFullLive` only
+
+### Where globs and catalogs are read from
+
+Both methods pick the manifest format by **file presence**, not by `PackageManagerDetector`:
+
+| At the workspace root | Workspace globs | Inline catalogs |
+| --- | --- | --- |
+| `pnpm-workspace.yaml` present | its `packages:` key | its `catalog:` / `catalogs:` keys |
+| `pnpm-workspace.yaml` absent | root `package.json` `workspaces` (array form, or the object form's `packages`) | root `package.json` `workspaces.catalog` (the `"default"` catalog) and `workspaces.catalogs` (named catalogs) |
+
+That is the same rule `WorkspaceDiscovery` already applies to globs, so live and point-in-time reads stay consistent — and unlike package-manager detection it is meaningful at a *git ref*, where there is no working tree to detect against. Without this fallback an `at(ref)` read of a bun or npm workspace collapsed to the root package alone.
+
+The reader is exported: `parsePackageJsonWorkspaces(content)` yields the `PackageJsonWorkspaces` slice (`packages`, `catalog`, `catalogs`), and `catalogSetFromPackageJson(content)` yields a `CatalogSet` built from it. Both fail with `CatalogAssemblyError` when the text is not valid JSON — which means a **malformed root `package.json` in a repo with no `pnpm-workspace.yaml` now fails the read** instead of being silently ignored.
+
+Bun's `bun.lock` catalogs are deliberately not read here: for bun the root `package.json` is the inline authority and the lockfile only mirrors it. The lockfile's view stays available on `LockfileData.pmSpecific` (`BunExtension.catalog` / `.catalogs`).
 
 ### Methods
 
@@ -328,13 +369,13 @@ Both methods take an optional `PointInTimeOptions` object with one field, `cwd` 
 
 #### `at(ref: string, options?: PointInTimeOptions)`
 
-Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml`, `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref: the cache holds 64 entries, evicts the least recently used past that and never caches failures, so a failed read retries on the next call. Workspace globs — `!` negations included — go through the same pattern core as live discovery; expansion is one directory level deep at the ref (`packages/**` is treated as `packages/*`).
+Workspace state as of `ref` (SHA, branch or tag). Reads `pnpm-workspace.yaml` (falling back to the root `package.json` `workspaces` field when it is absent), `pnpm-lock.yaml` and each package's `package.json` at the ref; a file absent at the ref is skipped, not an error. Snapshots are cached per resolved root and ref: the cache holds 64 entries, evicts the least recently used past that and never caches failures, so a failed read retries on the next call. Workspace globs — `!` negations included — go through the same pattern core as live discovery; expansion is one directory level deep at the ref (`packages/**` is treated as `packages/*`).
 
 - **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeAtError>`
 
 #### `worktree(options?: PointInTimeOptions)`
 
-Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible: pnpmfile hook replay is an overlay only the live `CatalogResolver` applies by default, so snapshots see injected catalogs through the lockfile record.
+Workspace state of the live working tree. Packages come from `WorkspaceDiscovery`; catalogs come from the on-disk `pnpm-workspace.yaml` (or the root `package.json` `workspaces` field when there is no `pnpm-workspace.yaml`) and `pnpm-lock.yaml`. Uncached — every call re-reads. A `configDependencies` edit that has not been `pnpm install`ed yet is invisible: pnpmfile hook replay is an overlay only the live `CatalogResolver` applies by default, so snapshots see injected catalogs through the lockfile record.
 
 - **Returns:** `Effect<WorkspaceStateSnapshot, PointInTimeWorktreeError>`
 
@@ -364,7 +405,7 @@ import type {
 ```
 
 - `GitReadError` — a `git show`/`git ls-tree` invocation failed irrecoverably (git missing, unknown revision, 30-second timeout). `at` only
-- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed, or an on-disk `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile never fails, it degrades to an empty catalog set
+- `CatalogAssemblyError` — the `pnpm-workspace.yaml` at the ref or on disk is malformed, the root `package.json` is not valid JSON in a workspace that has no `pnpm-workspace.yaml`, or an on-disk `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile never fails, it degrades to an empty catalog set
 - `WorkspaceRootNotFoundError` — no workspace root was found walking up from `options.cwd` (or `process.cwd()` when omitted)
 - `WorkspaceDiscoveryError` — the live packages could not be enumerated. `worktree` only
 
@@ -375,7 +416,7 @@ The `Schema.Class` value object both methods return, exported directly so you ca
 | Member | Type | Description |
 | --- | --- | --- |
 | `packages` | `ReadonlyArray<PackageStateSnapshot>` | Every package at that moment |
-| `catalogs` | `CatalogSet` | Assembled catalogs: lockfile first, then inline `pnpm-workspace.yaml` (inline wins per dependency) |
+| `catalogs` | `CatalogSet` | Assembled catalogs: lockfile first, then the inline declarations from `pnpm-workspace.yaml` or the root `package.json` (inline wins per dependency) |
 | `versions` | `Record<string, string>` | Getter mapping package name to declared version |
 | `package(name)` | `Option<PackageStateSnapshot>` | Find a package snapshot by name |
 | `resolve(dep, spec)` | `Option<string>` | Resolve a `catalog:`/`workspace:` specifier against this snapshot; `Option.none()` for plain or unresolvable specifiers |
@@ -395,6 +436,40 @@ An immutable catalog collection shared by live and point-in-time resolution, als
 | `CatalogSet.merge(...sets)` | `CatalogSet` | Merge sets; later sets win per dependency within a catalog |
 | `toCatalogs()` | `Catalogs` | View as the pnpm `Catalogs` shape |
 | `resolveSpecifier(dep, spec)` | `Option<string>` | Resolve a `catalog:` specifier; `Option.none()` for non-catalog or unresolved specifiers |
+
+### package.json workspaces reader
+
+The npm/bun counterpart to `CatalogSet.fromWorkspaceYaml`, exported as two standalone functions rather than statics.
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `PackageJsonWorkspaces` | interface | The glob- and catalog-bearing slice of a root `package.json` `workspaces` field: `packages`, `catalog`, `catalogs` — each optional |
+| `parsePackageJsonWorkspaces(content)` | `Effect<PackageJsonWorkspaces, CatalogAssemblyError>` | Parse the `workspaces` field out of raw `package.json` text. Accepts the array form (globs only) and the object form. Every field is `undefined` when there is no `workspaces` field |
+| `catalogSetFromPackageJson(content)` | `Effect<CatalogSet, CatalogAssemblyError>` | Build a `CatalogSet` from that text: `workspaces.catalog` becomes the `"default"` catalog, each key of `workspaces.catalogs` becomes a catalog of that name |
+
+Both fail with `CatalogAssemblyError` (`source: "manifest"`) when `content` is not valid JSON.
+
+```typescript
+import { Effect } from "effect";
+import { catalogSetFromPackageJson, parsePackageJsonWorkspaces } from "workspaces-effect";
+
+const program = Effect.gen(function* () {
+  const text = `{
+    "workspaces": {
+      "packages": ["packages/*"],
+      "catalog": { "effect": "^3.12.0" },
+      "catalogs": { "react18": { "react": "^18.3.1" } }
+    }
+  }`;
+
+  const ws = yield* parsePackageJsonWorkspaces(text);
+  console.log(ws.packages);
+  // example output: [ 'packages/*' ]
+
+  const catalogs = yield* catalogSetFromPackageJson(text);
+  return catalogs.resolveSpecifier("react", "catalog:react18"); // Option<string>
+});
+```
 
 ---
 
@@ -440,6 +515,53 @@ const reader = yield* LockfileReader;
 const lockfile = yield* reader.readLockfile();
 const react = yield* reader.resolvedVersion("react");
 const integrity = yield* reader.checkIntegrity();
+```
+
+### LockfileData
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `packageManager` | `"npm" \| "pnpm" \| "yarn" \| "bun"` | Which PM produced the lockfile |
+| `lockfileVersion` | `string` | The lockfile format version |
+| `packages` | `ReadonlyArray<ResolvedPackage>` | All resolved packages |
+| `workspaceDependencies` | `ReadonlyArray<WorkspaceDependency>` | Inter-workspace dependency links |
+| `importers` | `ReadonlyArray<LockfileImporter>` | Each workspace importer's declared dependencies. Populated by the pnpm, bun and npm parsers; **always `[]` for yarn**, whose lockfile does not record importers |
+| `pmSpecific` | `PnpmExtension \| BunExtension \| undefined` | PM-specific data |
+
+`LockfileImporter` is a `Schema.Class`:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `path` | `string` | Importer path relative to the workspace root; `"."` for the root package. Matches the keys of `WorkspaceDiscovery.importerMap()` |
+| `dependencies` | `ReadonlyArray<ImporterDependency>` | Every dependency the importer declares, across all four sections |
+
+`ImporterDependency` is a `Schema.Class`:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | Dependency name |
+| `specifier` | `string` | The range declared in the importer's `package.json`, which may be a `catalog:` reference |
+| `version` | `string \| undefined` | The concrete resolved version. **Populated by pnpm only** — bun and npm record resolved versions on their package tuples/entries rather than per importer, so their importer dependencies carry a `specifier` and no `version` |
+| `depType` | `"dependencies" \| "devDependencies" \| "peerDependencies" \| "optionalDependencies"` | Which manifest section declared it |
+
+### parseLockfileContent
+
+The pure parser dispatch behind `LockfileReader`, exported so a caller holding two snapshots of a lockfile — a "before" and an "after" — can parse both in one process. The service reads a single lockfile from the workspace root and memoizes it, which cannot express a diff.
+
+`parseLockfileContent(content: string, lockfilePath: string, packageManager: PackageManagerType)`
+
+- **Returns:** `Effect<LockfileData, LockfileParseError>`
+- No services, no filesystem access: `lockfilePath` is used only for error reporting, and `packageManager` selects the format.
+
+```typescript
+import { Effect } from "effect";
+import { parseLockfileContent } from "workspaces-effect";
+
+const program = Effect.gen(function* () {
+  const before = yield* parseLockfileContent(beforeText, "pnpm-lock.yaml", "pnpm");
+  const after = yield* parseLockfileContent(afterText, "pnpm-lock.yaml", "pnpm");
+  return after.importers.length - before.importers.length;
+});
 ```
 
 ### LockfileInitError union
