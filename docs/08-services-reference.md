@@ -359,6 +359,8 @@ Both methods pick the manifest format by **file presence**, not by `PackageManag
 
 That is the same rule `WorkspaceDiscovery` already applies to globs, so live and point-in-time reads stay consistent — and unlike package-manager detection it is meaningful at a *git ref*, where there is no working tree to detect against. Without this fallback an `at(ref)` read of a bun or npm workspace collapsed to the root package alone.
 
+**One shape where `at()` and `worktree()` still diverge:** the "present" row above is **strict file presence** — `at(ref)` treats a present `pnpm-workspace.yaml` as the sole source of globs even when its `packages:` key is absent or empty, and never falls back to `package.json` `workspaces` in that case. `worktree()` enumerates through `WorkspaceDiscovery`, which falls back to `package.json` `workspaces` whenever the yaml's globs come back empty — regardless of whether that emptiness is because the key is absent or because the file itself is absent. So a repo with a `pnpm-workspace.yaml` that holds only `catalogs:`/settings (no `packages:` key) *and* globs declared under `package.json` `workspaces` will have `worktree()` see every package while `at(ref)` sees only the root — a diff between the two snapshots then reads as every dependency of every package being newly added, silently. This divergence is accepted, not a bug: `at(ref)` intentionally treats `pnpm-workspace.yaml` presence as authoritative and does not probe `package.json` for globs when the yaml exists.
+
 The reader is exported: `parsePackageJsonWorkspaces(content)` yields the `PackageJsonWorkspaces` slice (`packages`, `catalog`, `catalogs`), and `catalogSetFromPackageJson(content)` yields a `CatalogSet` built from it. Both fail with `CatalogAssemblyError` when the text is not valid JSON — which means a **malformed root `package.json` in a repo with no `pnpm-workspace.yaml` now fails the read** instead of being silently ignored.
 
 Bun's `bun.lock` catalogs are deliberately not read here: for bun the root `package.json` is the inline authority and the lockfile only mirrors it. The lockfile's view stays available on `LockfileData.pmSpecific` (`BunExtension.catalog` / `.catalogs`).
@@ -589,6 +591,8 @@ Assembles the workspace's complete pnpm catalog set and rewrites `catalog:` and 
 **Platform deps:** `FileSystem`, `Path`
 **Composite layers:** `WorkspacesLive`, `WorkspacesFullLive`
 
+Because assembly reads the manifest and lockfile through the same shared working-tree pipeline as `PointInTimeWorkspace.worktree()` (`readWorktreeCatalogState`), it inherits that pipeline's strict failure mode: in a workspace with no `pnpm-workspace.yaml` — including a single-package pnpm repo, a valid and common shape — a root `package.json` that is not valid JSON fails the read with `CatalogAssemblyError` instead of degrading to an empty manifest. Since all three methods (`catalogs()`, `resolve()`, `resolveSpecifier()`) drive that same lazily-cached assembly on first call, a malformed root `package.json` under this condition fails all three, not just `catalogs()`.
+
 ### Methods
 
 All three methods carry the exported [`CatalogResolverError`](#catalogresolvererror-union) union in their E channels because the first call drives the lazy assembly.
@@ -632,7 +636,7 @@ import type { CatalogResolverError } from "workspaces-effect";
 //   | WorkspaceRootNotFoundError
 ```
 
-- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, the default catalog is defined twice, or a `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile degrades to empty lockfile catalogs instead
+- `CatalogAssemblyError` — `pnpm-workspace.yaml` is unreadable or malformed, the default catalog is defined twice, the root `package.json` is not valid JSON in a workspace that has no `pnpm-workspace.yaml`, or a `pnpm-lock.yaml` exists but cannot be read; a missing or malformed lockfile degrades to empty lockfile catalogs instead
 - `WorkspaceRootNotFoundError` — no workspace root was found from `process.cwd()`
 
 ---
