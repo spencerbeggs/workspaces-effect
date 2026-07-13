@@ -93,6 +93,11 @@ export { WorkspaceRootNotFoundError, WorkspaceRootNotFoundErrorBase } from "./er
 export type { CatalogResolverLiveLayer } from "./layers/CatalogResolverLive.js";
 export { CatalogResolverLive } from "./layers/CatalogResolverLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
+export type { PackageJsonWorkspaces } from "./layers/catalog/package-json-workspaces.js";
+export {
+	catalogSetFromPackageJson,
+	parsePackageJsonWorkspaces,
+} from "./layers/catalog/package-json-workspaces.js";
 export type { ManifestLike } from "./layers/catalog/resolve.js";
 export type { WorkspaceManifestCatalogs, WorkspaceManifestData } from "./layers/catalog/workspace-manifest.js";
 export { workspaceManifestFromYaml } from "./layers/catalog/workspace-manifest.js";
