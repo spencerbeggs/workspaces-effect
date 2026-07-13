@@ -65,6 +65,67 @@ export class ResolvedPackage extends Schema.Class<ResolvedPackage>("ResolvedPack
 }) {}
 
 /**
+ * One declared dependency of one workspace importer, as the lockfile records it.
+ *
+ * @remarks
+ * `specifier` is the range declared in the importer's `package.json` (which may
+ * be a `catalog:` reference); `version` is the concrete version the lockfile
+ * resolved it to, when the format records one. Together they are what a
+ * before/after lockfile diff needs — the pair the parsers used to discard.
+ *
+ * @example Reading an importer's dependencies
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { LockfileReader } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const reader = yield* LockfileReader;
+ *   const data = yield* reader.readLockfile();
+ *   for (const importer of data.importers) {
+ *     for (const dep of importer.dependencies) {
+ *       console.log(importer.path, dep.name, dep.specifier, dep.version);
+ *     }
+ *   }
+ * });
+ * ```
+ *
+ * @public
+ */
+export class ImporterDependency extends Schema.Class<ImporterDependency>("ImporterDependency")({
+	name: Schema.NonEmptyString,
+	specifier: Schema.String,
+	version: Schema.optional(Schema.String),
+	depType: DepType,
+}) {}
+
+/**
+ * One workspace importer's declared dependencies, as the lockfile records them.
+ *
+ * @remarks
+ * `path` is the importer path relative to the workspace root — `"."` for the
+ * root package — matching the keys of {@link WorkspaceDiscovery.importerMap}.
+ *
+ * @example Finding the root importer
+ * ```typescript
+ * import { Effect } from "effect";
+ * import { LockfileReader } from "workspaces-effect";
+ *
+ * const program = Effect.gen(function* () {
+ *   const reader = yield* LockfileReader;
+ *   const data = yield* reader.readLockfile();
+ *   const root = data.importers.find((i) => i.path === ".");
+ *   return root?.dependencies.length ?? 0;
+ * });
+ * ```
+ *
+ * @public
+ */
+export class LockfileImporter extends Schema.Class<LockfileImporter>("LockfileImporter")({
+	path: Schema.String,
+	dependencies: Schema.Array(ImporterDependency),
+}) {}
+
+/**
  * A dependency relationship between two workspace packages in the lockfile.
  *
  * @remarks
@@ -215,6 +276,8 @@ export class BunExtension extends Schema.Class<BunExtension>("BunExtension")({
  * - `lockfileVersion` — the lockfile format version string.
  * - `packages` — all resolved packages as {@link ResolvedPackage} instances.
  * - `workspaceDependencies` — inter-workspace edges as {@link WorkspaceDependency} instances.
+ * - `importers` — each workspace importer's declared dependencies as
+ *   {@link LockfileImporter} instances (empty for yarn, which does not record them).
  * - `pmSpecific` — optional package-manager-specific data ({@link PnpmExtension} or {@link BunExtension}).
  *
  * @example Reading lockfile data
@@ -236,6 +299,7 @@ export class LockfileData extends Schema.Class<LockfileData>("LockfileData")({
 	lockfileVersion: Schema.String,
 	packages: Schema.Array(ResolvedPackage),
 	workspaceDependencies: Schema.Array(WorkspaceDependency),
+	importers: Schema.optionalWith(Schema.Array(LockfileImporter), { default: () => [] }),
 	pmSpecific: Schema.optional(Schema.Union(PnpmExtension, BunExtension)),
 }) {}
 

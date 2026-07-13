@@ -16,9 +16,15 @@
 import { Effect, Schema } from "effect";
 import { parse as parseYaml } from "yaml-effect";
 import { LockfileParseError } from "../../errors/LockfileParseError.js";
-import { LockfileData, PnpmExtension, ResolvedPackage } from "../../schemas/lockfile.js";
+import {
+	ImporterDependency,
+	LockfileData,
+	LockfileImporter,
+	PnpmExtension,
+	ResolvedPackage,
+} from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
-import { extractWorkspaceDeps } from "./shared.js";
+import { DEP_SECTIONS, extractWorkspaceDeps } from "./shared.js";
 
 /**
  * Raw schema for pnpm lockfile validation.
@@ -154,6 +160,7 @@ export const parsePnpmLockfile = (
 const toLockfileData = (raw: PnpmLockfileRawType): LockfileData => {
 	const workspaceEntries = new Map<string, WorkspaceEntry>();
 	const workspaceNames = new Set<string>();
+	const importers: Array<LockfileImporter> = [];
 
 	for (const [importerPath, importer] of Object.entries(raw.importers)) {
 		const toVersionMap = (
@@ -191,6 +198,23 @@ const toLockfileData = (raw: PnpmLockfileRawType): LockfileData => {
 				}
 			}
 		}
+
+		const importerDeps: Array<ImporterDependency> = [];
+		for (const [field, depType] of DEP_SECTIONS) {
+			const section = importer[field];
+			if (!section) continue;
+			for (const [name, info] of Object.entries(section)) {
+				importerDeps.push(
+					new ImporterDependency({
+						name,
+						specifier: info.specifier,
+						version: info.version === "" ? undefined : info.version,
+						depType,
+					}),
+				);
+			}
+		}
+		importers.push(new LockfileImporter({ path: importerPath, dependencies: importerDeps }));
 	}
 
 	for (const path of Object.keys(raw.importers)) {
@@ -244,6 +268,7 @@ const toLockfileData = (raw: PnpmLockfileRawType): LockfileData => {
 		lockfileVersion: String(raw.lockfileVersion),
 		packages,
 		workspaceDependencies: [...wsDeps],
+		importers,
 		pmSpecific,
 	});
 };

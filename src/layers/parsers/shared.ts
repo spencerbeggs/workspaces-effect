@@ -18,6 +18,22 @@ import { WorkspaceDependency } from "../../schemas/lockfile.js";
 const DEP_TYPES = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;
 
 /**
+ * The four dependency sections of a manifest, in a stable order.
+ *
+ * Each tuple pairs the manifest field name with the {@link ImporterDependency}
+ * `depType` it maps to. Declared once and shared by the pnpm, bun, and npm
+ * parsers when building their importer records.
+ *
+ * @internal
+ */
+export const DEP_SECTIONS = [
+	["dependencies", "dependencies"],
+	["devDependencies", "devDependencies"],
+	["peerDependencies", "peerDependencies"],
+	["optionalDependencies", "optionalDependencies"],
+] as const;
+
+/**
  * Common dependency map shape shared across all lockfile formats.
  * Represents the dependency fields of a single workspace entry.
  *
