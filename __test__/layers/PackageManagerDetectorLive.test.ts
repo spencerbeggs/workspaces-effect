@@ -62,6 +62,45 @@ describe("PackageManagerDetectorLive", () => {
 		expect(result.version).toBeUndefined();
 	});
 
+	it("falls through to pnpm-workspace.yaml when root package.json is malformed", async () => {
+		const layer = testLayer({
+			"/root/pnpm-workspace.yaml": true,
+			"/root/package.json": "{ not json",
+		});
+
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const detector = yield* PackageManagerDetector;
+				return yield* detector.detect("/root");
+			}).pipe(Effect.provide(layer)),
+		);
+
+		expect(result.type).toBe("pnpm");
+	});
+
+	it("fails with a typed PackageManagerDetectionError (not a defect) when the only package.json is malformed", async () => {
+		const layer = testLayer({
+			"/root/package.json": "{ not json",
+		});
+
+		const exit = await Effect.runPromiseExit(
+			Effect.gen(function* () {
+				const detector = yield* PackageManagerDetector;
+				return yield* detector.detect("/root");
+			}).pipe(Effect.provide(layer)),
+		);
+
+		expect(exit._tag).toBe("Failure");
+		if (exit._tag !== "Failure") throw new Error("expected Failure exit");
+		// A defect (unhandled JSON.parse throw) would show up as a "Die", not
+		// a "Fail" -- asserting the cause tag distinguishes the graceful typed
+		// failure this test requires from the crash this test guards against.
+		expect(exit.cause._tag).toBe("Fail");
+		if (exit.cause._tag !== "Fail") throw new Error("expected Fail cause, got a defect (Die)");
+		expect(exit.cause.error).toBeInstanceOf(PackageManagerDetectionError);
+		expect(exit.cause.error._tag).toBe("PackageManagerDetectionError");
+	});
+
 	it("detects bun from bun.lock + packageManager field", async () => {
 		const layer = testLayer({
 			"/root/bun.lock": true,

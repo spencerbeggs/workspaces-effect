@@ -53,7 +53,10 @@ const readPackageManagerField = (
 		if (!exists) return undefined;
 
 		const content = yield* fs.readFileString(pkgJsonPath);
-		const parsed = JSON.parse(content) as Record<string, unknown>;
+		const parsed = yield* Effect.try({
+			try: () => JSON.parse(content) as Record<string, unknown>,
+			catch: (error) => new Error(`invalid json: ${String(error)}`),
+		});
 		const field = parsed.packageManager;
 		return typeof field === "string" ? field : undefined;
 	}).pipe(Effect.orElseSucceed(() => undefined));
@@ -75,9 +78,13 @@ const readDevEnginesPackageManager = (
 		const pkgJsonPath = path.join(root, "package.json");
 		if (!(yield* fs.exists(pkgJsonPath))) return undefined;
 		const content = yield* fs.readFileString(pkgJsonPath);
-		const parsed = JSON.parse(content) as {
-			devEngines?: { packageManager?: unknown };
-		};
+		const parsed = yield* Effect.try({
+			try: () =>
+				JSON.parse(content) as {
+					devEngines?: { packageManager?: unknown };
+				},
+			catch: (error) => new Error(`invalid json: ${String(error)}`),
+		});
 		const raw = parsed.devEngines?.packageManager;
 		const entry = Array.isArray(raw) ? raw[0] : raw;
 		if (typeof entry !== "object" || entry === null) return undefined;
@@ -187,7 +194,10 @@ const detectPackageManager = (
 		const pkgExists = yield* fs.exists(pkgJsonPath).pipe(Effect.orElseSucceed(() => false));
 		if (pkgExists) {
 			const content = yield* fs.readFileString(pkgJsonPath).pipe(Effect.orElseSucceed(() => "{}"));
-			const parsed = JSON.parse(content) as Record<string, unknown>;
+			const parsed = yield* Effect.try({
+				try: () => JSON.parse(content) as Record<string, unknown>,
+				catch: (error) => new Error(`invalid json: ${String(error)}`),
+			}).pipe(Effect.orElseSucceed(() => ({}) as Record<string, unknown>));
 			if ("workspaces" in parsed && parsed.workspaces != null) {
 				const result = {
 					type: "npm" as PackageManagerType,
