@@ -99,6 +99,10 @@ if (Option.isSome(react)) {
 
 Use this to audit exact versions across a monorepo or to confirm that every package resolves a shared dependency to the same version.
 
+> **Name-only lookup.** `resolvedVersion(name)` matches by package name alone. When a name resolves to more than one version in the lockfile (common under npm/bun's hoisting — a nested dependency pinned to a different version than the hoisted one), it returns the *first* match and cannot tell you which importer that match belongs to or disambiguate the other version(s). Do not treat it as "the version importer X uses." Consumers that need the exact version a specific importer's dependency resolved to must match that importer's `ImporterDependency.specifier` against `packages` themselves (see [Importers](#importers) below) rather than relying on `resolvedVersion`.
+>
+> This also interacts with how the npm parser derives package names: it reads a resolved entry's name from its `node_modules/...` key (`key.slice("node_modules/".length)`) when the entry has no explicit `name` field. A nested entry like `node_modules/foo/node_modules/bar` therefore yields the name `"foo/node_modules/bar"`, not `"bar"` — another reason a name-only lookup cannot stand in for real per-importer resolution.
+
 ## Importers
 
 `packages` is the flat resolution graph. `importers` is the other half: what each workspace package *declared*, as the lockfile recorded it, keyed by importer path.
@@ -141,7 +145,7 @@ Coverage differs by package manager, because the formats differ:
 | npm | Populated | **Always `undefined`** — npm records the resolved version on the `node_modules/...` package entries, not per importer |
 | yarn | **Always `[]`** — the yarn Berry lockfile does not record importers | n/a |
 
-So a consumer that needs the resolved version of a bun or npm importer dependency joins `specifier` against `packages` (or `resolvedVersion(name)`) by name itself.
+So a consumer that needs the resolved version of a bun or npm importer dependency joins that importer dependency's `specifier` against `packages` by name itself. `resolvedVersion(name)` is **not** a substitute here — it is a name-only lookup that returns the first matching package and cannot disambiguate a name that resolves to multiple versions across importers (see the caveat under [Querying resolved versions](#querying-resolved-versions)).
 
 ## Parsing lockfile text directly
 

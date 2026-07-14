@@ -1,5 +1,6 @@
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { describe, expect, it } from "vitest";
+import { CatalogAssemblyError } from "../../../src/errors/CatalogAssemblyError.js";
 import {
 	catalogSetFromPackageJson,
 	parsePackageJsonWorkspaces,
@@ -42,6 +43,57 @@ describe("parsePackageJsonWorkspaces", () => {
 
 	it("fails with CatalogAssemblyError on invalid JSON", async () => {
 		const result = await Effect.runPromiseExit(parsePackageJsonWorkspaces("{{{ not json"));
+
+		expect(result._tag).toBe("Failure");
+	});
+
+	it.each([
+		["a number", { workspaces: 42 }],
+		["null", { workspaces: null }],
+		["a string", { workspaces: "packages/*" }],
+		["a boolean", { workspaces: true }],
+	])("fails with CatalogAssemblyError when workspaces is %s", async (_label, manifest) => {
+		const result = await Effect.runPromiseExit(parsePackageJsonWorkspaces(JSON.stringify(manifest)));
+
+		expect(result._tag).toBe("Failure");
+		if (result._tag === "Failure") {
+			const failure = Cause.failureOption(result.cause);
+			expect(failure._tag).toBe("Some");
+			if (failure._tag === "Some") {
+				expect(failure.value).toBeInstanceOf(CatalogAssemblyError);
+				expect(failure.value.reason).toContain("malformed workspaces field");
+			}
+		}
+	});
+
+	it("fails with CatalogAssemblyError when workspaces is an array with non-string entries", async () => {
+		const result = await Effect.runPromiseExit(
+			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: ["packages/*", 42] })),
+		);
+
+		expect(result._tag).toBe("Failure");
+	});
+
+	it("fails with CatalogAssemblyError when workspaces.packages is not an array", async () => {
+		const result = await Effect.runPromiseExit(
+			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { packages: "packages/*" } })),
+		);
+
+		expect(result._tag).toBe("Failure");
+	});
+
+	it("fails with CatalogAssemblyError when workspaces.catalog is not a record", async () => {
+		const result = await Effect.runPromiseExit(
+			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { catalog: "not-an-object" } })),
+		);
+
+		expect(result._tag).toBe("Failure");
+	});
+
+	it("fails with CatalogAssemblyError when workspaces.catalogs is not a record of records", async () => {
+		const result = await Effect.runPromiseExit(
+			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { catalogs: { silk: "not-an-object" } } })),
+		);
 
 		expect(result._tag).toBe("Failure");
 	});
