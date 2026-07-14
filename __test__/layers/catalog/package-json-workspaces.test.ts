@@ -41,6 +41,14 @@ describe("parsePackageJsonWorkspaces", () => {
 		expect(result.catalog).toBeUndefined();
 	});
 
+	it("treats an explicit null workspaces field as absent", async () => {
+		const result = await Effect.runPromise(
+			parsePackageJsonWorkspaces(JSON.stringify({ name: "app", version: "1.0.0", workspaces: null })),
+		);
+
+		expect(result).toEqual({});
+	});
+
 	it("fails with CatalogAssemblyError on invalid JSON", async () => {
 		const result = await Effect.runPromiseExit(parsePackageJsonWorkspaces("{{{ not json"));
 
@@ -49,7 +57,6 @@ describe("parsePackageJsonWorkspaces", () => {
 
 	it.each([
 		["a number", { workspaces: 42 }],
-		["null", { workspaces: null }],
 		["a string", { workspaces: "packages/*" }],
 		["a boolean", { workspaces: true }],
 	])("fails with CatalogAssemblyError when workspaces is %s", async (_label, manifest) => {

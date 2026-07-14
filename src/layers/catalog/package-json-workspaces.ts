@@ -62,8 +62,13 @@ const WorkspacesFieldSchema = Schema.Union(
 	PackageJsonWorkspacesObjectSchema,
 ).annotations({ identifier: "PackageJsonWorkspacesField" });
 
+// `null` is treated identically to an absent field: it is a plausible output of
+// tooling that serializes a stripped field, and npm itself treats a falsy
+// `workspaces` as "no workspaces". Unlike a malformed shape, there is nothing
+// there to misread, so it carries none of the silent-empty-manifest hazard
+// that makes the other shapes fail.
 const PackageJsonWithWorkspacesSchema = Schema.Struct({
-	workspaces: Schema.optional(WorkspacesFieldSchema),
+	workspaces: Schema.optionalWith(WorkspacesFieldSchema, { nullable: true }),
 });
 
 /**
@@ -71,13 +76,16 @@ const PackageJsonWithWorkspacesSchema = Schema.Struct({
  *
  * @param content - Raw `package.json` text.
  * @returns An Effect yielding the workspaces slice; all fields are `undefined`
- *   when the manifest has no `workspaces` field (a legitimate, common shape —
- *   not every root `package.json` declares workspaces). Fails with
+ *   when the manifest has no `workspaces` field, or when `workspaces` is
+ *   explicitly `null` (both are legitimate, common shapes — not every root
+ *   `package.json` declares workspaces, and `null` is a plausible output of
+ *   tooling that serializes a stripped field). Fails with
  *   {@link CatalogAssemblyError} when the text is not valid JSON, or when a
- *   present `workspaces` field is not a valid npm/bun shape (not an array of
- *   strings and not an object with valid `packages`/`catalog`/`catalogs`) —
- *   an unreadable manifest must never be silently treated as an empty one,
- *   since that would make every dependency in the workspace look "added".
+ *   present, non-null `workspaces` field is not a valid npm/bun shape (not an
+ *   array of strings and not an object with valid
+ *   `packages`/`catalog`/`catalogs`) — an unreadable manifest must never be
+ *   silently treated as an empty one, since that would make every dependency
+ *   in the workspace look "added".
  *
  * @public
  */
