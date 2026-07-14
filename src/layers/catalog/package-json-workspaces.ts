@@ -130,16 +130,40 @@ export const parsePackageJsonWorkspaces = (
  * `workspaces.catalogs` becomes a catalog of that name. This mirrors how
  * {@link CatalogSet.fromWorkspaceYaml} treats pnpm's `catalog:` / `catalogs:`.
  *
+ * Declaring the default catalog twice — once as `workspaces.catalog` and
+ * again as `workspaces.catalogs.default` — is rejected with
+ * {@link CatalogAssemblyError} rather than silently resolved (pnpm itself
+ * rejects the equivalent duplication in `pnpm-workspace.yaml`). Presence is
+ * checked structurally (`!== undefined` / `Object.hasOwn`), not by
+ * truthiness, so an explicitly-declared empty catalog (`catalog: {}` or
+ * `catalogs: { default: {} }`) still counts as a declaration.
+ *
  * @param content - Raw `package.json` text.
  *
  * @public
  */
 export const catalogSetFromPackageJson = (content: string): Effect.Effect<CatalogSet, CatalogAssemblyError> =>
 	parsePackageJsonWorkspaces(content).pipe(
-		Effect.map((ws) =>
-			CatalogSet.fromCatalogs({
-				...(ws.catalog ? { default: ws.catalog } : {}),
-				...(ws.catalogs ?? {}),
-			}),
-		),
+		Effect.flatMap((ws) => {
+			const hasCatalog = ws.catalog !== undefined;
+			const hasCatalogsDefault = ws.catalogs !== undefined && Object.hasOwn(ws.catalogs, "default");
+
+			if (hasCatalog && hasCatalogsDefault) {
+				return Effect.fail(
+					new CatalogAssemblyError({
+						source: "manifest",
+						reason:
+							"the default catalog is defined twice: once as `workspaces.catalog` and once as " +
+							"`workspaces.catalogs.default` — remove one",
+					}),
+				);
+			}
+
+			return Effect.succeed(
+				CatalogSet.fromCatalogs({
+					...(hasCatalog ? { default: ws.catalog } : {}),
+					...(ws.catalogs ?? {}),
+				}),
+			);
+		}),
 	);

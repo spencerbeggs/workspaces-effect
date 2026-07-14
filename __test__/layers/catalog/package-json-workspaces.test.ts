@@ -1,3 +1,4 @@
+import type { Exit } from "effect";
 import { Cause, Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { CatalogAssemblyError } from "../../../src/errors/CatalogAssemblyError.js";
@@ -14,6 +15,26 @@ const BUN_PKG = JSON.stringify({
 		catalogs: { silk: { effect: "^3.21.4", typescript: "^7.0.2" } },
 	},
 });
+
+/**
+ * Asserts an Exit failed with a typed {@link CatalogAssemblyError} — not
+ * merely a `Failure` Exit. A defect (an unhandled throw) also produces a
+ * `Failure`, so a bare `exit._tag === "Failure"` check would pass even if the
+ * code raised an untyped defect instead of the typed error the contract
+ * promises. When `reasonSubstring` is given, also asserts the error's
+ * `reason` contains it.
+ */
+const expectCatalogAssemblyError = (exit: Exit.Exit<unknown, unknown>, reasonSubstring?: string): void => {
+	expect(exit._tag).toBe("Failure");
+	if (exit._tag !== "Failure") return;
+	const failure = Cause.failureOption(exit.cause);
+	expect(failure._tag).toBe("Some");
+	if (failure._tag !== "Some") return;
+	expect(failure.value).toBeInstanceOf(CatalogAssemblyError);
+	if (reasonSubstring !== undefined) {
+		expect((failure.value as CatalogAssemblyError).reason).toContain(reasonSubstring);
+	}
+};
 
 describe("parsePackageJsonWorkspaces", () => {
 	it("reads packages, catalog and catalogs from the object form", async () => {
@@ -52,7 +73,7 @@ describe("parsePackageJsonWorkspaces", () => {
 	it("fails with CatalogAssemblyError on invalid JSON", async () => {
 		const result = await Effect.runPromiseExit(parsePackageJsonWorkspaces("{{{ not json"));
 
-		expect(result._tag).toBe("Failure");
+		expectCatalogAssemblyError(result, "invalid json");
 	});
 
 	it.each([
@@ -62,15 +83,7 @@ describe("parsePackageJsonWorkspaces", () => {
 	])("fails with CatalogAssemblyError when workspaces is %s", async (_label, manifest) => {
 		const result = await Effect.runPromiseExit(parsePackageJsonWorkspaces(JSON.stringify(manifest)));
 
-		expect(result._tag).toBe("Failure");
-		if (result._tag === "Failure") {
-			const failure = Cause.failureOption(result.cause);
-			expect(failure._tag).toBe("Some");
-			if (failure._tag === "Some") {
-				expect(failure.value).toBeInstanceOf(CatalogAssemblyError);
-				expect(failure.value.reason).toContain("malformed workspaces field");
-			}
-		}
+		expectCatalogAssemblyError(result, "malformed workspaces field");
 	});
 
 	it("fails with CatalogAssemblyError when workspaces is an array with non-string entries", async () => {
@@ -78,7 +91,7 @@ describe("parsePackageJsonWorkspaces", () => {
 			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: ["packages/*", 42] })),
 		);
 
-		expect(result._tag).toBe("Failure");
+		expectCatalogAssemblyError(result, "malformed workspaces field");
 	});
 
 	it("fails with CatalogAssemblyError when workspaces.packages is not an array", async () => {
@@ -86,7 +99,7 @@ describe("parsePackageJsonWorkspaces", () => {
 			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { packages: "packages/*" } })),
 		);
 
-		expect(result._tag).toBe("Failure");
+		expectCatalogAssemblyError(result, "malformed workspaces field");
 	});
 
 	it("fails with CatalogAssemblyError when workspaces.catalog is not a record", async () => {
@@ -94,7 +107,7 @@ describe("parsePackageJsonWorkspaces", () => {
 			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { catalog: "not-an-object" } })),
 		);
 
-		expect(result._tag).toBe("Failure");
+		expectCatalogAssemblyError(result, "malformed workspaces field");
 	});
 
 	it("fails with CatalogAssemblyError when workspaces.catalogs is not a record of records", async () => {
@@ -102,7 +115,7 @@ describe("parsePackageJsonWorkspaces", () => {
 			parsePackageJsonWorkspaces(JSON.stringify({ workspaces: { catalogs: { silk: "not-an-object" } } })),
 		);
 
-		expect(result._tag).toBe("Failure");
+		expectCatalogAssemblyError(result, "malformed workspaces field");
 	});
 });
 
@@ -118,5 +131,46 @@ describe("catalogSetFromPackageJson", () => {
 		const set = await Effect.runPromise(catalogSetFromPackageJson(JSON.stringify({ workspaces: ["."] })));
 
 		expect(set.entries).toEqual({});
+	});
+
+	it("maps workspaces.catalog alone to the default catalog", async () => {
+		const set = await Effect.runPromise(
+			catalogSetFromPackageJson(JSON.stringify({ workspaces: { catalog: { react: "^19.0.0" } } })),
+		);
+
+		expect(set.entries.default).toEqual({ react: "^19.0.0" });
+	});
+
+	it("maps workspaces.catalogs.default alone to the default catalog", async () => {
+		const set = await Effect.runPromise(
+			catalogSetFromPackageJson(
+				JSON.stringify({ workspaces: { catalogs: { default: { react: "^19.0.0" }, silk: { effect: "^3.21.4" } } } }),
+			),
+		);
+
+		expect(set.entries.default).toEqual({ react: "^19.0.0" });
+		expect(set.entries.silk).toEqual({ effect: "^3.21.4" });
+	});
+
+	it("fails with CatalogAssemblyError when the default catalog is declared both ways", async () => {
+		const result = await Effect.runPromiseExit(
+			catalogSetFromPackageJson(
+				JSON.stringify({
+					workspaces: {
+						catalog: { react: "^19.0.0" },
+						catalogs: { default: { react: "^18.0.0" } },
+					},
+				}),
+			),
+		);
+
+		expectCatalogAssemblyError(result, "defined twice");
+		if (result._tag === "Failure") {
+			const failure = Cause.failureOption(result.cause);
+			if (failure._tag === "Some") {
+				expect((failure.value as CatalogAssemblyError).reason).toContain("workspaces.catalog");
+				expect((failure.value as CatalogAssemblyError).reason).toContain("workspaces.catalogs.default");
+			}
+		}
 	});
 });
