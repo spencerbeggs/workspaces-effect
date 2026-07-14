@@ -15,6 +15,7 @@ import { parse as parseYaml } from "yaml-effect";
 import { CatalogAssemblyError } from "../../errors/CatalogAssemblyError.js";
 import { CatalogSet } from "../../schemas/CatalogSet.js";
 import { inlineCatalogs } from "../catalog/assemble.js";
+import { catalogSetFromPackageJson } from "../catalog/package-json-workspaces.js";
 import type { WorkspaceManifestData } from "../catalog/workspace-manifest.js";
 import { readWorkspaceManifest } from "../catalog/workspace-manifest.js";
 
@@ -45,6 +46,33 @@ const lockfileCatalogsFromText = (text: string): Effect.Effect<CatalogSet> =>
 	);
 
 /**
+ * Read catalogs from the root `package.json` `workspaces` field. Missing or
+ * unreadable manifest yields an empty set — a repo with no catalogs is normal.
+ *
+ * @internal
+ */
+const readPackageJsonCatalogs = (
+	fs: FileSystem.FileSystem,
+	path: Path.Path,
+	root: string,
+): Effect.Effect<CatalogSet, CatalogAssemblyError> =>
+	Effect.gen(function* () {
+		const pkgPath = path.join(root, "package.json");
+		const exists = yield* fs.exists(pkgPath).pipe(Effect.orElseSucceed(() => false));
+		if (!exists) return CatalogSet.empty();
+		const content = yield* fs.readFileString(pkgPath).pipe(
+			Effect.mapError(
+				(error) =>
+					new CatalogAssemblyError({
+						source: "manifest",
+						reason: `failed to read ${pkgPath}: ${String(error)}`,
+					}),
+			),
+		);
+		return yield* catalogSetFromPackageJson(content);
+	});
+
+/**
  * Read the working tree's catalog state at `root`.
  *
  * A missing `pnpm-lock.yaml` yields empty lockfile catalogs; any OTHER read
@@ -59,8 +87,21 @@ export const readWorktreeCatalogState = (
 	Effect.gen(function* () {
 		const fs = yield* FileSystem.FileSystem;
 		const path = yield* Path.Path;
-		const manifest = yield* readWorkspaceManifest(root);
-		const inline = CatalogSet.fromCatalogs(inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }));
+
+		const manifestPath = path.join(root, "pnpm-workspace.yaml");
+		const hasPnpmManifest = yield* fs.exists(manifestPath).pipe(Effect.orElseSucceed(() => false));
+
+		// pnpm keeps catalogs in pnpm-workspace.yaml; npm and bun keep them in the
+		// root package.json `workspaces` field. File presence picks the reader —
+		// the same rule WorkspaceDiscoveryLive already uses for globs.
+		const manifest = hasPnpmManifest
+			? yield* readWorkspaceManifest(root)
+			: { catalog: undefined, catalogs: undefined, configDependencies: undefined };
+
+		const inline = hasPnpmManifest
+			? CatalogSet.fromCatalogs(inlineCatalogs({ catalog: manifest.catalog, catalogs: manifest.catalogs }))
+			: yield* readPackageJsonCatalogs(fs, path, root);
+
 		const lockPath = path.join(root, "pnpm-lock.yaml");
 		const lockText = yield* fs.readFileString(lockPath).pipe(
 			Effect.catchAll((error) =>

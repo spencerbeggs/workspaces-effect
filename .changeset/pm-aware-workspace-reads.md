@@ -1,0 +1,19 @@
+---
+"workspaces-effect": minor
+---
+
+## Features
+
+- `PackageManagerDetector` now reads `devEngines.packageManager` as its highest-priority signal, above lockfile and config-file presence. Accepts the object and array forms; the `packageManager` field still supplies the version when both name the same manager.
+- `PointInTimeWorkspace` reads workspace globs and catalogs from the root `package.json` `workspaces` field when there is no `pnpm-workspace.yaml`, at a git ref and in the worktree. New public helpers `parsePackageJsonWorkspaces` and `catalogSetFromPackageJson` expose that reader.
+- `LockfileData` gained an `importers` field: each workspace importer's declared dependencies with their specifier, resolved version (where the format records one — pnpm only), and dependency section. Populated by the pnpm, bun, and npm parsers; yarn leaves it empty.
+- `parseLockfileContent(content, lockfilePath, packageManager)` is now public, so a caller can parse a before/after lockfile pair in one process rather than going through the memoized `LockfileReader` service.
+
+## Bug Fixes
+
+- `PointInTimeWorkspace.at(ref)` collapsed to the root package alone in a bun or npm workspace, because it read workspace globs only from `pnpm-workspace.yaml` and had no fallback. Consumers diffing two snapshots saw every declared dependency of every package as newly added, with no error raised.
+- `PackageManagerDetector.detect()` crashed with an unhandled defect (`FiberFailure`) instead of degrading gracefully when the root `package.json` was malformed. Three call sites parsed it with a bare `JSON.parse` inside an `Effect.gen` body and piped `Effect.orElseSucceed` around it — that only recovers the typed error channel, not a synchronous `throw`, which becomes an unrecoverable defect. This affected the `devEngines.packageManager` reader (new in this release), the pre-existing `packageManager` field reader, and the pre-existing npm-fallback `workspaces` field check. All three now route the parse failure through `Effect.try` first, so a malformed `package.json` degrades to `undefined` (or, for the npm-fallback check, to no `workspaces` match) and detection falls through the normal chain; if nothing matches, `detect()` fails with the documented `PackageManagerDetectionError` instead of crashing.
+- `parsePackageJsonWorkspaces` previously did unchecked casts on a present `workspaces` field: a malformed value (`"workspaces": 42`, a `catalog` that is a string instead of an object, etc.) silently degraded to `{}` — an unreadable manifest read as "no workspaces," the exact silent-empty-manifest failure mode this release exists to eliminate. It now validates the shape and fails with `CatalogAssemblyError` naming what was wrong. An absent `workspaces` field, or one explicitly set to `null`, still correctly yields `{}` — `null` carries none of the silent-empty-manifest hazard, since there is nothing there to misread.
+- `catalogSetFromPackageJson` silently let `workspaces.catalogs.default` win over `workspaces.catalog` when a manifest declared the default catalog both ways, instead of reporting the ambiguity — the same silent-resolution failure mode this release exists to eliminate, and a contradiction of the already-documented `CatalogAssemblyError` contract (pnpm itself rejects the equivalent duplication in `pnpm-workspace.yaml`). It now fails with `CatalogAssemblyError` naming both declaration sites when both are present; `workspaces.catalog` alone and `workspaces.catalogs.default` alone are unaffected.
+
+This release therefore ships two deliberately opposite policies for a malformed root `package.json`: `PackageManagerDetector` degrades gracefully (it is a heuristic with a fallback chain, so a bad read just falls through to the next signal), while the catalog reader hard-fails (its output is load-bearing for diffing workspace state, so silently reading a malformed manifest as empty is precisely the bug this release fixes).

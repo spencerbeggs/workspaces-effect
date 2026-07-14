@@ -93,12 +93,17 @@ export { WorkspaceRootNotFoundError, WorkspaceRootNotFoundErrorBase } from "./er
 export type { CatalogResolverLiveLayer } from "./layers/CatalogResolverLive.js";
 export { CatalogResolverLive } from "./layers/CatalogResolverLive.js";
 export { ChangeDetectorLive } from "./layers/ChangeDetectorLive.js";
+export type { PackageJsonWorkspaces } from "./layers/catalog/package-json-workspaces.js";
+export {
+	catalogSetFromPackageJson,
+	parsePackageJsonWorkspaces,
+} from "./layers/catalog/package-json-workspaces.js";
 export type { ManifestLike } from "./layers/catalog/resolve.js";
 export type { WorkspaceManifestCatalogs, WorkspaceManifestData } from "./layers/catalog/workspace-manifest.js";
 export { workspaceManifestFromYaml } from "./layers/catalog/workspace-manifest.js";
 export { DependencyGraphLive } from "./layers/DependencyGraphLive.js";
 export type { LockfileReaderLiveLayer } from "./layers/LockfileReaderLive.js";
-export { LockfileReaderLive } from "./layers/LockfileReaderLive.js";
+export { LockfileReaderLive, parseLockfileContent } from "./layers/LockfileReaderLive.js";
 export { PackageManagerDetectorLive } from "./layers/PackageManagerDetectorLive.js";
 export { PackageResolverLive } from "./layers/PackageResolverLive.js";
 export type { PointInTimeWorkspaceLiveLayer } from "./layers/PointInTimeWorkspaceLive.js";
@@ -130,7 +135,9 @@ export {
 } from "./schemas/core.js";
 export {
 	BunExtension,
+	ImporterDependency,
 	LockfileData,
+	LockfileImporter,
 	LockfileIntegrity,
 	PnpmExtension,
 	ResolvedPackage,

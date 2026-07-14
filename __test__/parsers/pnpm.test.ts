@@ -155,3 +155,28 @@ packages:
 		}
 	});
 });
+
+describe("importers", () => {
+	it("retains the specifier and the resolved version per importer and section", async () => {
+		const data = await Effect.runPromise(parsePnpmLockfile(MINIMAL_PNPM_LOCK, "/project/pnpm-lock.yaml"));
+
+		const core = data.importers.find((i) => i.path === "packages/core");
+		expect(core).toBeDefined();
+
+		const lodash = core?.dependencies.find((d) => d.name === "lodash");
+		expect(lodash).toEqual(
+			expect.objectContaining({
+				name: "lodash",
+				specifier: "^4.17.21",
+				version: "4.17.21",
+				depType: "dependencies",
+			}),
+		);
+	});
+
+	it("keeps the root importer under the path '.'", async () => {
+		const data = await Effect.runPromise(parsePnpmLockfile(MINIMAL_PNPM_LOCK, "/project/pnpm-lock.yaml"));
+
+		expect(data.importers.some((i) => i.path === ".")).toBe(true);
+	});
+});

@@ -372,3 +372,66 @@ describe("root-level wildcard parity", () => {
 		expect(Option.isSome(snap.package("@wildcard/a"))).toBe(true);
 	});
 });
+
+describe("bun workspace (no pnpm-workspace.yaml)", () => {
+	let bunRoot: string;
+	let liveB: Layer.Layer<PointInTimeWorkspace>;
+
+	const gitB = (...args: ReadonlyArray<string>) =>
+		execFileSync("git", args as Array<string>, { cwd: bunRoot, encoding: "utf8" }).trim();
+
+	beforeAll(() => {
+		bunRoot = mkdtempSync(join(tmpdir(), "pit-bun-"));
+		mkdirSync(join(bunRoot, "packages", "a"), { recursive: true });
+		writeFileSync(
+			join(bunRoot, "package.json"),
+			JSON.stringify({
+				name: "root",
+				version: "1.0.0",
+				workspaces: {
+					packages: ["packages/*"],
+					catalogs: { silk: { effect: "^3.20.0" } },
+				},
+			}),
+		);
+		writeFileSync(
+			join(bunRoot, "packages", "a", "package.json"),
+			JSON.stringify({ name: "@fixture/a", version: "1.0.0", dependencies: { effect: "catalog:silk" } }),
+		);
+		gitB("init", "-b", "main");
+		gitB("add", "-A");
+		gitB("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "base");
+
+		const RootStub = Layer.succeed(WorkspaceRoot, { find: () => Effect.succeed(bunRoot) } as never);
+		liveB = PointInTimeWorkspaceLive.pipe(
+			Layer.provide(Layer.mergeAll(RootStub, WorkspaceDiscoveryLive.pipe(Layer.provide(RootStub)))),
+			Layer.provide(NodeContext.layer),
+		);
+	});
+
+	afterAll(() => {
+		rmSync(bunRoot, { recursive: true, force: true });
+	});
+
+	it("at(ref) reads workspace packages from the package.json workspaces field", async () => {
+		const snapshot = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at("HEAD");
+			}).pipe(Effect.provide(liveB)) as Effect.Effect<WorkspaceStateSnapshot, unknown, never>,
+		);
+
+		expect(snapshot.packages.map((p) => p.name).sort()).toEqual(["@fixture/a", "root"]);
+	});
+
+	it("at(ref) resolves catalog: specifiers from the package.json catalogs", async () => {
+		const snapshot = await Effect.runPromise(
+			Effect.gen(function* () {
+				const pit = yield* PointInTimeWorkspace;
+				return yield* pit.at("HEAD");
+			}).pipe(Effect.provide(liveB)) as Effect.Effect<WorkspaceStateSnapshot, unknown, never>,
+		);
+
+		expect(snapshot.resolve("effect", "catalog:silk")).toEqual(Option.some("^3.20.0"));
+	});
+});

@@ -62,6 +62,45 @@ describe("PackageManagerDetectorLive", () => {
 		expect(result.version).toBeUndefined();
 	});
 
+	it("falls through to pnpm-workspace.yaml when root package.json is malformed", async () => {
+		const layer = testLayer({
+			"/root/pnpm-workspace.yaml": true,
+			"/root/package.json": "{ not json",
+		});
+
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const detector = yield* PackageManagerDetector;
+				return yield* detector.detect("/root");
+			}).pipe(Effect.provide(layer)),
+		);
+
+		expect(result.type).toBe("pnpm");
+	});
+
+	it("fails with a typed PackageManagerDetectionError (not a defect) when the only package.json is malformed", async () => {
+		const layer = testLayer({
+			"/root/package.json": "{ not json",
+		});
+
+		const exit = await Effect.runPromiseExit(
+			Effect.gen(function* () {
+				const detector = yield* PackageManagerDetector;
+				return yield* detector.detect("/root");
+			}).pipe(Effect.provide(layer)),
+		);
+
+		expect(exit._tag).toBe("Failure");
+		if (exit._tag !== "Failure") throw new Error("expected Failure exit");
+		// A defect (unhandled JSON.parse throw) would show up as a "Die", not
+		// a "Fail" -- asserting the cause tag distinguishes the graceful typed
+		// failure this test requires from the crash this test guards against.
+		expect(exit.cause._tag).toBe("Fail");
+		if (exit.cause._tag !== "Fail") throw new Error("expected Fail cause, got a defect (Die)");
+		expect(exit.cause.error).toBeInstanceOf(PackageManagerDetectionError);
+		expect(exit.cause.error._tag).toBe("PackageManagerDetectionError");
+	});
+
 	it("detects bun from bun.lock + packageManager field", async () => {
 		const layer = testLayer({
 			"/root/bun.lock": true,
@@ -320,5 +359,110 @@ describe("PackageManagerDetectorLive", () => {
 		);
 
 		expect(result.type).toBe("pnpm");
+	});
+
+	describe("devEngines.packageManager", () => {
+		it("detects bun from devEngines even without a bun lockfile", async () => {
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/project");
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							"/project/package.json": JSON.stringify({
+								workspaces: ["packages/*"],
+								devEngines: { packageManager: { name: "bun", version: "1.3.14" } },
+							}),
+						}),
+					),
+				),
+			);
+
+			expect(result.type).toBe("bun");
+			expect(result.version).toBe("1.3.14");
+			expect(result.runtime).toBe("bun");
+		});
+
+		it("takes priority over a pnpm-workspace.yaml", async () => {
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/project");
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							"/project/pnpm-workspace.yaml": true,
+							"/project/package.json": JSON.stringify({
+								devEngines: { packageManager: { name: "bun", version: "1.3.14" } },
+							}),
+						}),
+					),
+				),
+			);
+
+			expect(result.type).toBe("bun");
+		});
+
+		it("prefers the packageManager field version when both name it", async () => {
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/project");
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							"/project/package.json": JSON.stringify({
+								packageManager: "bun@1.3.16",
+								devEngines: { packageManager: { name: "bun", version: "1.3.14" } },
+							}),
+						}),
+					),
+				),
+			);
+
+			expect(result.version).toBe("1.3.16");
+		});
+
+		it("accepts the array form of devEngines.packageManager", async () => {
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/project");
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							"/project/package.json": JSON.stringify({
+								devEngines: { packageManager: [{ name: "pnpm", version: "11.12.0" }] },
+							}),
+						}),
+					),
+				),
+			);
+
+			expect(result.type).toBe("pnpm");
+			expect(result.version).toBe("11.12.0");
+			expect(result.runtime).toBe("node");
+		});
+
+		it("ignores an unrecognized devEngines package manager and falls through", async () => {
+			const result = await Effect.runPromise(
+				Effect.gen(function* () {
+					const detector = yield* PackageManagerDetector;
+					return yield* detector.detect("/project");
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							"/project/pnpm-workspace.yaml": true,
+							"/project/package.json": JSON.stringify({
+								devEngines: { packageManager: { name: "cargo", version: "1.0.0" } },
+							}),
+						}),
+					),
+				),
+			);
+
+			expect(result.type).toBe("pnpm");
+		});
 	});
 });

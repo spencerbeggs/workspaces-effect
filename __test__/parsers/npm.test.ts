@@ -109,3 +109,22 @@ describe("parseNpmLockfile", () => {
 		expect(ws?.isWorkspace).toBe(true);
 	});
 });
+
+describe("importers", () => {
+	it("records each workspace's declared dependencies with their specifiers", async () => {
+		const data = await Effect.runPromise(parseNpmLockfile(MINIMAL_NPM_LOCK, "/project/package-lock.json"));
+
+		const importer = data.importers.find((i) => i.path !== ".");
+		expect(importer).toBeDefined();
+		expect(importer?.dependencies.length).toBeGreaterThan(0);
+	});
+
+	it("keeps the root importer under the path '.'", async () => {
+		const data = await Effect.runPromise(parseNpmLockfile(MINIMAL_NPM_LOCK, "/project/package-lock.json"));
+
+		const root = data.importers.find((i) => i.path === ".");
+		expect(root?.dependencies).toContainEqual(
+			expect.objectContaining({ name: "typescript", specifier: "^5.3.0", depType: "devDependencies" }),
+		);
+	});
+});

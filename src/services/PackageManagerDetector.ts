@@ -14,17 +14,31 @@ import type { PackageManagerType } from "../schemas/core.js";
  *
  * @remarks
  * The `type` field identifies the package manager (`npm`, `pnpm`, `yarn`, or `bun`).
- * The `version` field is extracted from the `packageManager` field in the root
- * `package.json` (e.g., `"pnpm@9.15.4"` yields `"9.15.4"`). It may be `undefined`
- * when no `packageManager` field is present and detection fell back to lock file
- * heuristics.
+ * The `version` field's provenance depends on which detection source matched:
+ * it may come from the root `package.json`'s `packageManager` field (e.g.,
+ * `"pnpm@9.15.4"` yields `"9.15.4"`) OR from `devEngines.packageManager.version`.
+ * When `devEngines.packageManager` names the same package manager as the
+ * `packageManager` field, the `packageManager` field's version wins — it is an
+ * exact pin, whereas `devEngines.packageManager.version` may be a semver range.
+ * Consumers that need an exact, installable version should not assume `version`
+ * is always a single resolved version: when it was sourced from `devEngines`
+ * alone (no matching `packageManager` field), it may be a range such as `"^9"`.
+ * `version` is `undefined` when neither source yields a value for the detected
+ * package manager (e.g. detection fell back to lock file heuristics with no
+ * `packageManager` field present).
  *
  * @public
  */
 export interface DetectedPackageManager {
 	/** The detected package manager type. */
 	readonly type: PackageManagerType;
-	/** The version string, or `undefined` if not specified in `packageManager`. */
+	/**
+	 * The version string, or `undefined` when neither `packageManager` nor
+	 * `devEngines.packageManager` yields one. May be an exact pin (from
+	 * `packageManager`) or a semver range (from `devEngines.packageManager`
+	 * alone) — see the {@link DetectedPackageManager} remarks for the full
+	 * provenance and precedence rules.
+	 */
 	readonly version: string | undefined;
 	/**
 	 * The inferred runtime environment based on the detected package manager.

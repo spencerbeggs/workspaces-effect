@@ -19,9 +19,15 @@
 import { Effect, Schema } from "effect";
 import { parse as parseJsonc } from "jsonc-effect";
 import { LockfileParseError } from "../../errors/LockfileParseError.js";
-import { BunExtension, LockfileData, ResolvedPackage } from "../../schemas/lockfile.js";
+import {
+	BunExtension,
+	ImporterDependency,
+	LockfileData,
+	LockfileImporter,
+	ResolvedPackage,
+} from "../../schemas/lockfile.js";
 import type { WorkspaceEntry } from "./shared.js";
-import { extractWorkspaceDeps } from "./shared.js";
+import { DEP_SECTIONS, extractWorkspaceDeps } from "./shared.js";
 
 /**
  * Raw schema for bun lockfile validation.
@@ -185,6 +191,21 @@ const toLockfileData = (raw: BunLockfileRaw): LockfileData => {
 		}
 	}
 
+	// Record each workspace's declared dependencies. Bun records the concrete
+	// version on the package tuples, not per importer, so `version` stays unset.
+	const importers: Array<LockfileImporter> = [];
+	for (const [wsPath, wsEntry] of Object.entries(raw.workspaces ?? {})) {
+		const deps: Array<ImporterDependency> = [];
+		for (const [field, depType] of DEP_SECTIONS) {
+			const section = wsEntry[field];
+			if (!section) continue;
+			for (const [name, specifier] of Object.entries(section)) {
+				deps.push(new ImporterDependency({ name, specifier: String(specifier), depType }));
+			}
+		}
+		importers.push(new LockfileImporter({ path: wsPath === "" ? "." : wsPath, dependencies: deps }));
+	}
+
 	// Process package tuples
 	if (raw.packages) {
 		for (const [, tuple] of Object.entries(raw.packages)) {
@@ -227,6 +248,7 @@ const toLockfileData = (raw: BunLockfileRaw): LockfileData => {
 		lockfileVersion: String(raw.lockfileVersion),
 		packages,
 		workspaceDependencies: [...wsDeps],
+		importers,
 		pmSpecific,
 	});
 };
