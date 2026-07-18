@@ -1,5 +1,11 @@
 # workspaces-effect
 
+> [!CAUTION]
+> **This package is deprecated and no longer maintained.**
+> All functionality has been migrated to [`@effected/workspaces`](https://www.npmjs.com/package/@effected/workspaces)
+> Source code live in the [Effected monorepo](https://github.com/spencerbeggs/effected).
+> No further releases, fixes or security patches will be published here.
+
 [![npm](https://img.shields.io/npm/v/workspaces-effect?label=npm&color=cb3837)](https://www.npmjs.com/package/workspaces-effect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-4caf50.svg)](https://opensource.org/licenses/MIT)
 
